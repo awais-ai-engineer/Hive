@@ -5,7 +5,17 @@ IDs are ULIDs: sortable by time, so pagination needs no extra timestamp index.
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import (
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from ulid import ULID
 
@@ -75,6 +85,7 @@ class Space(Base):
     type: Mapped[SpaceType] = mapped_column(Enum(SpaceType, name="space_type"))
     name: Mapped[str] = mapped_column(String(100))
     slug: Mapped[str] = mapped_column(String(100), unique=True)
+    description: Mapped[str | None] = mapped_column(Text)
     allowed_email_domain: Mapped[str | None] = mapped_column(String(255))
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = created_at()
@@ -82,6 +93,7 @@ class Space(Base):
 
 class SpaceMember(Base):
     __tablename__ = "space_members"
+    __table_args__ = (Index("ix_space_members_user_id", "user_id"),)
 
     space_id: Mapped[str] = mapped_column(
         ForeignKey("spaces.id", ondelete="CASCADE"), primary_key=True
@@ -98,13 +110,30 @@ class SpaceMember(Base):
 
 class Channel(Base):
     __tablename__ = "channels"
+    __table_args__ = (UniqueConstraint("space_id", "name", name="uq_channels_space_name"),)
 
     id: Mapped[str] = pk()
     space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"), index=True)
     type: Mapped[ChannelType] = mapped_column(
         Enum(ChannelType, name="channel_type"), default=ChannelType.text
     )
-    name: Mapped[str] = mapped_column(String(100))
+    name: Mapped[str] = mapped_column(String(80))
+    topic: Mapped[str | None] = mapped_column(Text)
+    position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created_at: Mapped[datetime] = created_at()
+
+
+class Invite(Base):
+    __tablename__ = "invites"
+
+    id: Mapped[str] = pk()
+    space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"), index=True)
+    code: Mapped[str] = mapped_column(String(16), unique=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    max_uses: Mapped[int | None] = mapped_column(Integer)
+    uses: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = created_at()
 
 

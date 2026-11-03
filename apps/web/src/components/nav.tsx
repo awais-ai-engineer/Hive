@@ -23,6 +23,7 @@ export default function Nav() {
     <header className="border-b border-white/10 px-4 py-4">
       <nav className="mx-auto flex max-w-5xl items-center justify-between" aria-label="Main navigation">
         <Link href="/" className="text-xl font-bold text-amber-400">Hive</Link>
+        <div className="ml-auto mr-4 text-sm"><Link href="/spaces">Spaces</Link></div>
         {!loading && <div className="flex items-center gap-3 text-sm">
           {user ? <><Link href="/me">{user.username}</Link><span>·</span>
             <button onClick={signOut} disabled={busy} className="text-amber-400 disabled:opacity-40">Log out</button></>

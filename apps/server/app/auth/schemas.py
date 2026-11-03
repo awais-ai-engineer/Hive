@@ -1,16 +1,28 @@
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, EmailStr, StringConstraints
+from email_validator import EmailNotValidError, validate_email
+from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints
+from pydantic_core import PydanticCustomError
 
 Username = Annotated[
     str, StringConstraints(min_length=3, max_length=32, pattern=r"^[a-zA-Z0-9_]+$")
 ]
 Password = Annotated[str, StringConstraints(min_length=8, max_length=128)]
-Email = Annotated[
-    EmailStr,
-    BeforeValidator(lambda value: value.strip().lower() if isinstance(value, str) else value),
-]
+
+
+def normalize_email(value: object) -> str:
+    if not isinstance(value, str):
+        raise PydanticCustomError("email_type", "Input should be a valid email address")
+    try:
+        return validate_email(
+            value.strip(), check_deliverability=False, test_environment=True
+        ).normalized.lower()
+    except EmailNotValidError as error:
+        raise ValueError("Invalid email address") from error
+
+
+Email = Annotated[str, BeforeValidator(normalize_email)]
 
 
 class SignupIn(BaseModel):

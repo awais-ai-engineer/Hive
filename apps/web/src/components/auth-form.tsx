@@ -29,7 +29,9 @@ export default function AuthForm({ mode }: { mode: 'signup' | 'login' }) {
         if (!parsed.success) throw new Error(parsed.error.issues[0].message);
         await auth.login(parsed.data);
       }
-      router.push('/me');
+      const next = new URLSearchParams(window.location.search).get('next');
+      const safe = next && /^\/(?![/\\])/.test(next) ? next : '/me';
+      router.push(safe);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Please try again.');
     } finally {

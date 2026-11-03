@@ -9,6 +9,7 @@
     "test": "python -m uv run pytest",
     "lint": "python -m uv run ruff check .",
     "db:migrate": "python -m uv run alembic upgrade head",
-    "db:revision": "python -m uv run alembic revision --autogenerate"
+    "db:revision": "python -m uv run alembic revision --autogenerate",
+    "db:seed": "python -m uv run python -m app.seed"
   }
 }
