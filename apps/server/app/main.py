@@ -7,9 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import health
 from app.auth.router import router as auth_router
+from app.channels.router import router as channels_router
 from app.core.config import settings
 from app.db.session import engine, redis
+from app.invites.router import router as invites_router
 from app.realtime.socket import sio
+from app.spaces.router import router as spaces_router
 from app.users.router import router as users_router
 
 logging.basicConfig(level=logging.INFO)
@@ -33,6 +36,9 @@ api.add_middleware(
 api.include_router(health.router, prefix="/api")
 api.include_router(auth_router, prefix="/api")
 api.include_router(users_router, prefix="/api")
+api.include_router(spaces_router, prefix="/api")
+api.include_router(channels_router, prefix="/api")
+api.include_router(invites_router, prefix="/api")
 
 # One ASGI app: Socket.IO handles /socket.io, everything else goes to FastAPI.
 app = socketio.ASGIApp(sio, other_asgi_app=api)

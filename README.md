@@ -22,7 +22,9 @@ pnpm install                                   # frontend packages
 cd apps/server && python -m uv sync && cd ../..  # backend packages
 docker compose -f infra/docker-compose.yml up -d postgres redis
 pnpm --filter @hive/server db:migrate          # create database tables
-pnpm dev                                       # web + server, with hot reload
+pnpm --filter @hive/server db:seed             # add demo accounts and spaces
+cd apps/server && python -m uv run uvicorn app.main:app --reload --reload-dir app --port 4000
+cd apps/web && pnpm exec next dev --turbopack -p 3000
 ```
 
 Moderation service (without Docker):
@@ -48,7 +50,7 @@ Ports 5434 and 6380 avoid clashing with other local Postgres/Redis instances.
 ## Roadmap
 
 1. [x] Auth (signup, login, refresh-token rotation), profiles
-2. Spaces, roles, invites, channels
+2. [x] Spaces, roles, invites, channels
 3. Real-time chat: idempotent send, optimistic UI, reconnect sync
 4. Threads, reactions, uploads, presence, unread counts
 5. Posts, voting, hot/top/new ranking
@@ -86,3 +88,19 @@ pnpm --filter @hive/web typecheck
 
 Tests recreate only the `hive_test` database and clear only `rl:*` rate-limit keys, so local
 development data is never touched.
+
+## Spaces & permissions
+
+Communities are public and searchable; workspaces are invite-only unless they allow a matching
+email domain. Non-members cannot discover private workspaces. Every new space starts with its
+creator as owner and a `general` text channel. Invite codes are single-use or reusable according
+to their configured limit, expire when configured, and can be revoked. Use `pnpm --filter
+@hive/server db:seed` for repeatable demo data.
+
+| Role | Rank | Capabilities |
+| --- | ---: | --- |
+| owner | 5 | Edit and delete the space, manage channels, invites, members, and lower roles |
+| admin | 4 | Edit the space, manage channels and invites, manage lower-ranked members |
+| moderator | 3 | Remove lower-ranked members |
+| member | 2 | Participate in a space |
+| guest | 1 | View and participate with limited access |
