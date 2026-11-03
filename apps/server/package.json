@@ -1,0 +1,14 @@
+{
+  "name": "@hive/server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Python (FastAPI) backend. This file only lets turbo run it alongside the web app.",
+  "scripts": {
+    "setup": "python -m uv sync",
+    "dev": "python -m uv run uvicorn app.main:app --reload --reload-dir app --port 4000",
+    "test": "python -m uv run pytest",
+    "lint": "python -m uv run ruff check .",
+    "db:migrate": "python -m uv run alembic upgrade head",
+    "db:revision": "python -m uv run alembic revision --autogenerate"
+  }
+}

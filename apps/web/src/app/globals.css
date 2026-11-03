@@ -1,0 +1,14 @@
+@import 'tailwindcss';
+
+body {
+  background: #0b0d12;
+  color: #e6e8ee;
+}
+
+.auth-input {
+  @apply mt-2 block w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 outline-none focus:border-amber-400;
+}
+
+.auth-button {
+  @apply rounded-lg bg-amber-400 px-4 py-2 font-medium text-black disabled:opacity-40;
+}

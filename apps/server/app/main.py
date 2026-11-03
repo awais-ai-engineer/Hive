@@ -1,0 +1,38 @@
+import logging
+from contextlib import asynccontextmanager
+
+import socketio
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.api import health
+from app.auth.router import router as auth_router
+from app.core.config import settings
+from app.db.session import engine, redis
+from app.realtime.socket import sio
+from app.users.router import router as users_router
+
+logging.basicConfig(level=logging.INFO)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    yield
+    await engine.dispose()
+    await redis.aclose()
+
+
+api = FastAPI(title="Hive API", version="0.1.0", lifespan=lifespan)
+api.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.web_origin],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+api.include_router(health.router, prefix="/api")
+api.include_router(auth_router, prefix="/api")
+api.include_router(users_router, prefix="/api")
+
+# One ASGI app: Socket.IO handles /socket.io, everything else goes to FastAPI.
+app = socketio.ASGIApp(sio, other_asgi_app=api)

@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.next/
+.turbo/
+.env
+.env.local
+__pycache__/
+.venv/
+*.log
+.playwright-cli/
+.ruff_cache/
+.pytest_cache/
+
+# Local planning notes (never published)
+AGENTS.md
+docs/tasks/
+CLAUDE.md
+.claude/
+.codex/
