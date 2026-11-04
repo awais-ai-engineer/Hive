@@ -9,6 +9,7 @@ from app.auth.security import hash_password
 from app.db.models import (
     Channel,
     ChannelType,
+    DirectMember,
     Invite,
     MemberRole,
     Message,
@@ -171,6 +172,7 @@ async def seed() -> None:
                         body=body, client_msg_id=client_id,
                     ).on_conflict_do_nothing(index_elements=["author_id", "client_msg_id"]))
         await seed_thread(session, seeded_spaces["hive-devs"].id, accounts)
+        await seed_direct_messages(session, accounts)
         await session.commit()
     print(f"Acme invite: http://localhost:3000/invite/{code}")
     await engine.dispose()
@@ -202,6 +204,39 @@ async def seed_thread(session, space_id: str, accounts: dict) -> None:
             message_id=parent.id, user_id=accounts[username].id, emoji=emoji,
         ).on_conflict_do_nothing())
 
+
+
+async def seed_direct_messages(session, accounts: dict) -> None:
+    """A private chat between alice and bob and a group chat with carol (idempotent)."""
+    conversations = {
+        ("alice", "bob"): [
+            ("bob", "Hey, do you have a minute to look at my pull request?"),
+            ("alice", "Sure, send me the link."),
+            ("bob", "Thanks! It is the pagination change."),
+        ],
+        ("alice", "bob", "carol"): [
+            ("carol", "Shall we plan the next meetup here?"),
+            ("alice", "Good idea. Friday evening works for me."),
+            ("bob", "Friday is perfect."),
+        ],
+    }
+    for people, messages in conversations.items():
+        ids = sorted(accounts[name].id for name in people)
+        key = ":".join(ids)
+        await session.execute(
+            insert(Channel).values(type=ChannelType.dm, name="dm", dm_key=key)
+            .on_conflict_do_nothing(index_elements=["dm_key"])
+        )
+        channel = await session.scalar(select(Channel).where(Channel.dm_key == key))
+        await session.execute(insert(DirectMember).values(
+            [{"channel_id": channel.id, "user_id": user_id} for user_id in ids]
+        ).on_conflict_do_nothing())
+        for index, (username, body) in enumerate(messages):
+            client_id = str(uuid5(NAMESPACE_URL, f"hive/dm/{'-'.join(people)}/{index}"))
+            await session.execute(insert(Message).values(
+                channel_id=channel.id, author_id=accounts[username].id, body=body,
+                client_msg_id=client_id,
+            ).on_conflict_do_nothing(index_elements=["author_id", "client_msg_id"]))
 
 if __name__ == "__main__":
     asyncio.run(seed())

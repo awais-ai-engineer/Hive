@@ -10,11 +10,11 @@ from app.db.models import (
     Channel,
     ChannelRead,
     ChannelType,
+    DirectMember,
     MemberRole,
     Message,
     Reaction,
     Space,
-    SpaceMember,
     SpaceType,
     User,
 )
@@ -28,9 +28,15 @@ MAX_REACTION_KINDS = 20
 
 
 async def readable(session: AsyncSession, channel_id: str, user_id: str | None):
+    """Returns (channel, space member). Direct messages are visible to their participants only
+    and have no space member."""
     channel = await session.get(Channel, channel_id)
     if channel is None:
         raise HTTPException(404, "Channel not found")
+    if channel.type == ChannelType.dm:
+        if user_id is None or await session.get(DirectMember, (channel.id, user_id)) is None:
+            raise HTTPException(404, "Channel not found")
+        return channel, None
     space = await session.get(Space, channel.space_id)
     member = await member_for(session, channel.space_id, user_id)
     if space is None or (space.type == SpaceType.workspace and member is None):
@@ -40,6 +46,8 @@ async def readable(session: AsyncSession, channel_id: str, user_id: str | None):
 
 async def writable(session: AsyncSession, channel_id: str, user_id: str):
     channel, member = await readable(session, channel_id, user_id)
+    if channel.type == ChannelType.dm:
+        return channel
     require_role(member.role if member else None, MemberRole.member)
     if channel.type != ChannelType.text:
         raise HTTPException(422, "Only text channels support messages")
@@ -266,22 +274,22 @@ async def mark_read(session: AsyncSession, user: User, channel_id: str, message_
     return marker
 
 
-async def unread_counts(session: AsyncSession, member: SpaceMember, channel_ids: list[str]):
+async def unread_counts(session: AsyncSession, user_id: str, channel_ids: list[str], since: datetime):
     """Unread top-level messages by others per channel. Without a read marker, everything
-    posted since the user joined counts as unread."""
+    posted after `since` (e.g. when the user joined the space) counts as unread."""
     if not channel_ids:
         return {}
     rows = await session.execute(
         select(Message.channel_id, func.count())
         .outerjoin(ChannelRead, and_(
-            ChannelRead.channel_id == Message.channel_id, ChannelRead.user_id == member.user_id
+            ChannelRead.channel_id == Message.channel_id, ChannelRead.user_id == user_id
         ))
         .where(
             Message.channel_id.in_(channel_ids), Message.parent_id.is_(None),
-            Message.deleted_at.is_(None), Message.author_id != member.user_id,
+            Message.deleted_at.is_(None), Message.author_id != user_id,
             or_(
                 Message.id > ChannelRead.last_read_id,
-                and_(ChannelRead.last_read_id.is_(None), Message.created_at > member.joined_at),
+                and_(ChannelRead.last_read_id.is_(None), Message.created_at > since),
             ),
         )
         .group_by(Message.channel_id)

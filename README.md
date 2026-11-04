@@ -141,3 +141,15 @@ deployments (tests use their own channel). Run the seed to populate example conv
 - **Unread counts:** `channel_reads` stores the newest message each user has seen. The marker only
   moves forward (`GREATEST`), the channel list returns `unread` per channel, and
   `channel:activity` events update badges for other channels live.
+
+## Direct messages
+
+Private one-to-one and group conversations (up to 9 people) live outside spaces at `/dms`. A
+conversation is a `dm` channel with no space plus `dm_members` rows, so messages, threads,
+reactions, files and unread markers reuse the channel code. Each group of people has exactly one
+conversation: `channels.dm_key` stores the sorted participant ids under a unique index, and
+`POST /api/dms` upserts on it. To limit spam, you can only message people who share a space with
+you (`GET /api/users/search`). Non-participants get 404 for history, uploads and socket joins.
+New messages are announced to every participant's `user:{id}` room (`dm:activity`) for the
+conversation list and the unread badge in the navigation bar, and presence changes reach DM
+partners the same way.

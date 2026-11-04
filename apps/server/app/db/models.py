@@ -114,14 +114,34 @@ class Channel(Base):
     __table_args__ = (UniqueConstraint("space_id", "name", name="uq_channels_space_name"),)
 
     id: Mapped[str] = pk()
-    space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"), index=True)
+    # Null for direct-message conversations, which live outside any space.
+    space_id: Mapped[str | None] = mapped_column(
+        ForeignKey("spaces.id", ondelete="CASCADE"), index=True
+    )
     type: Mapped[ChannelType] = mapped_column(
         Enum(ChannelType, name="channel_type"), default=ChannelType.text
     )
     name: Mapped[str] = mapped_column(String(80))
     topic: Mapped[str | None] = mapped_column(Text)
     position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Sorted participant ids of a DM, so the same group of people always gets one conversation.
+    dm_key: Mapped[str | None] = mapped_column(Text, unique=True)
     created_at: Mapped[datetime] = created_at()
+
+
+class DirectMember(Base):
+    """A participant of a direct-message conversation (a Channel with type dm)."""
+
+    __tablename__ = "dm_members"
+    __table_args__ = (Index("ix_dm_members_user_id", "user_id"),)
+
+    channel_id: Mapped[str] = mapped_column(
+        ForeignKey("channels.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    joined_at: Mapped[datetime] = created_at()
 
 
 class Invite(Base):

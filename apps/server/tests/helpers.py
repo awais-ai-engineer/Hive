@@ -25,7 +25,7 @@ async def connected(url, account=None):
     client = socketio.AsyncClient(reconnection=False)
     queues = {name: asyncio.Queue() for name in (
         "message:new", "message:updated", "message:deleted", "typing",
-        "reaction:updated", "read:updated", "presence", "channel:activity",
+        "reaction:updated", "read:updated", "presence", "channel:activity", "dm:activity",
     )}
     for name, queue in queues.items():
         client.on(name, queue.put_nowait)
