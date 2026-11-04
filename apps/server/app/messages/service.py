@@ -72,7 +72,8 @@ async def serialize(session: AsyncSession, rows: list[tuple[Message, User]]) -> 
         ))
         serialized = await serialize_files(files)
         for file in files:
-            attachments.setdefault(file.message_id, []).append(serialized[file.id])
+            if file.id in serialized:
+                attachments.setdefault(file.message_id, []).append(serialized[file.id])
     result = []
     for message, author in rows:
         deleted = message.deleted_at is not None

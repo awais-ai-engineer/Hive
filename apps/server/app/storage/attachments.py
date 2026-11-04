@@ -11,6 +11,7 @@ async def serialize_files(files):
         if files
         else {}
     )
+    # Files whose URL could not be signed (e.g. missing from the bucket) are left out.
     return {
         file.id: AttachmentOut(
             id=file.id,
@@ -21,4 +22,5 @@ async def serialize_files(files):
             url=urls[file.storage_key],
         )
         for file in files
+        if file.storage_key in urls
     }

@@ -172,3 +172,20 @@ async def test_migration_backfill(client, setup_chat):
     url = (await LocalStorage().signed_urls([SignRequest(attachment_id, 'legacy.png', True)]))[attachment_id]
     response = await client.get(url)
     assert response.status_code == 200 and response.content == PNG
+
+
+async def test_supabase_skips_objects_it_cannot_sign(monkeypatch):
+    monkeypatch.setattr(settings, 'supabase_url', 'https://example.supabase.co')
+    monkeypatch.setattr(settings, 'supabase_service_key', 'secret-never-log')
+    def handler(request):
+        return httpx.Response(200, json=[
+            {'path': 'ok', 'signedURL': '/object/sign/hive-media/ok?token=1'},
+            {'path': 'gone', 'signedURL': None, 'error': 'Object not found'},
+        ])
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        items = [SignRequest('ok', 'a.png', True), SignRequest('gone', 'b.png', True)]
+        for item in items:
+            await redis.delete(f'media-url:{item.key}:{item.inline}')
+        urls = await SupabaseStorage(http).signed_urls(items)
+    # One missing object must not take down the whole page of messages or posts.
+    assert list(urls) == ['ok']

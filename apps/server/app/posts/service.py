@@ -81,7 +81,8 @@ async def serialize(session, rows, viewer_id=None):
     serialized = await serialize_files(files)
     media = {}
     for file in files:
-        media.setdefault(file.post_id, []).append(serialized[file.id])
+        if file.id in serialized:
+            media.setdefault(file.post_id, []).append(serialized[file.id])
     result = []
     for post, space, author in rows:
         vote = votes.get(post.id, 0)

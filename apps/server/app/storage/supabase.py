@@ -49,37 +49,40 @@ class SupabaseStorage:
             log.warning("Storage cleanup failed")
 
     async def signed_urls(self, items):
-        result, missing = {}, []
-        for item in items:
-            cache = f"media-url:{item.key}:{item.inline}"
-            cached = await redis.get(cache)
-            if cached:
-                result[item.key] = cached
-            else:
-                missing.append(item)
-        if missing:
-            response = await self.request(
-                "POST",
-                f"sign/{settings.supabase_bucket}",
-                json={
-                    "expiresIn": settings.signed_url_seconds,
-                    "paths": list(dict.fromkeys(item.key for item in missing)),
-                },
-            )
-            try:
-                signed = {
-                    row["path"]: row["signedURL"] for row in response.json() if not row.get("error")
-                }
-                for item in missing:
-                    url = f"{settings.supabase_url.rstrip('/')}/storage/v1{signed[item.key]}"
-                    if not item.inline:
-                        url += f"&download={quote(item.filename, safe='')}"
-                    result[item.key] = url
-                    await redis.set(
-                        f"media-url:{item.key}:{item.inline}",
-                        url,
-                        ex=max(1, settings.signed_url_seconds - 300),
-                    )
-            except (KeyError, TypeError, ValueError):
-                raise StorageError("Storage unavailable") from None
+        """Signed URLs for many objects: cached ones from Redis (one MGET), the rest in a single
+        batch request. A missing or broken object is left out instead of failing the whole page."""
+        if not items:
+            return {}
+        cache_keys = [f"media-url:{item.key}:{item.inline}" for item in items]
+        cached = await redis.mget(cache_keys)
+        result = {item.key: url for item, url in zip(items, cached, strict=True) if url}
+        missing = [item for item in items if item.key not in result]
+        if not missing:
+            return result
+        response = await self.request(
+            "POST",
+            f"sign/{settings.supabase_bucket}",
+            json={
+                "expiresIn": settings.signed_url_seconds,
+                "paths": list(dict.fromkeys(item.key for item in missing)),
+            },
+        )
+        try:
+            rows = response.json()
+            signed = {row["path"]: row["signedURL"] for row in rows if row.get("signedURL")}
+        except (KeyError, TypeError, ValueError, AttributeError):
+            raise StorageError("Storage unavailable") from None
+        base = settings.supabase_url.rstrip("/")
+        async with redis.pipeline(transaction=False) as pipe:
+            for item in missing:
+                if item.key not in signed:
+                    log.warning("Storage object could not be signed")
+                    continue
+                url = f"{base}/storage/v1{signed[item.key]}"
+                if not item.inline:
+                    url += f"&download={quote(item.filename, safe='')}"
+                result[item.key] = url
+                pipe.set(f"media-url:{item.key}:{item.inline}", url,
+                         ex=max(1, settings.signed_url_seconds - 300))
+            await pipe.execute()
         return result
