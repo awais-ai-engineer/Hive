@@ -8,6 +8,7 @@ export const messageSendSchema = z.object({
 
 export const reactionSchema = z.object({ emoji: z.string(), count: z.number(), user_ids: z.array(z.string()) });
 export const attachmentSchema = z.object({
+  kind: z.enum(['image', 'video', 'file']),
   id: z.string(), filename: z.string(), content_type: z.string(), size: z.number(), url: z.string(),
 });
 export const messageSchema = z.object({

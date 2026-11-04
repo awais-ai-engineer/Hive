@@ -15,7 +15,20 @@ class Settings(BaseSettings):
     refresh_token_days: int = 30
     cookie_secure: bool = False
     upload_dir: str = "uploads"
-    max_upload_mb: int = 10
+    storage_driver: str = "local"
+    max_image_mb: int = 10
+    max_video_mb: int = 100
+    max_file_mb: int = 10
+    supabase_url: str = ""
+    supabase_service_key: str = ""
+    supabase_bucket: str = "hive-media"
+    signed_url_seconds: int = 3600
+
+    def validate_storage(self):
+        if self.storage_driver not in ("local", "supabase"):
+            raise ValueError("STORAGE_DRIVER must be local or supabase")
+        if self.storage_driver == "supabase" and not all((self.supabase_url, self.supabase_service_key, self.supabase_bucket)):
+            raise ValueError("Supabase storage requires SUPABASE_URL, SUPABASE_SERVICE_KEY and SUPABASE_BUCKET")
 
 
 settings = Settings()

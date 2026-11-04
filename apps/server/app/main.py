@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 import socketio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api import health
 from app.auth.router import router as auth_router
@@ -16,6 +17,7 @@ from app.messages.router import router as messages_router
 from app.posts.router import router as posts_router
 from app.realtime.socket import sio
 from app.spaces.router import router as spaces_router
+from app.storage.base import StorageError
 from app.uploads.router import router as uploads_router
 from app.users.router import router as users_router
 
@@ -24,6 +26,7 @@ logging.basicConfig(level=logging.INFO)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    settings.validate_storage()
     yield
     await engine.dispose()
     await redis.aclose()
@@ -50,3 +53,8 @@ api.include_router(posts_router, prefix="/api")
 
 # One ASGI app: Socket.IO handles /socket.io, everything else goes to FastAPI.
 app = socketio.ASGIApp(sio, other_asgi_app=api)
+
+
+@api.exception_handler(StorageError)
+async def storage_error_handler(request, error):
+    return JSONResponse(status_code=502, content={"detail": "Storage unavailable"})

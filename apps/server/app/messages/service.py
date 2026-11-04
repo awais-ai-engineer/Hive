@@ -22,7 +22,7 @@ from app.db.session import redis
 from app.messages.schemas import AttachmentOut, AuthorOut, MessageOut, SendIn
 from app.spaces.permissions import require_role
 from app.spaces.service import member_for
-from app.uploads.storage import signed_url
+from app.storage.attachments import serialize_files
 
 MAX_REACTION_KINDS = 20
 
@@ -67,13 +67,12 @@ async def serialize(session: AsyncSession, rows: list[tuple[Message, User]]) -> 
         )
         for message_id, emoji, user_id in reaction_rows:
             reactions.setdefault(message_id, {}).setdefault(emoji, []).append(user_id)
-        for file in await session.scalars(
+        files = list(await session.scalars(
             select(Attachment).where(Attachment.message_id.in_(ids)).order_by(Attachment.id)
-        ):
-            attachments.setdefault(file.message_id, []).append(AttachmentOut(
-                id=file.id, filename=file.filename, content_type=file.content_type,
-                size=file.size, url=signed_url(file.id),
-            ))
+        ))
+        serialized = await serialize_files(files)
+        for file in files:
+            attachments.setdefault(file.message_id, []).append(serialized[file.id])
     result = []
     for message, author in rows:
         deleted = message.deleted_at is not None
@@ -132,8 +131,10 @@ async def thread(session, message_id, user_id, after=None, limit=100):
     query = _with_authors().where(Message.parent_id == parent.id)
     if after is not None:
         query = query.where(Message.id > after)
-    page = await _page(session, query.order_by(Message.id.asc()), False, limit)
-    return {"parent": await message_out(session, parent), **page}
+    rows = list((await session.execute(query.order_by(Message.id.asc()).limit(limit + 1))).all())
+    author = await session.get(User, parent.author_id)
+    outputs = await serialize(session, [(parent, author), *rows[:limit]])
+    return {"parent": outputs[0], "items": outputs[1:], "has_more": len(rows) > limit}
 
 
 async def _check_rate(user_id: str) -> None:

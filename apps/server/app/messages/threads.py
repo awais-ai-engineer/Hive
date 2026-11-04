@@ -128,11 +128,11 @@ async def my_threads(session: AsyncSession, user: User, before: str | None, limi
         .where(Message.id.in_(select(ranked.c.id).where(ranked.c.rank <= 2)))
         .order_by(Message.id)
     )).all())
-    recent_out = dict(zip([message.id for message, _ in recent], await serialize(session, recent),
-                          strict=True))
-
+    combined = [(parent, author) for parent, author, _ in rows] + recent
+    outputs = await serialize(session, combined)
+    parents_out = outputs[:len(rows)]
+    recent_out = dict(zip([message.id for message, _ in recent], outputs[len(rows):], strict=True))
     unread = await _unread_replies(session, user.id, [parent for parent, _, _ in rows])
-    parents_out = await serialize(session, [(parent, author) for parent, author, _ in rows])
     where = await places(session, user.id, list({parent.channel_id for parent, _, _ in rows}))
     items = []
     for (parent, _, last_id), parent_out in zip(rows, parents_out, strict=True):
@@ -231,6 +231,7 @@ async def my_unreads(session: AsyncSession, user: User) -> dict:
     )).all())
     where = await places(session, user.id, list(counts))
     items = []
+    batches = []
     for channel_id, count in counts.items():
         query = (
             select(Message, User).join(User, User.id == Message.author_id)
@@ -245,7 +246,11 @@ async def my_unreads(session: AsyncSession, user: User) -> dict:
             query = query.where(Message.created_at > since[channel_id])
         rows = list((await session.execute(query.order_by(Message.id.desc()).limit(20))).all())
         rows.reverse()
-        unread_items = await serialize(session, rows)
+        batches.append((channel_id, count, rows))
+    all_rows = [row for _, _, rows in batches for row in rows]
+    serialized = {item["id"]: item for item in await serialize(session, all_rows)}
+    for channel_id, count, rows in batches:
+        unread_items = [serialized[message.id] for message, _ in rows]
         items.append({
             "channel": where[channel_id], "unread": count,
             "first_unread_id": unread_items[0]["id"] if unread_items else None,

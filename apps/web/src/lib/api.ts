@@ -83,3 +83,38 @@ export async function endSession() {
   if (!response.ok) throw new Error('Could not log out. Please try again.');
   setSession(null);
 }
+
+export function uploadFile<T>(path: string, file: File, onProgress: (percent: number) => void, signal?: AbortSignal): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let request: XMLHttpRequest | null = null;
+    let settled = false;
+    const finish = (error?: Error, result?: T) => {
+      if (settled) return;
+      settled = true; signal?.removeEventListener('abort', cancel);
+      if (error) reject(error); else resolve(result!);
+    };
+    const cancel = () => { request?.abort(); finish(new DOMException('Upload cancelled', 'AbortError')); };
+    signal?.addEventListener('abort', cancel, { once: true });
+    async function send(retried = false) {
+      if (signal?.aborted) { cancel(); return; }
+      const xhr = new XMLHttpRequest(); request = xhr;
+      xhr.open('POST', `${API_URL}${path}`); xhr.withCredentials = true;
+      if (session) xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`);
+      xhr.upload.onprogress = event => { if (event.lengthComputable) onProgress(Math.round(event.loaded / event.total * 100)); };
+      xhr.onerror = () => finish(new Error('Upload failed. Check your connection.'));
+      xhr.onabort = () => finish(new DOMException('Upload cancelled', 'AbortError'));
+      xhr.onload = async () => {
+        if (xhr.status === 401 && !retried) {
+          if (await refreshSession()) { void send(true); return; }
+        }
+        try {
+          const data = JSON.parse(xhr.responseText);
+          if (xhr.status < 200 || xhr.status >= 300) throw new Error(typeof data.detail === 'string' ? data.detail : 'Upload failed');
+          finish(undefined, data as T);
+        } catch (error) { finish(error instanceof Error ? error : new Error('Upload failed')); }
+      };
+      const form = new FormData(); form.append('file', file); xhr.send(form);
+    }
+    void send();
+  });
+}

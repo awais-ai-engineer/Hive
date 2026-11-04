@@ -1,6 +1,8 @@
+import type { Attachment } from '@hive/shared';
 import { apiData } from './spaces';
 
 export type Post = {
+  media: Attachment[];
   id: string; space: { id: string; slug: string; name: string };
   author: { id: string; username: string; avatar_url: string | null } | null;
   title: string; body: string | null; url: string | null; domain: string | null;

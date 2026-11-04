@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { relativeTime, type Post, type VoteResult } from '../../lib/posts';
+import { MediaGallery } from './media-gallery';
 import { VoteButtons } from './vote-buttons';
 
 export function PostCard({ post, combined = false, full = false, reason, onChange }: {
@@ -18,6 +19,7 @@ export function PostCard({ post, combined = false, full = false, reason, onChang
       <p className="mt-1 text-xs text-white/45">posted by {post.author ? `u/${post.author.username}` : '[deleted]'} · <time dateTime={post.created_at}>{relativeTime(post.created_at)}</time>
         {combined && <> · in <Link className="text-amber-400" href={`/s/${post.space.slug}`}>{post.space.name}</Link></>}
         {post.edited_at && ' · edited'}</p>
+      {!!post.media?.length && <MediaGallery files={post.media} postId={post.id} full={full} />}
       {post.body && <p className={`mt-3 whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${full ? 'text-white/85' : 'text-white/50'}`}>{full ? post.body : post.body.slice(0, 300) + (post.body.length > 300 ? '…' : '')}</p>}
       <Link className="mt-3 inline-block text-xs text-white/50 hover:text-amber-400" href={`/p/${post.id}`}>{post.comment_count} comments · View post</Link>
     </div>

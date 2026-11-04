@@ -2,8 +2,11 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
+from app.messages.schemas import AttachmentOut
+
 
 class PostCreate(BaseModel):
+    mediaIds: list[str] = Field(default_factory=list, max_length=10)
     title: str = Field(min_length=1, max_length=300)
     body: str | None = Field(default=None, max_length=40000)
     url: HttpUrl | None = Field(default=None, max_length=2000)
@@ -23,7 +26,7 @@ class PostCreate(BaseModel):
 
     @model_validator(mode="after")
     def exclusive_body_url(self):
-        if self.body is not None and self.url is not None:
+        if (self.body is not None or getattr(self, "mediaIds", [])) and self.url is not None:
             raise ValueError("Choose either text or a link")
         return self
 
@@ -40,7 +43,7 @@ class PostPatch(BaseModel):
 
     @model_validator(mode="after")
     def exclusive_body_url(self):
-        if self.body is not None and self.url is not None:
+        if (self.body is not None or getattr(self, "mediaIds", [])) and self.url is not None:
             raise ValueError("Choose either text or a link")
         return self
 
@@ -70,6 +73,7 @@ class Place(BaseModel):
 
 
 class PostOut(BaseModel):
+    media: list[AttachmentOut] = Field(default_factory=list)
     id: str
     space: Place
     author: Author | None

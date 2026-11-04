@@ -7,7 +7,9 @@ os.environ["JWT_SECRET"] = "test-secret-long-enough-for-hs256-signing"
 os.environ["COOKIE_SECURE"] = "false"
 os.environ["SOCKETIO_CHANNEL"] = "hive-socketio-tests"
 os.environ["UPLOAD_DIR"] = tempfile.mkdtemp(prefix="hive-uploads-")
-os.environ["MAX_UPLOAD_MB"] = "1"
+os.environ["MAX_IMAGE_MB"] = "1"
+os.environ["MAX_FILE_MB"] = "1"
+os.environ["MAX_VIDEO_MB"] = "2"
 
 import asyncio
 import socket

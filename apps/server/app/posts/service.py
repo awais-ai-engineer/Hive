@@ -8,12 +8,23 @@ from urllib.parse import urlparse
 from fastapi import HTTPException
 from sqlalchemy import or_, select, tuple_
 
-from app.db.models import MemberRole, Post, PostVote, Space, SpaceMember, SpaceType, User
+from app.db.models import (
+    Attachment,
+    MemberRole,
+    Post,
+    PostVote,
+    Space,
+    SpaceMember,
+    SpaceType,
+    User,
+)
 from app.db.session import redis
 from app.posts.ranking import hot_score
 from app.posts.schemas import Author, Place, PostOut
 from app.spaces.permissions import require_role
 from app.spaces.service import load_space, member_for
+from app.storage import get_storage
+from app.storage.attachments import serialize_files
 
 
 async def visible_space(session, space, user_id):
@@ -56,6 +67,21 @@ async def serialize(session, rows, viewer_id=None):
         if viewer_id and rows
         else {}
     )
+    files = (
+        list(
+            await session.scalars(
+                select(Attachment)
+                .where(Attachment.post_id.in_([row[0].id for row in rows if not row[0].deleted_at]))
+                .order_by(Attachment.position)
+            )
+        )
+        if rows
+        else []
+    )
+    serialized = await serialize_files(files)
+    media = {}
+    for file in files:
+        media.setdefault(file.post_id, []).append(serialized[file.id])
     result = []
     for post, space, author in rows:
         vote = votes.get(post.id, 0)
@@ -82,6 +108,7 @@ async def serialize(session, rows, viewer_id=None):
                 created_at=post.created_at,
                 edited_at=post.edited_at,
                 deleted=deleted,
+                media=[] if deleted else media.get(post.id, []),
             ).model_dump(mode="json")
         )
     return result
@@ -91,7 +118,8 @@ async def get_post(session, post_id, user_id=None):
     row = (
         await session.execute(
             select(Post, Space, User)
-            .select_from(Post).join(Space, Space.id == Post.space_id)
+            .select_from(Post)
+            .join(Space, Space.id == Post.space_id)
             .outerjoin(User, User.id == Post.author_id)
             .where(Post.id == post_id)
         )
@@ -124,6 +152,29 @@ async def create(session, user, slug, data):
     )
     session.add(post)
     await session.flush()
+    if data.mediaIds:
+        if len(set(data.mediaIds)) != len(data.mediaIds):
+            raise HTTPException(422, "Duplicate media")
+        files = list(
+            await session.scalars(
+                select(Attachment)
+                .where(
+                    Attachment.id.in_(data.mediaIds),
+                    Attachment.uploader_id == user.id,
+                    Attachment.space_id == space.id,
+                    Attachment.post_id.is_(None),
+                )
+                .with_for_update()
+            )
+        )
+        kinds = [file.kind for file in files]
+        if len(files) != len(data.mediaIds) or not (
+            all(kind == "image" for kind in kinds) or kinds == ["video"]
+        ):
+            raise HTTPException(422, "Use 1-10 images or one video uploaded to this space")
+        for file in files:
+            file.post_id = post.id
+            file.position = data.mediaIds.index(file.id)
     post.hot = hot_score(0, post.created_at)
     await session.commit()
     return await get_post(session, post.id, user.id)
@@ -132,7 +183,8 @@ async def create(session, user, slug, data):
 async def feed(session, viewer, slug=None, sort="hot", period="week", cursor=None, limit=25):
     query = (
         select(Post, Space, User)
-        .select_from(Post).join(Space, Space.id == Post.space_id)
+        .select_from(Post)
+        .join(Space, Space.id == Post.space_id)
         .outerjoin(User, User.id == Post.author_id)
         .where(Post.deleted_at.is_(None))
     )
@@ -204,7 +256,10 @@ async def edit(session, user, post_id, data):
     # Only change what was sent, so editing a link post's url keeps it a link post (and vice versa).
     body = data.body if "body" in data.model_fields_set else post.body
     url = (str(data.url) if data.url else None) if "url" in data.model_fields_set else post.url
-    if body and url:
+    has_media = await session.scalar(
+        select(Attachment.id).where(Attachment.post_id == post_id).limit(1)
+    )
+    if (body or has_media) and url:
         raise HTTPException(422, "Choose either text or a link")
     post.body, post.url = body, url
     post.edited_at = datetime.now(UTC)
@@ -226,7 +281,11 @@ async def remove(session, user, post_id):
     post.deleted_at = datetime.now(UTC)
     post.body = None
     post.url = None
+    keys = list(
+        await session.scalars(select(Attachment.storage_key).where(Attachment.post_id == post_id))
+    )
     await session.commit()
+    await get_storage().delete(keys)
 
 
 async def vote(session, user, post_id, value):
@@ -268,4 +327,3 @@ async def vote(session, user, post_id, value):
         "downvotes": post.downvotes,
         "my_vote": value,
     }
-
