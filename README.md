@@ -53,7 +53,7 @@ Ports 5434 and 6380 avoid clashing with other local Postgres/Redis instances.
 2. [x] Spaces, roles, invites, channels
 3. [x] Real-time chat: idempotent send, optimistic UI, reconnect sync
 4. [x] Threads, reactions, uploads, presence, unread counts
-5. Posts, voting, hot/top/new ranking
+5. [x] Posts, voting, hot/top/new ranking
 6. Nested comments (ltree), public community pages
 7. WebRTC voice/video, huddles
 8. Webhooks, slash commands, OAuth bots
@@ -170,3 +170,25 @@ button work; on phones the sidebar becomes a drawer.
   `thread:activity`.
 - `space:watch` / `space:unwatch` subscribe a socket to a space's `channel:activity` and presence,
   so sidebar badges stay live while a DM is open. Leaving or being removed from a space ends it.
+
+## Posts & ranking
+
+Spaces have Reddit-style text, link and title-only posts (`/s/<slug>?tab=posts`, `/p/<id>`), and
+`/feed` combines the posts of your spaces (or all public communities when logged out). Members
+vote up or down; authors can edit the body or link (not the title) and authors or moderators
+can delete.
+
+- **Hot** uses the classic formula `sign(score) * log10(max(|score|, 1)) + created_epoch / 45000`
+  (`app/posts/ranking.py`). The time term gives every newer post a steadily higher baseline, while
+  each 10x more score is worth about 12.5 hours, so fresh posts with some votes rise above old
+  popular ones. It is recomputed in the same transaction as every vote.
+- **New** orders by ULID, **Top** by score within a time window (day, week, month, year, all).
+- **Keyset cursors**, not offsets: `next_cursor` is an opaque base64 value of the last row's sort
+  key (`[hot, id]`, `[score, id]` or `[id]`), compared with a row-value `(key, id) < (…)`, so
+  pages stay stable while votes and new posts arrive.
+- **Race-safe voting:** the post row is locked (`SELECT … FOR UPDATE`), the vote is changed, and
+  the counters are updated with SQL arithmetic in one transaction, so concurrent votes never lose
+  updates and repeating the same vote changes nothing. A `CHECK (value IN (-1, 1))` constraint
+  guards the votes table.
+- Live updates: `post:new` and `post:score` are broadcast to the space room. Limits: 5 posts per
+  10 minutes and 60 votes per minute per user.

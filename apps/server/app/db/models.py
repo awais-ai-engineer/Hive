@@ -2,16 +2,20 @@
 
 IDs are ULIDs: sortable by time, so pagination needs no extra timestamp index.
 """
+
 import enum
 from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    CheckConstraint,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Index,
     Integer,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -169,9 +173,7 @@ class Message(Base):
     id: Mapped[str] = pk()
     channel_id: Mapped[str] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"))
     author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    parent_id: Mapped[str | None] = mapped_column(
-        ForeignKey("messages.id", ondelete="CASCADE")
-    )
+    parent_id: Mapped[str | None] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE"))
     client_msg_id: Mapped[str | None] = mapped_column(String(64))
     body: Mapped[str] = mapped_column(Text)
     reply_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
@@ -242,3 +244,40 @@ class ThreadRead(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class Post(Base):
+    __tablename__ = "posts"
+    __table_args__ = (
+        Index("posts_space_new", "space_id", "id"),
+        Index("posts_space_hot", "space_id", "hot", "id"),
+        Index("posts_space_top", "space_id", "score", "id"),
+        Index("posts_author_idx", "author_id"),
+    )
+    id: Mapped[str] = pk()
+    space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"))
+    author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(300))
+    body: Mapped[str | None] = mapped_column(Text)
+    url: Mapped[str | None] = mapped_column(Text)
+    score: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    upvotes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    downvotes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    comment_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    hot: Mapped[float] = mapped_column(Float, default=0, server_default="0")
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = created_at()
+
+
+class PostVote(Base):
+    __tablename__ = "post_votes"
+    __table_args__ = (CheckConstraint("value IN (-1, 1)", name="post_votes_value_check"),)
+    post_id: Mapped[str] = mapped_column(
+        ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    value: Mapped[int] = mapped_column(SmallInteger)
+    created_at: Mapped[datetime] = created_at()
