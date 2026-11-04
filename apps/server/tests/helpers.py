@@ -26,6 +26,7 @@ async def connected(url, account=None):
     queues = {name: asyncio.Queue() for name in (
         "message:new", "message:updated", "message:deleted", "typing",
         "reaction:updated", "read:updated", "presence", "channel:activity", "dm:activity",
+        "thread:activity", "thread:read",
     )}
     for name, queue in queues.items():
         client.on(name, queue.put_nowait)

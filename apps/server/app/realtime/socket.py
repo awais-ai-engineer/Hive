@@ -18,12 +18,24 @@ from sqlalchemy import select
 
 from app.auth.security import decode_access_token
 from app.core.config import settings
-from app.db.models import Channel, ChannelType, SpaceMember, User
+from app.db.models import Channel, ChannelType, Message, Space, SpaceMember, SpaceType, User
 from app.db.session import SessionLocal
 from app.dms.service import participant_ids, partner_ids
 from app.messages import service
-from app.messages.schemas import ChannelIn, EditIn, MessageIn, ReactionIn, ReadIn, SendIn, SyncIn
+from app.messages.schemas import (
+    ChannelIn,
+    EditIn,
+    MessageIn,
+    ReactionIn,
+    ReadIn,
+    SendIn,
+    SpaceIn,
+    SyncIn,
+    ThreadReadIn,
+)
+from app.messages.threads import mark_thread_read, thread_participants
 from app.realtime import presence
+from app.spaces.service import member_for
 
 log = logging.getLogger("hive.realtime")
 
@@ -133,6 +145,12 @@ async def send(sid, data, session, user):
         await sio.emit("message:new", message, room=room)
         if parent is not None:
             await sio.emit("message:updated", parent, room=room)
+            # Everyone in the thread hears about it, even without the channel open.
+            activity = {"parentId": parent["id"], "channelId": message["channel_id"],
+                        "messageId": message["id"], "authorId": user.id}
+            parent_row = await session.get(Message, parent["id"])
+            for participant in await thread_participants(session, parent_row):
+                await sio.emit("thread:activity", activity, room=f"user:{participant}")
         else:
             channel = await session.get(Channel, message["channel_id"])
             activity = {"channelId": channel.id, "messageId": message["id"], "authorId": user.id}
@@ -173,6 +191,30 @@ async def read(sid, data, session, user):
     await sio.emit("read:updated", {"channelId": data.channelId, "lastReadId": marker},
                    room=f"user:{user.id}", skip_sid=sid)
     return {"lastReadId": marker}
+
+
+@chat_event("thread:read", ThreadReadIn)
+async def thread_read(sid, data, session, user):
+    marker = await mark_thread_read(session, user, data.parentId, data.messageId)
+    await sio.emit("thread:read", {"parentId": data.parentId, "lastReadId": marker},
+                   room=f"user:{user.id}", skip_sid=sid)
+    return {"lastReadId": marker}
+
+
+@chat_event("space:watch", SpaceIn)
+async def watch_space(sid, data, session, user):
+    """Follow a space's channel activity and presence without opening one of its channels."""
+    space = await session.get(Space, data.spaceId)
+    if space is None or (
+        space.type == SpaceType.workspace and await member_for(session, space.id, user.id) is None
+    ):
+        raise HTTPException(404, "Space not found")
+    await sio.enter_room(sid, f"space:{space.id}")
+
+
+@chat_event("space:unwatch", SpaceIn)
+async def unwatch_space(sid, data, session, user):
+    await sio.leave_room(sid, f"space:{data.spaceId}")
 
 
 @chat_event("sync", SyncIn)

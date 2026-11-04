@@ -36,7 +36,7 @@ export default function MembersPage() {
       const conversation = await apiData<{ id: string }>('/api/dms', {
         method: 'POST', body: JSON.stringify({ usernames: [member.user.username] }),
       });
-      router.push(`/dms?c=${conversation.id}`);
+      router.push(`/home?c=${conversation.id}`);
     } catch (cause) { setError(requestError(cause)); }
   }
 

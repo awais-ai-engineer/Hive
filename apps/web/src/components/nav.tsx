@@ -53,7 +53,7 @@ export default function Nav() {
         <Link href="/" className="text-xl font-bold text-amber-400">Hive</Link>
         <div className="ml-auto mr-4 flex items-center gap-4 text-sm">
           <Link href="/spaces">Spaces</Link>
-          {user && <Link href="/dms" className="flex items-center gap-1">Messages
+          {user && <Link href="/home" className="flex items-center gap-1">Home
             {unread > 0 && <span aria-label={`${unread} unread messages`} className="rounded-full bg-amber-400 px-1.5 text-xs font-semibold text-black">{unread > 99 ? '99+' : unread}</span>}
           </Link>}
         </div>

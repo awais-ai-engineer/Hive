@@ -17,14 +17,19 @@ type Props = {
   /** Whether the viewer has a read marker to move (space members, conversation participants). */
   tracksReads: boolean;
   onRead?: (channelId: string) => void;
+  /** Optional controlled thread panel (e.g. kept in the URL); otherwise managed internally. */
+  threadId?: string | null;
+  onThreadChange?: (threadId: string | null) => void;
 };
 
-export function ChannelChat({ channel, placeholder, reason, canModerate, tracksReads, onRead }: Props) {
+export function ChannelChat({ channel, placeholder, reason, canModerate, tracksReads, onRead, ...thread }: Props) {
   const { user } = useAuth();
   const chat = useChannelMessages(channel.id);
   const [error, setError] = useState('');
   const [newMessages, setNewMessages] = useState(false);
-  const [threadId, setThreadId] = useState<string | null>(null);
+  const [ownThreadId, setOwnThreadId] = useState<string | null>(null);
+  const threadId = thread.onThreadChange ? thread.threadId ?? null : ownThreadId;
+  const setThreadId = thread.onThreadChange ?? setOwnThreadId;
   const [typers, setTypers] = useState<Record<string, { name: string; until: number }>>({});
   const list = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
@@ -89,7 +94,7 @@ export function ChannelChat({ channel, placeholder, reason, canModerate, tracksR
     requestAnimationFrame(() => { anchor.current = null; });
   }
   const retry = (message: ChatMessage) => void chat.send(message.body ?? '', message.client_msg_id!, message.attachments);
-  const closeThread = useCallback(() => setThreadId(null), []);
+  const closeThread = useCallback(() => setThreadId(null), [setThreadId]);
   const names = Object.values(typers).map(value => value.name);
   const typingText = names.length > 2 ? 'Several people are typing…'
     : names.length === 2 ? `${names[0]} and ${names[1]} are typing…`

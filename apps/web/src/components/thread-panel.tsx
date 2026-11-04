@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { socket } from '../lib/socket';
 import { useMessageList } from '../lib/use-channel-messages';
 import { Composer } from './composer';
 import { MessageItem } from './message-item';
@@ -25,6 +26,14 @@ export function ThreadPanel({ channelId, parentId, userId, reason, canWrite, can
     const element = list.current;
     if (element) element.scrollTop = element.scrollHeight;
   }, [thread.messages.length]);
+  // Opening a thread marks its newest reply as read (drives the Threads view highlight).
+  const lastRead = useRef<string | null>(null);
+  useEffect(() => {
+    const newest = thread.messages.filter(item => !item.status).at(-1)?.id;
+    if (!userId || !newest || newest === lastRead.current || !socket.connected) return;
+    lastRead.current = newest;
+    socket.emit('thread:read', { parentId, messageId: newest }, () => {});
+  }, [thread.messages, userId, parentId]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
