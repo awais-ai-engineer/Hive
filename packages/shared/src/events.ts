@@ -24,6 +24,8 @@ export const SocketEvents = {
   ThreadRead: 'thread:read',
   ThreadActivity: 'thread:activity',
   Sync: 'sync',
+  PostNew: 'post:new',
+  PostScore: 'post:score',
 } as const;
 
 export interface PingAck {

@@ -52,6 +52,7 @@ export default function Nav() {
       <nav className="mx-auto flex max-w-5xl items-center justify-between" aria-label="Main navigation">
         <Link href="/" className="text-xl font-bold text-amber-400">Hive</Link>
         <div className="ml-auto mr-4 flex items-center gap-4 text-sm">
+          <Link href="/feed">Feed</Link>
           <Link href="/spaces">Spaces</Link>
           {user && <Link href="/home" className="flex items-center gap-1">Home
             {unread > 0 && <span aria-label={`${unread} unread messages`} className="rounded-full bg-amber-400 px-1.5 text-xs font-semibold text-black">{unread > 99 ? '99+' : unread}</span>}

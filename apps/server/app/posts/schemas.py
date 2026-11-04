@@ -1,0 +1,87 @@
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
+
+
+class PostCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    body: str | None = Field(default=None, max_length=40000)
+    url: HttpUrl | None = Field(default=None, max_length=2000)
+
+    @field_validator("title")
+    @classmethod
+    def title_trim(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError("Title is required")
+        return value
+
+    @field_validator("body")
+    @classmethod
+    def body_trim(cls, value):
+        return value.strip() or None if value is not None else None
+
+    @model_validator(mode="after")
+    def exclusive_body_url(self):
+        if self.body is not None and self.url is not None:
+            raise ValueError("Choose either text or a link")
+        return self
+
+
+class PostPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    body: str | None = Field(default=None, max_length=40000)
+    url: HttpUrl | None = Field(default=None, max_length=2000)
+
+    @field_validator("body")
+    @classmethod
+    def body_trim(cls, value):
+        return value.strip() or None if value is not None else None
+
+    @model_validator(mode="after")
+    def exclusive_body_url(self):
+        if self.body is not None and self.url is not None:
+            raise ValueError("Choose either text or a link")
+        return self
+
+
+class VoteIn(BaseModel):
+    value: int = Field(ge=-1, le=1)
+
+    @field_validator("value")
+    @classmethod
+    def valid_vote(cls, value):
+        if value not in (-1, 0, 1):
+            raise ValueError("Vote must be -1, 0 or 1")
+        return value
+
+
+class Author(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    username: str
+    avatar_url: str | None
+
+
+class Place(BaseModel):
+    id: str
+    slug: str
+    name: str
+
+
+class PostOut(BaseModel):
+    id: str
+    space: Place
+    author: Author | None
+    title: str
+    body: str | None
+    url: str | None
+    domain: str | None
+    score: int
+    upvotes: int
+    downvotes: int
+    comment_count: int
+    my_vote: int
+    created_at: datetime
+    edited_at: datetime | None
+    deleted: bool

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../../lib/auth';
 import { socket } from '../../../lib/socket';
 import { ChannelChat } from '../../../components/channel-chat';
+import { PostFeed } from '../../../components/posts/post-feed';
 import { apiData, requestError, type Channel, type Member, type Space } from '../../../lib/spaces';
 
 const rank: Record<string, number> = { owner: 5, admin: 4, moderator: 3, member: 2, guest: 1 };
@@ -46,6 +47,7 @@ export default function SpacePage() {
 
   const selected = search.get('c');
   const channel = channels.find(item => item.id === selected) ?? channels[0];
+  const tab = search.get('tab') ?? (space?.type === 'community' ? 'posts' : 'chat');
   const clearUnread = useCallback((channelId: string) => {
     setChannels(list => list.map(item => item.id === channelId && item.unread ? { ...item, unread: 0 } : item));
   }, []);
@@ -65,7 +67,9 @@ export default function SpacePage() {
 
   useEffect(() => {
     if (channels.length > 0 && !search.get('c')) {
-      router.replace(`/s/${slug}?c=${channels[0].id}`);
+      const params = new URLSearchParams(search.toString());
+      params.set('c', channels[0].id);
+      router.replace(`/s/${slug}?${params}`);
     }
   }, [channels, search, slug, router]);
 
@@ -91,7 +95,7 @@ export default function SpacePage() {
         {canAdmin && <Link className="ml-3 inline-block text-sm text-amber-400" href={`/s/${slug}/settings`}>Settings</Link>}
         <h2 className="mb-2 mt-6 text-sm font-semibold uppercase text-white/50">Channels</h2>
         <ul className="space-y-1">{channels.map(item => <li key={item.id}>
-          <button onClick={() => router.replace(`/s/${slug}?c=${item.id}`)}
+          <button onClick={() => router.replace(`/s/${slug}?tab=chat&c=${item.id}`)}
             className={`w-full rounded px-2 py-1 text-left ${item.id === channel?.id ? 'bg-white/10 text-amber-400' : 'text-white/70'}`}>
             <span className="flex items-center justify-between gap-2">
               <span className={`truncate ${item.unread && item.id !== channel?.id ? 'font-semibold text-white' : ''}`}>{item.type === 'voice' ? '🔊' : '#'} {item.name}</span>
@@ -108,10 +112,13 @@ export default function SpacePage() {
       </>}
     </aside>
     <section className="min-h-80 min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-3 sm:p-6">
+      {space && <div className="mb-5 flex gap-4">
+        {['posts', 'chat'].map(value => <Link key={value} href={`/s/${slug}?tab=${value}${selected ? `&c=${selected}` : ''}`} className={`rounded px-3 py-2 capitalize ${tab === value ? 'bg-white/10 text-amber-400' : 'text-white/50'}`}>{value}</Link>)}
+      </div>}
       {space && <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div><p className="text-sm uppercase text-white/50">{space.type}</p>
-          <h2 className="text-2xl font-semibold">{channel?.name ?? space.name}</h2>
-          {channel?.topic && <p className="mt-1 text-white/60">{channel.topic}</p>}
+          <h2 className="text-2xl font-semibold">{tab === 'posts' ? space.name : channel?.name ?? space.name}</h2>
+          {tab === 'chat' && channel?.topic && <p className="mt-1 text-white/60">{channel.topic}</p>}
         </div>
         <div className="flex gap-2">
           {!space.my_role && space.type === 'community' && <button disabled={busy} onClick={() => changeMembership('join')} className="auth-button">Join</button>}
@@ -119,7 +126,11 @@ export default function SpacePage() {
         </div>
       </div>}
       {error && <p role="alert" className={error === 'Loading space…' ? 'text-white/50' : 'text-rose-400'}>{error}</p>}
-      {space && channel && <ChannelChat key={`${channel.id}:${user?.id ?? 'anonymous'}`} channel={channel} placeholder={`Message #${channel.name}`}
+      {space && tab === 'posts' && <>
+        {space.my_role && rank[space.my_role] >= rank.member && <Link href={`/s/${slug}/submit`} className="auth-button mb-5 inline-block">Create post</Link>}
+        <PostFeed space={space} />
+      </>}
+      {space && tab === 'chat' && channel && <ChannelChat key={`${channel.id}:${user?.id ?? 'anonymous'}`} channel={channel} placeholder={`Message #${channel.name}`}
         reason={channel.type === 'voice' ? 'Voice rooms coming soon' : !user ? 'Log in to chat'
           : !space.my_role ? 'Join this space to chat' : space.my_role === 'guest' ? 'You have read-only access' : ''}
         canModerate={!!space.my_role && rank[space.my_role] >= rank.moderator} tracksReads={!!space.my_role} onRead={clearUnread} />}

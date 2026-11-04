@@ -13,6 +13,7 @@ from app.db.session import engine, redis
 from app.dms.router import router as dms_router
 from app.invites.router import router as invites_router
 from app.messages.router import router as messages_router
+from app.posts.router import router as posts_router
 from app.realtime.socket import sio
 from app.spaces.router import router as spaces_router
 from app.uploads.router import router as uploads_router
@@ -45,6 +46,7 @@ api.include_router(invites_router, prefix="/api")
 api.include_router(messages_router, prefix="/api")
 api.include_router(uploads_router, prefix="/api")
 api.include_router(dms_router, prefix="/api")
+api.include_router(posts_router, prefix="/api")
 
 # One ASGI app: Socket.IO handles /socket.io, everything else goes to FastAPI.
 app = socketio.ASGIApp(sio, other_asgi_app=api)

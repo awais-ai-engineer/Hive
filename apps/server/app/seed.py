@@ -1,9 +1,11 @@
 import asyncio
 import secrets
+from datetime import UTC, datetime, timedelta
 from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
+from ulid import ULID
 
 from app.auth.security import hash_password
 from app.db.models import (
@@ -13,6 +15,8 @@ from app.db.models import (
     Invite,
     MemberRole,
     Message,
+    Post,
+    PostVote,
     Reaction,
     Space,
     SpaceMember,
@@ -20,6 +24,7 @@ from app.db.models import (
     User,
 )
 from app.db.session import SessionLocal, engine
+from app.posts.ranking import hot_score
 
 
 async def seed() -> None:
@@ -62,7 +67,7 @@ async def seed() -> None:
                 None,
                 "bob",
                 [("general", ChannelType.text), ("jobs", ChannelType.text)],
-                {},
+                {"alice": MemberRole.member, "carol": MemberRole.member},
             ),
             (
                 "acme",
@@ -173,6 +178,7 @@ async def seed() -> None:
                     ).on_conflict_do_nothing(index_elements=["author_id", "client_msg_id"]))
         await seed_thread(session, seeded_spaces["hive-devs"].id, accounts)
         await seed_direct_messages(session, accounts)
+        await seed_posts(session, seeded_spaces, accounts)
         await session.commit()
     print(f"Acme invite: http://localhost:3000/invite/{code}")
     await engine.dispose()
@@ -237,6 +243,56 @@ async def seed_direct_messages(session, accounts: dict) -> None:
                 channel_id=channel.id, author_id=accounts[username].id, body=body,
                 client_msg_id=client_id,
             ).on_conflict_do_nothing(index_elements=["author_id", "client_msg_id"]))
+
+# (space, author, hours ago, title, body, url, {voter: value})
+SEED_POSTS = [
+    ("hive-devs", "alice", 2, "Show us what you are building this week", "Share a screenshot or a link, and one thing you got stuck on.", None, {"bob": 1}),
+    ("hive-devs", "bob", 5, "Cursor pagination beats OFFSET for chat history", "OFFSET gets slower the deeper you page and skips rows when new messages arrive. Keyset cursors on a ULID stay fast and stable.", None, {"alice": 1, "carol": 1}),
+    ("hive-devs", "carol", 9, "FastAPI documentation: dependencies with yield", None, "https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/", {"alice": 1}),
+    ("hive-devs", "alice", 20, "What editor theme do you use?", None, None, {"bob": -1, "carol": 1}),
+    ("hive-devs", "bob", 30, "How Socket.IO rooms scale with a Redis adapter", "Every instance publishes to Redis and only delivers to its own sockets. Rooms stay cheap because they are just sets per process.", None, {"alice": 1, "carol": 1}),
+    ("hive-devs", "carol", 48, "PostgreSQL docs: row constructor comparison", None, "https://www.postgresql.org/docs/current/functions-comparisons.html", {"bob": 1}),
+    ("hive-devs", "alice", 72, "Weekly help thread: ask anything", "No question is too small. Mention which part of the stack you are in.", None, {"bob": 1, "carol": 1}),
+    ("hive-devs", "bob", 100, "Idempotent message sends with client IDs", "Generate a UUID in the browser, send it with the message, and put a unique index on (author, client id). Retries become harmless.", None, {"alice": 1, "carol": 1}),
+    ("hive-devs", "carol", 140, "Tailwind v4 is out", None, "https://tailwindcss.com/blog/tailwindcss-v4", {"alice": -1}),
+    ("hive-devs", "alice", 200, "Tabs or spaces?", None, None, {"bob": -1, "carol": -1}),
+    ("hive-devs", "bob", 260, "Argon2id parameters for a small server", "Start with the library defaults, measure on your real hardware, and aim for roughly 50 ms per hash.", None, {"alice": 1}),
+    ("hive-devs", "carol", 330, "My first open source pull request got merged", "It was a one-line docs fix, but it still counts!", None, {"alice": 1, "bob": 1}),
+    ("hive-devs", "alice", 420, "Reading list: designing data-intensive applications", "Which chapter changed how you build things?", None, {"carol": 1}),
+    ("hive-devs", "bob", 520, "Next.js App Router notes", None, "https://nextjs.org/docs/app", {}),
+    ("hive-devs", "carol", 650, "Rate limiting with Redis INCR and EXPIRE", "A tiny Lua script keeps the increment and the expiry atomic.", None, {"alice": 1, "bob": 1}),
+    ("python-pk", "bob", 3, "Python meetup in Lahore this Saturday", "Talks on async Python and testing. Everyone is welcome.", None, {"alice": 1, "carol": 1}),
+    ("python-pk", "alice", 26, "Remote Python jobs thread", "Post roles you know about: company, stack, and whether juniors can apply.", None, {"bob": 1}),
+    ("python-pk", "carol", 70, "uv: an extremely fast Python package manager", None, "https://docs.astral.sh/uv/", {"alice": 1, "bob": 1}),
+    ("python-pk", "bob", 150, "Which testing library do you prefer?", None, None, {"carol": -1}),
+    ("python-pk", "alice", 400, "Typing tips that caught real bugs", "TypedDict for JSON payloads and Literal for status strings found three bugs in our code.", None, {"bob": 1}),
+]
+
+
+async def seed_posts(session, spaces: dict, accounts: dict) -> None:
+    """Demo posts spread over the last month with votes, so Hot, New and Top differ (idempotent)."""
+    now = datetime.now(UTC)
+    for slug, author, hours, title, body, url, votes in SEED_POSTS:
+        space = spaces[slug]
+        post = await session.scalar(select(Post).where(Post.space_id == space.id, Post.title == title))
+        if post is None:
+            created = now - timedelta(hours=hours)
+            # The ULID id encodes the time, and "New" sorts by id, so it must match created_at.
+            post = Post(id=str(ULID.from_datetime(created)), space_id=space.id,
+                        author_id=accounts[author].id, title=title, body=body, url=url,
+                        created_at=created)
+            session.add(post)
+            await session.flush()
+        for voter, value in votes.items():
+            await session.execute(insert(PostVote).values(
+                post_id=post.id, user_id=accounts[voter].id, value=value,
+            ).on_conflict_do_nothing())
+        values = list(await session.scalars(select(PostVote.value).where(PostVote.post_id == post.id)))
+        post.upvotes = values.count(1)
+        post.downvotes = values.count(-1)
+        post.score = post.upvotes - post.downvotes
+        post.hot = hot_score(post.score, post.created_at)
+
 
 if __name__ == "__main__":
     asyncio.run(seed())
