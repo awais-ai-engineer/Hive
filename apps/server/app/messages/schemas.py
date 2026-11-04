@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -73,6 +74,15 @@ class ReadIn(ChannelIn):
     messageId: str
 
 
+class ThreadReadIn(BaseModel):
+    parentId: str
+    messageId: str
+
+
+class SpaceIn(BaseModel):
+    spaceId: str
+
+
 class SyncIn(BaseModel):
     channels: dict[str, str | None]
 
@@ -120,3 +130,52 @@ class MessagePage(BaseModel):
 
 class ThreadPage(MessagePage):
     parent: MessageOut
+
+
+class Participant(BaseModel):
+    id: str
+    username: str
+    avatar_url: str | None
+    online: bool = False
+
+
+class PlaceSpace(BaseModel):
+    id: str
+    slug: str
+    name: str
+
+
+class Place(BaseModel):
+    """Where a message lives: a space channel or a DM conversation."""
+
+    id: str
+    kind: Literal["channel", "dm"]
+    name: str
+    space: PlaceSpace | None
+    participants: list[Participant] | None
+
+
+class ThreadItem(BaseModel):
+    parent: MessageOut
+    channel: Place
+    reply_count: int
+    last_reply_id: str
+    last_reply_at: datetime
+    latest_replies: list[MessageOut]
+    unread_replies: int
+
+
+class ThreadList(BaseModel):
+    items: list[ThreadItem]
+    has_more: bool
+
+
+class UnreadItem(BaseModel):
+    channel: Place
+    unread: int
+    first_unread_id: str | None
+    items: list[MessageOut]
+
+
+class UnreadList(BaseModel):
+    items: list[UnreadItem]

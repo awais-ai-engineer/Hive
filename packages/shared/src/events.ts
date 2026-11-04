@@ -18,6 +18,11 @@ export const SocketEvents = {
   ReactionUpdated: 'reaction:updated',
   ChannelActivity: 'channel:activity',
   Presence: 'presence',
+  DmActivity: 'dm:activity',
+  SpaceWatch: 'space:watch',
+  SpaceUnwatch: 'space:unwatch',
+  ThreadRead: 'thread:read',
+  ThreadActivity: 'thread:activity',
   Sync: 'sync',
 } as const;
 

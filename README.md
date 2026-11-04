@@ -153,3 +153,20 @@ you (`GET /api/users/search`). Non-participants get 404 for history, uploads and
 New messages are announced to every participant's `user:{id}` room (`dm:activity`) for the
 conversation list and the unread badge in the navigation bar, and presence changes reach DM
 partners the same way.
+
+## Home
+
+`/home` is one Slack-style screen: a sidebar with a space switcher, "Find a conversation"
+(Ctrl+K), **Unreads**, **Threads**, the space's **Channels**, **Conversations** (group DMs) and
+**Direct messages**, and the open chat on the right. The URL holds the state
+(`?s=<space>&c=<channel or DM>&t=<thread>` or `&view=unreads|threads`), so links and the back
+button work; on phones the sidebar becomes a drawer.
+
+- `GET /api/me/unreads` lists every channel and DM of yours with unread messages (DMs first).
+- `GET /api/me/threads` lists threads you started or replied to, ordered by their newest reply
+  and paged with `before=<last_reply_id>`. Each thread has its own forward-only read marker
+  (`thread_reads`, set with the `thread:read` event); without one, replies after your first
+  message in the thread count as new. Replies are announced to every participant with
+  `thread:activity`.
+- `space:watch` / `space:unwatch` subscribe a socket to a space's `channel:activity` and presence,
+  so sidebar badges stay live while a DM is open. Leaving or being removed from a space ends it.

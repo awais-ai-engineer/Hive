@@ -1,0 +1,236 @@
+'use client';
+
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { ChannelChat } from '../../components/channel-chat';
+import { ChatHeader } from '../../components/home/chat-header';
+import { Sidebar } from '../../components/home/sidebar';
+import { ThreadsView } from '../../components/home/threads-view';
+import { UnreadsView } from '../../components/home/unreads-view';
+import { useAuth } from '../../lib/auth';
+import { conversationTitle, DMS_CHANGED, type Conversation } from '../../lib/dms';
+import { loadSetting, placeHref, saveSetting, type Place, type ThreadItem, type UnreadItem } from '../../lib/home';
+import { socket } from '../../lib/socket';
+import { apiData, requestError, type Channel, type Space } from '../../lib/spaces';
+
+const rank: Record<string, number> = { owner: 5, admin: 4, moderator: 3, member: 2, guest: 1 };
+const LAST_SPACE = 'hive:last-space';
+
+export default function HomePage() {
+  return <Suspense fallback={<p className="p-8 text-white/50">Loading…</p>}><Home /></Suspense>;
+}
+
+/** Calls `fn` once, `delay` ms after the last call (collapses bursts of socket events). */
+function useDebounced(fn: () => void, delay: number) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latest = useRef(fn);
+  latest.current = fn;
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  return useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => latest.current(), delay);
+  }, [delay]);
+}
+
+function Home() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const search = useSearchParams();
+  const slugParam = search.get('s');
+  const selected = search.get('c');
+  const view = search.get('view');
+  const threadParam = search.get('t');
+
+  const [spaces, setSpaces] = useState<Space[]>([]);
+  const [spacesReady, setSpacesReady] = useState(false);
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [unreads, setUnreads] = useState<UnreadItem[]>([]);
+  const [unreadsReady, setUnreadsReady] = useState(false);
+  const [threadsUnread, setThreadsUnread] = useState(0);
+  const [threadsVersion, setThreadsVersion] = useState(0);
+  const [error, setError] = useState('');
+  const [drawer, setDrawer] = useState(false);
+
+  const slug = slugParam ?? (spacesReady ? loadSetting<string | null>(LAST_SPACE, null) ?? spaces[0]?.slug ?? null : null);
+  const space = spaces.find(item => item.slug === slug) ?? null;
+
+  const go = useCallback((params: Record<string, string | null | undefined>) => {
+    const next = new URLSearchParams();
+    const merged = { s: slug, ...params };
+    for (const [key, value] of Object.entries(merged)) if (value) next.set(key, value);
+    router.push(`/home?${next}`);
+    setDrawer(false);
+  }, [router, slug]);
+
+  // Data loading -------------------------------------------------------------------------
+  useEffect(() => {
+    if (loading || !user) return;
+    apiData<Space[]>('/api/me/spaces').then(list => { setSpaces(list); setSpacesReady(true); })
+      .catch(cause => { setError(requestError(cause)); setSpacesReady(true); });
+  }, [loading, user]);
+
+  useEffect(() => {
+    if (!space) { setChannels([]); return; }
+    saveSetting(LAST_SPACE, space.slug);
+    let active = true;
+    apiData<Channel[]>(`/api/spaces/${encodeURIComponent(space.slug)}/channels`)
+      .then(list => { if (active) setChannels(list); })
+      .catch(cause => { if (active) setError(requestError(cause)); });
+    return () => { active = false; };
+  }, [space]);
+
+  const loadConversations = useCallback(() => {
+    apiData<Conversation[]>('/api/dms').then(setConversations).catch(() => {});
+  }, []);
+  const loadUnreads = useCallback(() => {
+    apiData<{ items: UnreadItem[] }>('/api/me/unreads')
+      .then(page => { setUnreads(page.items); setUnreadsReady(true); }).catch(() => {});
+  }, []);
+  const loadThreads = useCallback(() => {
+    apiData<{ items: ThreadItem[] }>('/api/me/threads?limit=50')
+      .then(page => setThreadsUnread(page.items.filter(item => item.unread_replies > 0).length)).catch(() => {});
+  }, []);
+  const refreshConversations = useDebounced(loadConversations, 300);
+  const refreshUnreads = useDebounced(loadUnreads, 400);
+  const refreshThreads = useDebounced(() => { loadThreads(); setThreadsVersion(value => value + 1); }, 400);
+
+  useEffect(() => {
+    if (loading || !user) return;
+    loadConversations(); loadUnreads(); loadThreads();
+  }, [loading, user, loadConversations, loadUnreads, loadThreads]);
+
+  // Live updates --------------------------------------------------------------------------
+  useEffect(() => {
+    if (!user || !space) return;
+    const watch = () => { if (socket.connected) socket.emit('space:watch', { spaceId: space.id }, () => {}); };
+    watch();
+    socket.on('connect', watch);
+    return () => {
+      socket.off('connect', watch);
+      if (socket.connected) socket.emit('space:unwatch', { spaceId: space.id }, () => {});
+    };
+  }, [user, space]);
+
+  useEffect(() => {
+    if (!user) return;
+    const onChannelActivity = (data: { channelId: string; authorId: string }) => {
+      if (data.authorId === user.id) return;
+      if (data.channelId !== selected) {
+        setChannels(list => list.map(item => item.id === data.channelId ? { ...item, unread: item.unread + 1 } : item));
+      }
+      refreshUnreads();
+    };
+    const onDm = () => { refreshConversations(); refreshUnreads(); };
+    const onRead = (data: { channelId: string }) => {
+      setChannels(list => list.map(item => item.id === data.channelId ? { ...item, unread: 0 } : item));
+      refreshConversations(); refreshUnreads();
+    };
+    const onPresence = (data: { userId: string; online: boolean }) => setConversations(list => list.map(item => ({
+      ...item, participants: item.participants.map(person => person.id === data.userId ? { ...person, online: data.online } : person),
+    })));
+    const onReconnect = () => { refreshConversations(); refreshUnreads(); refreshThreads(); };
+    socket.on('channel:activity', onChannelActivity).on('dm:activity', onDm).on('read:updated', onRead)
+      .on('thread:activity', refreshThreads).on('thread:read', refreshThreads).on('presence', onPresence).on('connect', onReconnect);
+    return () => {
+      socket.off('channel:activity', onChannelActivity).off('dm:activity', onDm).off('read:updated', onRead)
+        .off('thread:activity', refreshThreads).off('thread:read', refreshThreads).off('presence', onPresence).off('connect', onReconnect);
+    };
+  }, [user, selected, refreshConversations, refreshUnreads, refreshThreads]);
+
+  const markRead = useCallback((channelId: string) => {
+    setChannels(list => list.map(item => item.id === channelId && item.unread ? { ...item, unread: 0 } : item));
+    setConversations(list => list.map(item => item.id === channelId && item.unread ? { ...item, unread: 0 } : item));
+    window.dispatchEvent(new Event(DMS_CHANGED));
+    refreshUnreads();
+  }, [refreshUnreads]);
+
+  useEffect(() => { if (threadParam) refreshThreads(); }, [threadParam, refreshThreads]);
+  useEffect(() => {
+    if (!drawer) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setDrawer(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawer]);
+
+  // Actions ------------------------------------------------------------------------------
+  async function openPerson(username: string) {
+    try {
+      const conversation = await apiData<Conversation>('/api/dms', { method: 'POST', body: JSON.stringify({ usernames: [username] }) });
+      loadConversations();
+      go({ c: conversation.id });
+    } catch (cause) { setError(requestError(cause)); }
+  }
+  function openPlace(place: Place, threadId?: string) {
+    router.push(placeHref(place, slug, threadId));
+    setDrawer(false);
+  }
+  function markUnreadItem(item: UnreadItem) {
+    const newest = item.items.at(-1)?.id;
+    if (newest && socket.connected) socket.emit('read:update', { channelId: item.channel.id, messageId: newest }, () => {});
+    setUnreads(list => list.filter(entry => entry.channel.id !== item.channel.id));
+    markRead(item.channel.id);
+  }
+
+  // Render -------------------------------------------------------------------------------
+  if (!loading && !user) {
+    return <main className="mx-auto max-w-md px-4 py-16 text-center">
+      <h1 className="mb-3 text-2xl font-bold">Home</h1>
+      <p className="text-white/60"><Link className="text-amber-400" href="/login?next=/home">Log in</Link> to see your channels and conversations.</p>
+    </main>;
+  }
+
+  const conversation = conversations.find(item => item.id === selected) ?? null;
+  const channel = channels.find(item => item.id === selected) ?? null;
+  const myRank = space?.my_role ? rank[space.my_role] : 0;
+  const unreadTotal = unreads.reduce((sum, item) => sum + item.unread, 0);
+  const showView = view === 'unreads' || view === 'threads' || (!conversation && !channel);
+  const threadChange = (id: string | null) => go({ c: selected, t: id });
+
+  let main;
+  if (conversation) {
+    main = <>
+      <ChatHeader conversation={conversation} onMenu={() => setDrawer(true)} />
+      <ChannelChat key={conversation.id} channel={{ id: conversation.id, name: conversationTitle(conversation) }}
+        placeholder={`Message ${conversationTitle(conversation)}`} reason="" canModerate={false} tracksReads onRead={markRead}
+        threadId={threadParam} onThreadChange={threadChange} />
+    </>;
+  } else if (channel && space) {
+    main = <>
+      <ChatHeader channel={channel} space={space} onMenu={() => setDrawer(true)} />
+      <ChannelChat key={channel.id} channel={channel} placeholder={`Message #${channel.name}`}
+        reason={channel.type === 'voice' ? 'Voice rooms coming soon' : !space.my_role ? 'Join this space to chat'
+          : space.my_role === 'guest' ? 'You have read-only access' : ''}
+        canModerate={myRank >= rank.moderator} tracksReads={!!space.my_role} onRead={markRead}
+        threadId={threadParam} onThreadChange={threadChange} />
+    </>;
+  } else if (view === 'threads') {
+    main = <>
+      <ChatHeader title="Threads" onMenu={() => setDrawer(true)} />
+      <ThreadsView version={threadsVersion} userId={user?.id} onOpen={item => openPlace(item.channel, item.parent.id)} />
+    </>;
+  } else {
+    main = <>
+      <ChatHeader title="Unreads" onMenu={() => setDrawer(true)} />
+      {selected && conversations.length + channels.length > 0 && <p className="mb-3 text-sm text-white/50">That conversation isn&apos;t in this space. Showing your unread messages instead.</p>}
+      <UnreadsView items={unreads} ready={unreadsReady} userId={user?.id} onOpen={place => openPlace(place)} onMarkRead={markUnreadItem} />
+    </>;
+  }
+
+  return <main className="mx-auto grid max-w-7xl gap-4 px-2 py-4 sm:px-4 md:grid-cols-[280px_minmax(0,1fr)]">
+    {drawer && <button type="button" aria-label="Close sidebar" onClick={() => setDrawer(false)} className="fixed inset-0 z-30 bg-black/60 md:hidden" />}
+    <aside className={`${drawer ? 'fixed inset-y-0 left-0 z-40 w-[85vw] max-w-[300px] p-4' : 'hidden'} min-w-0 rounded-none border-white/10 bg-[#0e1016] md:static md:z-auto md:block md:h-[calc(100vh-7rem)] md:w-auto md:max-w-none md:rounded-xl md:border md:bg-white/[0.03] md:p-4`}>
+      {spacesReady && !spaces.length && <p className="mb-3 text-sm text-white/50">You haven&apos;t joined a space yet. <Link href="/spaces" className="text-amber-400">Browse spaces</Link> or <Link href="/spaces/new" className="text-amber-400">create one</Link>.</p>}
+      <Sidebar spaces={spaces} space={space} channels={channels} conversations={conversations}
+        selected={selected} view={showView && view !== 'threads' ? 'unreads' : view}
+        unreadTotal={unreadTotal} threadsUnread={threadsUnread}
+        onSwitchSpace={next => go({ s: next })} onOpen={id => go({ c: id })} onView={next => go({ view: next })}
+        onPerson={username => void openPerson(username)} />
+    </aside>
+    <section className="min-h-[70vh] min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-3 sm:p-5">
+      {error && <p role="alert" className="mb-2 text-sm text-rose-400">{error}</p>}
+      {main}
+    </section>
+  </main>;
+}
