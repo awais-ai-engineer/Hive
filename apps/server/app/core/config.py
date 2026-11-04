@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     access_token_minutes: int = 15
     refresh_token_days: int = 30
     cookie_secure: bool = False
+    upload_dir: str = "uploads"
+    max_upload_mb: int = 10
 
 
 settings = Settings()

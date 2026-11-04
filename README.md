@@ -52,7 +52,7 @@ Ports 5434 and 6380 avoid clashing with other local Postgres/Redis instances.
 1. [x] Auth (signup, login, refresh-token rotation), profiles
 2. [x] Spaces, roles, invites, channels
 3. [x] Real-time chat: idempotent send, optimistic UI, reconnect sync
-4. Threads, reactions, uploads, presence, unread counts
+4. [x] Threads, reactions, uploads, presence, unread counts
 5. Posts, voting, hot/top/new ranking
 6. Nested comments (ltree), public community pages
 7. WebRTC voice/video, huddles
@@ -120,3 +120,24 @@ After reconnecting, clients rejoin their channel and sync from their newest know
 through missed messages in order. Older history uses a separate backward cursor. Socket.IO's
 Redis manager fans events out across server instances; configure `SOCKETIO_CHANNEL` to isolate
 deployments (tests use their own channel). Run the seed to populate example conversations.
+
+## Threads, reactions, files, presence, unread
+
+- **Threads:** a reply is a message with `parent_id` (one level deep). Channel history only
+  returns top-level messages; `GET /api/messages/{id}/thread` returns the parent and its replies.
+  The parent's `reply_count` is incremented in the same transaction, so idempotent retries never
+  count twice.
+- **Reactions:** `reaction:toggle` adds or removes one emoji per user (primary key
+  `message_id, user_id, emoji`; at most 20 different emoji per message) and broadcasts the new
+  totals.
+- **Files:** `POST /api/channels/{id}/uploads` stores up to 10 MB per file under `UPLOAD_DIR`, then
+  `message:send` claims up to 5 files with `attachmentIds` (only the uploader's unclaimed files in
+  the same channel). Downloads use HMAC-signed URLs that expire, so `<img>` tags work without an
+  auth header. Only PNG/JPEG/GIF/WebP render inline; everything else downloads as
+  `application/octet-stream` with `nosniff`.
+- **Presence:** each user's connected socket ids live in a Redis set shared by all instances.
+  The first connection broadcasts `online`, the last disconnect broadcasts `offline`, and member
+  lists include an `online` flag.
+- **Unread counts:** `channel_reads` stores the newest message each user has seen. The marker only
+  moves forward (`GREATEST`), the channel list returns `unread` per channel, and
+  `channel:activity` events update badges for other channels live.

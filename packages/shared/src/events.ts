@@ -13,6 +13,11 @@ export const SocketEvents = {
   TypingStart: 'typing:start',
   TypingStop: 'typing:stop',
   ReadUpdate: 'read:update',
+  ReadUpdated: 'read:updated',
+  ReactionToggle: 'reaction:toggle',
+  ReactionUpdated: 'reaction:updated',
+  ChannelActivity: 'channel:activity',
+  Presence: 'presence',
   Sync: 'sync',
 } as const;
 

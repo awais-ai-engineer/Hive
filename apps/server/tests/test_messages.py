@@ -1,89 +1,11 @@
 import asyncio
-import socket
-from contextlib import asynccontextmanager
 from uuid import uuid4
 
-import pytest
-import pytest_asyncio
-import socketio
-import uvicorn
 from sqlalchemy import func, select
 
 from app.db.models import Channel, ChannelType, MemberRole, Message, SpaceMember
 from app.db.session import SessionLocal, redis
-from app.main import app
-from app.realtime.socket import sio
-from tests.helpers import create_account
-
-
-@pytest_asyncio.fixture(scope="session")
-async def live_server(database):
-    listener = socket.socket()
-    listener.bind(("127.0.0.1", 0))
-    port = listener.getsockname()[1]
-    server = uvicorn.Server(uvicorn.Config(app, log_level="warning", lifespan="off"))
-    task = asyncio.create_task(server.serve(sockets=[listener]))
-    try:
-        async with asyncio.timeout(10):
-            while not server.started:
-                if task.done():
-                    await task
-                await asyncio.sleep(0.01)
-        yield f"http://127.0.0.1:{port}"
-    finally:
-        server.should_exit = True
-        await asyncio.wait_for(task, 10)
-        await sio.shutdown()
-        if getattr(sio.manager, "thread", None):
-            sio.manager.thread.cancel()
-
-
-@asynccontextmanager
-async def connected(url, account=None):
-    client = socketio.AsyncClient(reconnection=False)
-    queues = {name: asyncio.Queue() for name in (
-        "message:new", "message:updated", "message:deleted", "typing"
-    )}
-    for name, queue in queues.items():
-        client.on(name, queue.put_nowait)
-    await client.connect(url, auth={"token": account["access_token"]} if account else {},
-                         transports=["websocket"], wait_timeout=5)
-    try:
-        yield client, queues
-    finally:
-        await client.disconnect()
-
-
-async def event(queue):
-    return await asyncio.wait_for(queue.get(), 3)
-
-
-async def quiet(queue):
-    with pytest.raises(TimeoutError):
-        await asyncio.wait_for(queue.get(), 0.15)
-
-
-async def call(client, name, data):
-    return await client.call(name, data, timeout=5)
-
-
-async def send(client, channel, body="Hello", client_id=None):
-    return await call(client, "message:send", {
-        "channelId": channel, "body": body, "clientMsgId": client_id or str(uuid4())
-    })
-
-
-@pytest_asyncio.fixture
-async def setup_chat(client):
-    alice, ah = await create_account(client, "alice", "alice@example.com")
-    bob, bh = await create_account(client, "bob", "bob@example.com")
-    carol, ch = await create_account(client, "carol", "carol@example.com")
-    space = (await client.post("/api/spaces", headers=ah, json={
-        "type": "community", "name": "Chat", "slug": "chat"
-    })).json()
-    channel = (await client.get("/api/spaces/chat/channels")).json()[0]["id"]
-    await client.post("/api/spaces/chat/join", headers=bh)
-    return alice, bob, carol, ah, bh, ch, space, channel
+from tests.helpers import call, connected, event, quiet, send
 
 
 async def test_history_and_pagination(client, setup_chat):
@@ -150,7 +72,7 @@ async def test_send_idempotency_edit_delete_sync(client, setup_chat, live_server
         async with connected(live_server, bob) as (b3, b3q):
             await call(b3, "channel:join", {"channelId": channel})
             assert (await call(b3, "message:delete", {"messageId": mid}))["ok"]
-            assert (await event(b3q["message:deleted"])) == {"id": mid, "channelId": channel}
+            assert (await event(b3q["message:deleted"])) == {"id": mid, "channelId": channel, "parentId": None}
         history = (await client.get(f"/api/channels/{channel}/messages", headers=bh)).json()
         assert history["items"][0]["deleted"] and history["items"][0]["body"] is None
 

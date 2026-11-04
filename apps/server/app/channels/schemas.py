@@ -45,3 +45,4 @@ class ChannelOut(BaseModel):
     name: str
     topic: str | None
     position: int
+    unread: int = 0

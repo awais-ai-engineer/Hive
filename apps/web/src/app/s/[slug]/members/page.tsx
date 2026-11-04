@@ -68,7 +68,7 @@ export default function MembersPage() {
           && member.user.id !== user?.id;
         const choices = roles.filter(role => rank[role] < rankYou);
         return <li key={member.user.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <div><span className="font-medium">{member.user.username}</span>
+          <div><span aria-label={member.online ? 'Online' : 'Offline'} className={`mr-2 inline-block h-2 w-2 rounded-full ${member.online ? 'bg-emerald-400' : 'bg-white/20'}`} /><span className="font-medium">{member.user.username}</span>
             <span className="ml-3 rounded bg-white/10 px-2 py-1 text-xs capitalize">{member.role}</span></div>
           {(mayChangeRole || mayKick) && <div className="flex items-center gap-2">
             {mayChangeRole && <select aria-label={`Role for ${member.user.username}`} defaultValue={member.role ?? 'guest'}

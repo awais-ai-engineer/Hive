@@ -2,7 +2,7 @@ import asyncio
 import secrets
 from uuid import NAMESPACE_URL, uuid5
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from app.auth.security import hash_password
@@ -12,6 +12,7 @@ from app.db.models import (
     Invite,
     MemberRole,
     Message,
+    Reaction,
     Space,
     SpaceMember,
     SpaceType,
@@ -169,9 +170,37 @@ async def seed() -> None:
                         channel_id=channel.id, author_id=accounts[username].id,
                         body=body, client_msg_id=client_id,
                     ).on_conflict_do_nothing(index_elements=["author_id", "client_msg_id"]))
+        await seed_thread(session, seeded_spaces["hive-devs"].id, accounts)
         await session.commit()
     print(f"Acme invite: http://localhost:3000/invite/{code}")
     await engine.dispose()
+
+
+async def seed_thread(session, space_id: str, accounts: dict) -> None:
+    """A demo thread and reactions on the first #general message (idempotent)."""
+    channel = await session.scalar(
+        select(Channel).where(Channel.space_id == space_id, Channel.name == "general")
+    )
+    parent = await session.scalar(
+        select(Message).where(Message.channel_id == channel.id, Message.parent_id.is_(None))
+        .order_by(Message.id)
+    )
+    replies = [
+        ("bob", "Mine is a CLI for tracking reading lists."),
+        ("carol", "I am trying out a small chat bot for this server."),
+        ("alice", "Both sound great. Post screenshots when you can!"),
+    ]
+    for index, (username, body) in enumerate(replies):
+        await session.execute(insert(Message).values(
+            channel_id=channel.id, author_id=accounts[username].id, parent_id=parent.id,
+            body=body, client_msg_id=str(uuid5(NAMESPACE_URL, f"hive/thread/{index}")),
+        ).on_conflict_do_nothing(index_elements=["author_id", "client_msg_id"]))
+    count = select(func.count()).where(Message.parent_id == parent.id).scalar_subquery()
+    await session.execute(update(Message).where(Message.id == parent.id).values(reply_count=count))
+    for username, emoji in [("bob", "👋"), ("carol", "👋"), ("carol", "🎉")]:
+        await session.execute(insert(Reaction).values(
+            message_id=parent.id, user_id=accounts[username].id, emoji=emoji,
+        ).on_conflict_do_nothing())
 
 
 if __name__ == "__main__":

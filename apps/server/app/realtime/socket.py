@@ -1,4 +1,8 @@
-"""Socket.IO server. Event names mirror packages/shared/src/events.ts."""
+"""Socket.IO server. Event names mirror packages/shared/src/events.ts.
+
+Rooms: `user:{id}` (all of a user's sockets), `channel:{id}` (live messages of an open channel),
+`space:{id}` (presence and unread activity for spaces with an open channel).
+"""
 
 import logging
 import time
@@ -13,10 +17,11 @@ from sqlalchemy import select
 
 from app.auth.security import decode_access_token
 from app.core.config import settings
-from app.db.models import Channel, User
-from app.db.session import SessionLocal, redis
+from app.db.models import Channel, SpaceMember, User
+from app.db.session import SessionLocal
 from app.messages import service
-from app.messages.schemas import ChannelIn, EditIn, MessageIn, SendIn, SyncIn
+from app.messages.schemas import ChannelIn, EditIn, MessageIn, ReactionIn, ReadIn, SendIn, SyncIn
+from app.realtime import presence
 
 log = logging.getLogger("hive.realtime")
 
@@ -29,8 +34,13 @@ sio = socketio.AsyncServer(
 typing_times: dict[str, float] = {}
 
 
-def sockets_key(user_id: str) -> str:
-    return f"{settings.socketio_channel}:user-sockets:{user_id}"
+async def broadcast_presence(user_id: str, online: bool) -> None:
+    async with SessionLocal() as session:
+        spaces = list(await session.scalars(
+            select(SpaceMember.space_id).where(SpaceMember.user_id == user_id)
+        ))
+    for space_id in spaces:
+        await sio.emit("presence", {"userId": user_id, "online": online}, room=f"space:{space_id}")
 
 
 @sio.event
@@ -45,16 +55,18 @@ async def connect(sid: str, environ: dict, auth: dict | None = None) -> None:
             if user is None:
                 raise ConnectionRefusedError("unauthorized")
             await sio.save_session(sid, {"user_id": user.id, "username": user.username})
-        await sio.enter_room(sid, f"user:{payload['sub']}")
-        await redis.sadd(sockets_key(payload["sub"]), sid)
+        await sio.enter_room(sid, f"user:{user.id}")
+        if await presence.add_socket(user.id, sid):
+            await broadcast_presence(user.id, True)
     log.info("socket connected %s", sid)
 
 
 @sio.event
 async def disconnect(sid: str, *args: object) -> None:
     identity = await sio.get_session(sid)
-    if identity.get("user_id"):
-        await redis.srem(sockets_key(identity["user_id"]), sid)
+    user_id = identity.get("user_id")
+    if user_id and await presence.remove_socket(user_id, sid):
+        await broadcast_presence(user_id, False)
     typing_times.pop(sid, None)
     log.info("socket disconnected %s", sid)
 
@@ -64,7 +76,12 @@ async def ping(sid: str, data: object = None) -> dict:
     return {"serverTime": int(time.time() * 1000)}
 
 
+ERROR_CODES = {401: "unauthorized", 403: "forbidden", 404: "not_found", 429: "rate_limited"}
+
+
 def chat_event(name, schema):
+    """Register a handler that gets a validated payload, a DB session and the user, and whose
+    result (or error) is sent back as the ack: {"ok": true, ...} / {"ok": false, "error": ...}."""
     def decorate(handler):
         @wraps(handler)
         async def wrapped(sid, data=None):
@@ -81,8 +98,7 @@ def chat_event(name, schema):
             except ValidationError:
                 return {"ok": False, "error": {"code": "invalid", "message": "Invalid input"}}
             except HTTPException as error:
-                code = {401: "unauthorized", 403: "forbidden", 404: "not_found",
-                        429: "rate_limited"}.get(error.status_code, "invalid")
+                code = ERROR_CODES.get(error.status_code, "invalid")
                 return {"ok": False, "error": {"code": code, "message": error.detail}}
         sio.on(name)(wrapped)
         return wrapped
@@ -91,9 +107,10 @@ def chat_event(name, schema):
 
 @chat_event("channel:join", ChannelIn)
 async def join(sid, data, session, user):
-    await service.readable(session, data.channelId, user.id)
-    await sio.enter_room(sid, f"channel:{data.channelId}")
-    return {"channelId": data.channelId}
+    channel, _ = await service.readable(session, data.channelId, user.id)
+    await sio.enter_room(sid, f"channel:{channel.id}")
+    await sio.enter_room(sid, f"space:{channel.space_id}")
+    return {"channelId": channel.id}
 
 
 @chat_event("channel:leave", ChannelIn)
@@ -103,9 +120,17 @@ async def leave(sid, data, session, user):
 
 @chat_event("message:send", SendIn)
 async def send(sid, data, session, user):
-    message, inserted = await service.send(session, user, data)
+    message, inserted, parent = await service.send(session, user, data)
     if inserted:
-        await sio.emit("message:new", message, room=f"channel:{message['channel_id']}")
+        room = f"channel:{message['channel_id']}"
+        await sio.emit("message:new", message, room=room)
+        if parent is not None:
+            await sio.emit("message:updated", parent, room=room)
+        else:
+            channel = await session.get(Channel, message["channel_id"])
+            await sio.emit("channel:activity", {
+                "channelId": channel.id, "messageId": message["id"], "authorId": user.id,
+            }, room=f"space:{channel.space_id}")
     return {"message": message}
 
 
@@ -119,8 +144,25 @@ async def edit(sid, data, session, user):
 @chat_event("message:delete", MessageIn)
 async def delete(sid, data, session, user):
     message = await service.change(session, user, data.messageId, None)
-    await sio.emit("message:deleted", {"id": message["id"], "channelId": message["channel_id"]},
-                   room=f"channel:{message['channel_id']}")
+    await sio.emit("message:deleted", {
+        "id": message["id"], "channelId": message["channel_id"], "parentId": message["parent_id"],
+    }, room=f"channel:{message['channel_id']}")
+
+
+@chat_event("reaction:toggle", ReactionIn)
+async def react(sid, data, session, user):
+    update = await service.toggle_reaction(session, user, data.messageId, data.emoji)
+    await sio.emit("reaction:updated", update, room=f"channel:{update['channelId']}")
+    return update
+
+
+@chat_event("read:update", ReadIn)
+async def read(sid, data, session, user):
+    marker = await service.mark_read(session, user, data.channelId, data.messageId)
+    # Other tabs and devices of the same user clear their badge too.
+    await sio.emit("read:updated", {"channelId": data.channelId, "lastReadId": marker},
+                   room=f"user:{user.id}", skip_sid=sid)
+    return {"lastReadId": marker}
 
 
 @chat_event("sync", SyncIn)
@@ -154,11 +196,13 @@ async def typing_stop(sid, data, session, user):
 
 
 async def evict_from_space(user_id: str, space_id: str) -> None:
+    """Stop live updates for a user who lost access to a space (left, kicked)."""
     async with SessionLocal() as session:
         channels = list(await session.scalars(select(Channel.id).where(Channel.space_id == space_id)))
     # The user room supplies local sockets; Redis also tracks sockets on other instances.
     sockets = {sid for sid, _ in sio.manager.get_participants("/", f"user:{user_id}")}
-    sockets.update(await redis.smembers(sockets_key(user_id)))
+    sockets.update(await presence.socket_ids(user_id))
     for sid in sockets:
+        await sio.leave_room(sid, f"space:{space_id}")
         for channel_id in channels:
             await sio.leave_room(sid, f"channel:{channel_id}")

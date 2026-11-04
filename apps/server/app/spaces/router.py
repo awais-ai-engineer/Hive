@@ -70,6 +70,7 @@ async def delete_space(slug: str, session: Session, user: CurrentUser):
     # Closing the rooms removes every connected socket, including those on other instances.
     for channel_id in channels:
         await sio.close_room(f"channel:{channel_id}")
+    await sio.close_room(f"space:{space.id}")
 
 
 @router.post("/{slug}/join", response_model=SpaceOut)

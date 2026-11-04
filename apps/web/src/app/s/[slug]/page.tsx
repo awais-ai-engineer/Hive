@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../../lib/auth';
+import { socket } from '../../../lib/socket';
 import { ChannelChat } from '../../../components/channel-chat';
-import { apiData, requestError, type Channel, type Space } from '../../../lib/spaces';
+import { apiData, requestError, type Channel, type Member, type Space } from '../../../lib/spaces';
 
 const rank: Record<string, number> = { owner: 5, admin: 4, moderator: 3, member: 2, guest: 1 };
 
@@ -18,6 +19,7 @@ export default function SpacePage() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [error, setError] = useState('Loading space…');
   const [busy, setBusy] = useState(false);
+  const [members, setMembers] = useState<Member[]>([]);
 
   const load = useCallback(async () => {
     const [data, channelList] = await Promise.all([
@@ -37,8 +39,29 @@ export default function SpacePage() {
     ]).then(([data, channelList]) => {
       if (active) { setSpace(data); setChannels(channelList); setError(''); }
     }).catch(cause => { if (active) setError(requestError(cause)); });
+    apiData<{ items: Member[] }>(`/api/spaces/${encodeURIComponent(slug)}/members`)
+      .then(page => { if (active) setMembers(page.items); }).catch(() => {});
     return () => { active = false; };
   }, [slug, loading, user]);
+
+  const selected = search.get('c');
+  const channel = channels.find(item => item.id === selected) ?? channels[0];
+  const clearUnread = useCallback((channelId: string) => {
+    setChannels(list => list.map(item => item.id === channelId && item.unread ? { ...item, unread: 0 } : item));
+  }, []);
+
+  useEffect(() => {
+    const onActivity = (data: { channelId: string; authorId: string }) => {
+      if (data.authorId === user?.id || data.channelId === channel?.id) return;
+      setChannels(list => list.map(item => item.id === data.channelId ? { ...item, unread: item.unread + 1 } : item));
+    };
+    const onRead = (data: { channelId: string }) => clearUnread(data.channelId);
+    const onPresence = (data: { userId: string; online: boolean }) => {
+      setMembers(list => list.map(item => item.user.id === data.userId ? { ...item, online: data.online } : item));
+    };
+    socket.on('channel:activity', onActivity).on('read:updated', onRead).on('presence', onPresence);
+    return () => { socket.off('channel:activity', onActivity).off('read:updated', onRead).off('presence', onPresence); };
+  }, [user?.id, channel?.id, clearUnread]);
 
   useEffect(() => {
     if (channels.length > 0 && !search.get('c')) {
@@ -56,8 +79,7 @@ export default function SpacePage() {
     finally { setBusy(false); }
   }
 
-  const selected = search.get('c');
-  const channel = channels.find(item => item.id === selected) ?? channels[0];
+  const online = members.filter(item => item.online);
   const canAdmin = space?.my_role && rank[space.my_role] >= rank.admin;
   const canLeave = space?.my_role && space.my_role !== 'owner';
   return <main className="mx-auto grid max-w-6xl gap-6 px-4 py-8 md:grid-cols-[240px_1fr]">
@@ -71,8 +93,17 @@ export default function SpacePage() {
         <ul className="space-y-1">{channels.map(item => <li key={item.id}>
           <button onClick={() => router.replace(`/s/${slug}?c=${item.id}`)}
             className={`w-full rounded px-2 py-1 text-left ${item.id === channel?.id ? 'bg-white/10 text-amber-400' : 'text-white/70'}`}>
-            {item.type === 'voice' ? '🔊' : '#'} {item.name}
+            <span className="flex items-center justify-between gap-2">
+              <span className={`truncate ${item.unread && item.id !== channel?.id ? 'font-semibold text-white' : ''}`}>{item.type === 'voice' ? '🔊' : '#'} {item.name}</span>
+              {item.unread > 0 && item.id !== channel?.id && <span aria-label={`${item.unread} unread`}
+                className="rounded-full bg-amber-400 px-1.5 text-xs font-semibold text-black">{item.unread > 99 ? '99+' : item.unread}</span>}
+            </span>
           </button>
+        </li>)}</ul>
+        <h2 className="mb-2 mt-6 text-sm font-semibold uppercase text-white/50">Online — {online.length}</h2>
+        <ul className="space-y-1 text-sm">{online.slice(0, 15).map(item => <li key={item.user.id} className="flex items-center gap-2 text-white/70">
+          <span aria-hidden className="h-2 w-2 rounded-full bg-emerald-400" />
+          <span className="truncate">{item.user.username}</span>
         </li>)}</ul>
       </>}
     </aside>
@@ -88,7 +119,7 @@ export default function SpacePage() {
         </div>
       </div>}
       {error && <p role="alert" className={error === 'Loading space…' ? 'text-white/50' : 'text-rose-400'}>{error}</p>}
-      {space && channel && <ChannelChat key={`${channel.id}:${user?.id ?? 'anonymous'}`} channel={channel} space={space} />}
+      {space && channel && <ChannelChat key={`${channel.id}:${user?.id ?? 'anonymous'}`} channel={channel} space={space} onRead={clearUnread} />}
     </section>
   </main>;
 }

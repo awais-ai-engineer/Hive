@@ -7,7 +7,7 @@ export type User = {
 };
 
 export type AuthSession = { access_token: string; token_type: string; user: User };
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 let session: AuthSession | null = null;
 let revision = 0;
 let refreshPromise: Promise<AuthSession | null> | null = null;
@@ -64,7 +64,7 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
     const headers = new Headers(init.headers);
     if (session) headers.set('Authorization', `Bearer ${session.access_token}`);
     else headers.delete('Authorization');
-    if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+    if (init.body && !(init.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
     return fetch(`${API_URL}${path}`, { ...init, headers, credentials: 'include' });
   };
   const token = session?.access_token;

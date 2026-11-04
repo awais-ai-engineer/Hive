@@ -17,12 +17,14 @@ export type Channel = {
   name: string;
   topic: string | null;
   position: number;
+  unread: number;
 };
 
 export type Member = {
   user: { id: string; username: string; avatar_url: string | null };
   role: Space['my_role'];
   joined_at: string;
+  online: boolean;
 };
 
 export async function apiData<T>(path: string, init?: RequestInit): Promise<T> {
