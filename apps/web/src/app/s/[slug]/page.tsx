@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../../lib/auth';
+import { ChannelChat } from '../../../components/channel-chat';
 import { apiData, requestError, type Channel, type Space } from '../../../lib/spaces';
 
 const rank: Record<string, number> = { owner: 5, admin: 4, moderator: 3, member: 2, guest: 1 };
@@ -49,7 +50,7 @@ export default function SpacePage() {
     setBusy(true); setError('');
     try {
       if (!user) { router.push(`/login?next=${encodeURIComponent(`/s/${slug}`)}`); return; }
-      await apiData(`/api/spaces/${encodeURIComponent(slug)}/${action}`, { method: action === 'join' ? 'POST' : 'DELETE' });
+      await apiData(`/api/spaces/${encodeURIComponent(slug)}/${action === 'leave' ? 'members/me' : action}`, { method: action === 'join' ? 'POST' : 'DELETE' });
       await load();
     } catch (cause) { setError(requestError(cause)); }
     finally { setBusy(false); }
@@ -75,7 +76,7 @@ export default function SpacePage() {
         </li>)}</ul>
       </>}
     </aside>
-    <section className="min-h-80 rounded-xl border border-white/10 bg-white/[0.03] p-6">
+    <section className="min-h-80 min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-3 sm:p-6">
       {space && <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div><p className="text-sm uppercase text-white/50">{space.type}</p>
           <h2 className="text-2xl font-semibold">{channel?.name ?? space.name}</h2>
@@ -87,7 +88,7 @@ export default function SpacePage() {
         </div>
       </div>}
       {error && <p role="alert" className={error === 'Loading space…' ? 'text-white/50' : 'text-rose-400'}>{error}</p>}
-      {space && <p className="mt-12 text-center text-white/40">Messages coming soon</p>}
+      {space && channel && <ChannelChat key={`${channel.id}:${user?.id ?? 'anonymous'}`} channel={channel} space={space} />}
     </section>
   </main>;
 }

@@ -1,7 +1,9 @@
 import asyncio
 import secrets
+from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 
 from app.auth.security import hash_password
 from app.db.models import (
@@ -9,6 +11,7 @@ from app.db.models import (
     ChannelType,
     Invite,
     MemberRole,
+    Message,
     Space,
     SpaceMember,
     SpaceType,
@@ -127,6 +130,45 @@ async def seed() -> None:
             session.add(invitation)
             await session.flush()
         code = invitation.code
+        conversations = [
+            ("Welcome to Hive Developers! What are you building?", "A small recipe app in Python.", "Nice! I am working on its search page."),
+            ("How is the new layout feeling?", "The channel sidebar is easier to scan.", "The amber accents look good on my phone."),
+            ("I added a getting-started guide.", "The database setup section helped me.", "I will check the Windows instructions."),
+            ("What should we discuss at the next meetup?", "Async Python would be useful.", "Could we cover connection pooling too?"),
+            ("The community page is ready to try.", "I joined from the directory.", "The member count updated right away."),
+            ("Please share any confusing error messages.", "A duplicate channel name now explains the problem.", "That should save a lot of debugging time."),
+            ("I am reviewing our keyboard navigation.", "Tab reaches the channel buttons.", "Remember to keep a visible focus ring."),
+            ("What editor shortcuts do you use most?", "Rename symbol is my favorite.", "Find references saves me every day."),
+            ("The test database is separate from demo data.", "Great, my example spaces are still here.", "I checked that the test cleanup is isolated."),
+            ("I opened a discussion on pagination.", "Cursor pagination seems like a good fit.", "Stable ordering matters when messages arrive together."),
+            ("Has anyone tried the invite flow?", "The single-use link worked for me.", "Expired links show a clear error too."),
+            ("I am polishing the mobile layout.", "The sidebar stacks above the conversation.", "Long words should wrap inside messages."),
+            ("Any recommendations for our docs examples?", "Use small examples with expected output.", "A troubleshooting section would help newcomers."),
+            ("The local health page is useful.", "I can see when Redis is unavailable.", "The round-trip measurement is handy too."),
+            ("How should we organize support questions?", "Keep general discussion here.", "Specific questions can go in help."),
+            ("I pushed a small accessibility improvement.", "The form labels are clearer now.", "I tested them with keyboard navigation."),
+            ("We should test reconnect behavior today.", "I can simulate a network interruption.", "I will check that no messages are duplicated."),
+            ("The demo seed can run more than once.", "That makes local setup much easier.", "I confirmed the example accounts stay consistent."),
+            ("What did you learn this week?", "Postgres unique indexes can enforce retry safety.", "I learned how Socket.IO rooms work."),
+            ("Thanks for trying the latest changes.", "The conversation feels much smoother.", "I will leave detailed feedback after lunch."),
+        ]
+        for channel_name, groups in [
+            ("general", conversations),
+            ("help", [("Where do I start?", "Read the local setup section in the README.",
+                       "Thanks, the health page is green now!"),
+                      ("Can I rerun the seed?", "Yes, it uses stable message identifiers.",
+                       "Perfect, my demo history did not duplicate.")]),
+        ]:
+            channel = await session.scalar(select(Channel).where(
+                Channel.space_id == seeded_spaces["hive-devs"].id, Channel.name == channel_name
+            ))
+            for group_index, group in enumerate(groups):
+                for username, body in zip(("alice", "bob", "carol"), group, strict=True):
+                    client_id = str(uuid5(NAMESPACE_URL, f"hive/{channel_name}/{group_index}/{username}"))
+                    await session.execute(insert(Message).values(
+                        channel_id=channel.id, author_id=accounts[username].id,
+                        body=body, client_msg_id=client_id,
+                    ).on_conflict_do_nothing(index_elements=["author_id", "client_msg_id"]))
         await session.commit()
     print(f"Acme invite: http://localhost:3000/invite/{code}")
     await engine.dispose()

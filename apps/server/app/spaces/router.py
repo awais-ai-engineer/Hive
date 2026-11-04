@@ -7,8 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import get_current_user
 from app.auth.optional import get_optional_user
-from app.db.models import MemberRole, Space, SpaceMember, SpaceType, User
+from app.db.models import Channel, MemberRole, Space, SpaceMember, SpaceType, User
 from app.db.session import get_session
+from app.realtime.socket import evict_from_space, sio
 from app.spaces.permissions import require_below, require_role
 from app.spaces.schemas import MemberRoleIn, SpaceCreate, SpaceOut, SpacePatch
 from app.spaces.service import (
@@ -63,8 +64,12 @@ async def patch_space(slug: str, data: SpacePatch, session: Session, user: Curre
 async def delete_space(slug: str, session: Session, user: CurrentUser):
     space, member = await load_space(session, slug, user)
     require_role(member.role if member else None, MemberRole.owner)
+    channels = list(await session.scalars(select(Channel.id).where(Channel.space_id == space.id)))
     await session.delete(space)
     await session.commit()
+    # Closing the rooms removes every connected socket, including those on other instances.
+    for channel_id in channels:
+        await sio.close_room(f"channel:{channel_id}")
 
 
 @router.post("/{slug}/join", response_model=SpaceOut)
@@ -98,6 +103,7 @@ async def leave_space(slug: str, session: Session, user: CurrentUser):
         raise HTTPException(409, "Owner cannot leave")
     await session.delete(member)
     await session.commit()
+    await evict_from_space(user.id, space.id)
 
 
 @router.get("/{slug}/members")
@@ -134,3 +140,4 @@ async def kick_member(slug: str, user_id: str, session: Session, user: CurrentUs
     require_below(actor_member.role, target.role)
     await session.delete(target)
     await session.commit()
+    await evict_from_space(user_id, space.id)

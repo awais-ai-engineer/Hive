@@ -51,7 +51,7 @@ Ports 5434 and 6380 avoid clashing with other local Postgres/Redis instances.
 
 1. [x] Auth (signup, login, refresh-token rotation), profiles
 2. [x] Spaces, roles, invites, channels
-3. Real-time chat: idempotent send, optimistic UI, reconnect sync
+3. [x] Real-time chat: idempotent send, optimistic UI, reconnect sync
 4. Threads, reactions, uploads, presence, unread counts
 5. Posts, voting, hot/top/new ranking
 6. Nested comments (ltree), public community pages
@@ -103,4 +103,20 @@ to their configured limit, expire when configured, and can be revoked. Use `pnpm
 | admin | 4 | Edit the space, manage channels and invites, manage lower-ranked members |
 | moderator | 3 | Remove lower-ranked members |
 | member | 2 | Participate in a space |
-| guest | 1 | View and participate with limited access |
+| guest | 1 | Read messages |
+
+## Real-time chat
+
+Text channels support plain-text messages, typing indicators, author edits, and author or
+moderator deletion. Public community history is readable without logging in; private workspace
+history requires membership. Sending requires a member role or higher.
+
+The composer shows messages immediately and replaces pending entries when the server confirms
+them. Every send carries a client-generated UUID. A unique index on `(author_id, client_msg_id)`
+and an atomic insert make retries idempotent, so retrying a failed send cannot create duplicates.
+Events are broadcast only after commit, and duplicate retries return the original message.
+
+After reconnecting, clients rejoin their channel and sync from their newest known ULID, paging
+through missed messages in order. Older history uses a separate backward cursor. Socket.IO's
+Redis manager fans events out across server instances; configure `SOCKETIO_CHANNEL` to isolate
+deployments (tests use their own channel). Run the seed to populate example conversations.
