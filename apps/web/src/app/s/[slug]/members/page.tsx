@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../../../lib/auth';
 import { apiData, requestError, type Member, type Space } from '../../../../lib/spaces';
@@ -11,6 +11,7 @@ const rank: Record<string, number> = { owner: 5, admin: 4, moderator: 3, member:
 
 export default function MembersPage() {
   const { slug } = useParams<{ slug: string }>();
+  const router = useRouter();
   const { user, loading } = useAuth();
   const [space, setSpace] = useState<Space | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -29,6 +30,15 @@ export default function MembersPage() {
     if (loading) return;
     load().catch(cause => setError(requestError(cause)));
   }, [slug, loading, user]);
+
+  async function message(member: Member) {
+    try {
+      const conversation = await apiData<{ id: string }>('/api/dms', {
+        method: 'POST', body: JSON.stringify({ usernames: [member.user.username] }),
+      });
+      router.push(`/dms?c=${conversation.id}`);
+    } catch (cause) { setError(requestError(cause)); }
+  }
 
   async function updateRole(member: Member, role: string) {
     try {
@@ -70,7 +80,8 @@ export default function MembersPage() {
         return <li key={member.user.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
           <div><span aria-label={member.online ? 'Online' : 'Offline'} className={`mr-2 inline-block h-2 w-2 rounded-full ${member.online ? 'bg-emerald-400' : 'bg-white/20'}`} /><span className="font-medium">{member.user.username}</span>
             <span className="ml-3 rounded bg-white/10 px-2 py-1 text-xs capitalize">{member.role}</span></div>
-          {(mayChangeRole || mayKick) && <div className="flex items-center gap-2">
+          {(mayChangeRole || mayKick || (user && space?.my_role && member.user.id !== user.id)) && <div className="flex items-center gap-2">
+            {user && space?.my_role && member.user.id !== user.id && <button onClick={() => message(member)} className="text-sm text-amber-400">Message</button>}
             {mayChangeRole && <select aria-label={`Role for ${member.user.username}`} defaultValue={member.role ?? 'guest'}
               onChange={event => updateRole(member, event.target.value)} className="rounded bg-[#171a22] px-2 py-1">
               <option value={member.role ?? 'guest'} disabled>Change role</option>

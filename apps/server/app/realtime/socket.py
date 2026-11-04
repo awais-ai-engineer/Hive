@@ -1,7 +1,8 @@
 """Socket.IO server. Event names mirror packages/shared/src/events.ts.
 
 Rooms: `user:{id}` (all of a user's sockets), `channel:{id}` (live messages of an open channel),
-`space:{id}` (presence and unread activity for spaces with an open channel).
+`space:{id}` (presence and unread activity for spaces with an open channel). Direct-message
+activity and presence go to each participant's `user:{id}` room instead.
 """
 
 import logging
@@ -17,8 +18,9 @@ from sqlalchemy import select
 
 from app.auth.security import decode_access_token
 from app.core.config import settings
-from app.db.models import Channel, SpaceMember, User
+from app.db.models import Channel, ChannelType, SpaceMember, User
 from app.db.session import SessionLocal
+from app.dms.service import participant_ids, partner_ids
 from app.messages import service
 from app.messages.schemas import ChannelIn, EditIn, MessageIn, ReactionIn, ReadIn, SendIn, SyncIn
 from app.realtime import presence
@@ -39,8 +41,12 @@ async def broadcast_presence(user_id: str, online: bool) -> None:
         spaces = list(await session.scalars(
             select(SpaceMember.space_id).where(SpaceMember.user_id == user_id)
         ))
+        partners = await partner_ids(session, user_id)
+    event = {"userId": user_id, "online": online}
     for space_id in spaces:
-        await sio.emit("presence", {"userId": user_id, "online": online}, room=f"space:{space_id}")
+        await sio.emit("presence", event, room=f"space:{space_id}")
+    for partner in partners:
+        await sio.emit("presence", event, room=f"user:{partner}")
 
 
 @sio.event
@@ -109,7 +115,8 @@ def chat_event(name, schema):
 async def join(sid, data, session, user):
     channel, _ = await service.readable(session, data.channelId, user.id)
     await sio.enter_room(sid, f"channel:{channel.id}")
-    await sio.enter_room(sid, f"space:{channel.space_id}")
+    if channel.space_id is not None:
+        await sio.enter_room(sid, f"space:{channel.space_id}")
     return {"channelId": channel.id}
 
 
@@ -128,9 +135,12 @@ async def send(sid, data, session, user):
             await sio.emit("message:updated", parent, room=room)
         else:
             channel = await session.get(Channel, message["channel_id"])
-            await sio.emit("channel:activity", {
-                "channelId": channel.id, "messageId": message["id"], "authorId": user.id,
-            }, room=f"space:{channel.space_id}")
+            activity = {"channelId": channel.id, "messageId": message["id"], "authorId": user.id}
+            if channel.type == ChannelType.dm:
+                for participant in await participant_ids(session, channel.id):
+                    await sio.emit("dm:activity", activity, room=f"user:{participant}")
+            else:
+                await sio.emit("channel:activity", activity, room=f"space:{channel.space_id}")
     return {"message": message}
 
 

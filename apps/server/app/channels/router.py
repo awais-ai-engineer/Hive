@@ -24,7 +24,9 @@ async def get_channels(slug: str, session: Session, viewer: OptionalUser):
     space, member = await load_space(session, slug, viewer)
     channels = await list_channels(session, space)
     if member is not None:
-        counts = await unread_counts(session, member, [channel.id for channel in channels])
+        counts = await unread_counts(
+            session, member.user_id, [channel.id for channel in channels], member.joined_at
+        )
         for channel in channels:
             channel.unread = counts.get(channel.id, 0)
     return channels

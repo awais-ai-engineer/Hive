@@ -119,7 +119,10 @@ export default function SpacePage() {
         </div>
       </div>}
       {error && <p role="alert" className={error === 'Loading space…' ? 'text-white/50' : 'text-rose-400'}>{error}</p>}
-      {space && channel && <ChannelChat key={`${channel.id}:${user?.id ?? 'anonymous'}`} channel={channel} space={space} onRead={clearUnread} />}
+      {space && channel && <ChannelChat key={`${channel.id}:${user?.id ?? 'anonymous'}`} channel={channel} placeholder={`Message #${channel.name}`}
+        reason={channel.type === 'voice' ? 'Voice rooms coming soon' : !user ? 'Log in to chat'
+          : !space.my_role ? 'Join this space to chat' : space.my_role === 'guest' ? 'You have read-only access' : ''}
+        canModerate={!!space.my_role && rank[space.my_role] >= rank.moderator} tracksReads={!!space.my_role} onRead={clearUnread} />}
     </section>
   </main>;
 }
