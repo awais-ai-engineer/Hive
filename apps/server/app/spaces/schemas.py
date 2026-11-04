@@ -82,6 +82,7 @@ class MemberOut(BaseModel):
     user: MemberUserOut
     role: MemberRole
     joined_at: datetime
+    online: bool = False
 
 
 class MemberRoleIn(BaseModel):

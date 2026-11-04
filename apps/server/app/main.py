@@ -14,6 +14,7 @@ from app.invites.router import router as invites_router
 from app.messages.router import router as messages_router
 from app.realtime.socket import sio
 from app.spaces.router import router as spaces_router
+from app.uploads.router import router as uploads_router
 from app.users.router import router as users_router
 
 logging.basicConfig(level=logging.INFO)
@@ -41,6 +42,7 @@ api.include_router(spaces_router, prefix="/api")
 api.include_router(channels_router, prefix="/api")
 api.include_router(invites_router, prefix="/api")
 api.include_router(messages_router, prefix="/api")
+api.include_router(uploads_router, prefix="/api")
 
 # One ASGI app: Socket.IO handles /socket.io, everything else goes to FastAPI.
 app = socketio.ASGIApp(sio, other_asgi_app=api)

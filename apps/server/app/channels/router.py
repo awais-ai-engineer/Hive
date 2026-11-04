@@ -9,6 +9,7 @@ from app.channels.schemas import ChannelCreate, ChannelOut, ChannelPatch
 from app.channels.service import create_channel, delete_channel, list_channels, update_channel
 from app.db.models import MemberRole, User
 from app.db.session import get_session
+from app.messages.service import unread_counts
 from app.spaces.permissions import require_role
 from app.spaces.service import load_space
 
@@ -20,8 +21,13 @@ OptionalUser = Annotated[User | None, Depends(get_optional_user)]
 
 @router.get("", response_model=list[ChannelOut])
 async def get_channels(slug: str, session: Session, viewer: OptionalUser):
-    space, _ = await load_space(session, slug, viewer)
-    return await list_channels(session, space)
+    space, member = await load_space(session, slug, viewer)
+    channels = await list_channels(session, space)
+    if member is not None:
+        counts = await unread_counts(session, member, [channel.id for channel in channels])
+        for channel in channels:
+            channel.unread = counts.get(channel.id, 0)
+    return channels
 
 
 @router.post("", response_model=ChannelOut, status_code=201)
