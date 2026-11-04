@@ -215,7 +215,7 @@ async def test_profile(client):
     assert (await client.patch("/api/me", json={"username": "changed"})).status_code == 401
 
 
-async def test_socket_auth(monkeypatch):
+async def test_socket_auth(monkeypatch, client):
     save = AsyncMock()
     room = AsyncMock()
     monkeypatch.setattr(sio, "save_session", save)
@@ -223,9 +223,13 @@ async def test_socket_auth(monkeypatch):
     await connect("anonymous", {}, None)
     save.assert_not_called()
     assert isinstance((await ping("anonymous"))["serverTime"], int)
-    await connect("authenticated", {}, {"token": create_access_token("user-id")})
-    save.assert_awaited_once_with("authenticated", {"user_id": "user-id"})
-    room.assert_awaited_once_with("authenticated", "user:user-id")
+    account = (await signup(client)).json()
+    user_id = account["user"]["id"]
+    await connect("authenticated", {}, {"token": account["access_token"]})
+    save.assert_awaited_once_with("authenticated", {"user_id": user_id, "username": "alice"})
+    room.assert_awaited_once_with("authenticated", f"user:{user_id}")
+    with pytest.raises(ConnectionRefusedError):
+        await connect("missing-user", {}, {"token": create_access_token("missing-user")})
     for token in ["invalid", None, ""]:
         with pytest.raises(ConnectionRefusedError):
             await connect("invalid", {}, {"token": token})

@@ -4,6 +4,7 @@ os.environ["DATABASE_URL"] = "postgresql+asyncpg://hive:hive@localhost:5434/hive
 os.environ["REDIS_URL"] = "redis://localhost:6380"
 os.environ["JWT_SECRET"] = "test-secret-long-enough-for-hs256-signing"
 os.environ["COOKIE_SECURE"] = "false"
+os.environ["SOCKETIO_CHANNEL"] = "hive-socketio-tests"
 
 import asyncpg
 import httpx

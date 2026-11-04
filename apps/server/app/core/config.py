@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     web_origin: str = "http://localhost:3000"
     database_url: str = "postgresql+asyncpg://hive:hive@localhost:5434/hive"
     redis_url: str = "redis://localhost:6380"
+    socketio_channel: str = "hive-socketio"
     moderation_url: str = "http://localhost:8000"
     jwt_secret: str = "dev-change-me"
     access_token_minutes: int = 15
