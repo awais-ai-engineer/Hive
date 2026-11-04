@@ -179,6 +179,7 @@ async def seed() -> None:
         await seed_thread(session, seeded_spaces["hive-devs"].id, accounts)
         await seed_direct_messages(session, accounts)
         await seed_posts(session, seeded_spaces, accounts)
+        await seed_media(session, seeded_spaces, accounts)
         await session.commit()
     print(f"Acme invite: http://localhost:3000/invite/{code}")
     await engine.dispose()
@@ -292,6 +293,42 @@ async def seed_posts(session, spaces: dict, accounts: dict) -> None:
         post.downvotes = values.count(-1)
         post.score = post.upvotes - post.downvotes
         post.hot = hot_score(post.score, post.created_at)
+
+
+async def seed_media(session, spaces, accounts):
+    """Offline, repeatable PNG gallery for the developers community."""
+    import struct
+    import zlib
+
+    from app.db.models import Attachment, Post
+    from app.storage import get_storage
+
+    title = "Our new office mascot sketches"
+    post = await session.scalar(select(Post).where(Post.space_id == spaces["hive-devs"].id, Post.title == title))
+    if post is None:
+        post = Post(space_id=spaces["hive-devs"].id, author_id=accounts["alice"].id,
+                    title=title, body="Two colour studies for our community mascot.")
+        session.add(post)
+        await session.flush()
+        from app.posts.ranking import hot_score
+        post.hot = hot_score(0, post.created_at)
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
+    for position, colour in enumerate([(251, 191, 36), (52, 211, 153)]):
+        existing = await session.scalar(select(Attachment).where(Attachment.post_id == post.id, Attachment.position == position))
+        if existing is not None:
+            continue
+        from app.db.models import new_id
+        attachment_id = new_id()
+        key = f"attachments/{attachment_id}"
+        data = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 160, 120, 8, 2, 0, 0, 0))
+        data += chunk(b"IDAT", zlib.compress((b"\0" + bytes(colour) * 160) * 120)) + chunk(b"IEND", b"")
+        async def chunks(payload=data):
+            yield payload
+        await get_storage().save(key, chunks(), "image/png")
+        session.add(Attachment(id=attachment_id, space_id=spaces["hive-devs"].id, post_id=post.id,
+            uploader_id=accounts["alice"].id, position=position, filename=f"mascot-{position + 1}.png",
+            content_type="image/png", kind="image", size=len(data), storage_key=key))
 
 
 if __name__ == "__main__":

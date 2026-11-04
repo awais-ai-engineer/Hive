@@ -88,9 +88,9 @@ async def test_attachments(client, setup_chat, live_server):
     alice, bob, _, ah, _, ch, _, channel = setup_chat
     path = f"/api/channels/{channel}/uploads"
     image = (await client.post(path, headers=ah, files={
-        "file": ("../../photo.png", b"\x89PNG fake", "image/png"),
+        "file": ("../../photo.png", b"\x89PNG\r\n\x1a\nfake", "image/png"),
     })).json()
-    assert image["filename"] == "photo.png" and image["size"] == 9
+    assert image["filename"] == "photo.png" and image["size"] == 12
     page = await client.post(path, headers=ah, files={"file": ("page.html", b"<script>", "text/html")})
     page = page.json()
     assert (await client.post(path, files={"file": ("a.txt", b"a")})).status_code == 401
@@ -121,7 +121,7 @@ async def test_attachments(client, setup_chat, live_server):
         })
         assert empty["error"]["code"] == "invalid"
     shown = await client.get(files[0]["url"])
-    assert shown.status_code == 200 and shown.content == b"\x89PNG fake"
+    assert shown.status_code == 200 and shown.content == b"\x89PNG\r\n\x1a\nfake"
     assert shown.headers["content-type"] == "image/png"
     assert shown.headers["content-disposition"].startswith("inline")
     download = await client.get(files[1]["url"])

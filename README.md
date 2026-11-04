@@ -192,3 +192,21 @@ can delete.
   guards the votes table.
 - Live updates: `post:new` and `post:score` are broadcast to the space room. Limits: 5 posts per
   10 minutes and 60 votes per minute per user.
+
+## Media & storage
+
+Posts support up to ten images or one video, with optional text. Chat also plays videos inline.
+Uploads show progress and can be cancelled. Galleries have keyboard navigation and a lightbox.
+The server detects PNG, JPEG, GIF, WebP, MP4 and WebM from their bytes; renamed HTML and SVG
+remain downloads with `nosniff`. Default limits are 10 MB for images/files and 100 MB for video,
+configured with `MAX_IMAGE_MB`, `MAX_FILE_MB` and `MAX_VIDEO_MB`.
+
+`STORAGE_DRIVER=local` stores objects beneath `UPLOAD_DIR` and serves HMAC-signed downloads,
+including HTTP range requests for seeking. Existing attachment paths remain supported.
+To deploy with Supabase, create a **private** Storage bucket named `hive-media` in your Supabase
+project and set `STORAGE_DRIVER=supabase`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, and
+`SUPABASE_BUCKET` on the API server (see `.env.example`). The service role key stays on the
+server because it grants privileged storage access; never put it in frontend environment variables.
+The API streams uploads through the Storage REST API, signs all files for a response in one
+request, and caches signed URLs in Redis. `SIGNED_URL_SECONDS` defaults to 3600. Browsers get
+only expiring signed URLs; ordinary files use download disposition. No storage SDK is required.

@@ -101,6 +101,7 @@ class ReactionOut(BaseModel):
 
 
 class AttachmentOut(BaseModel):
+    kind: Literal["image", "video", "file"]
     id: str
     filename: str
     content_type: str

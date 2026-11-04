@@ -25,8 +25,9 @@ export function formatSize(bytes: number) {
 }
 
 function AttachmentView({ file }: { file: Attachment }) {
-  const href = `${API_URL}${file.url}`;
-  if (file.content_type.startsWith('image/') && file.url) {
+  const href = /^https?:\/\//.test(file.url) ? file.url : `${API_URL}${file.url}`;
+  if (file.kind === 'video') return <video src={href} controls preload="metadata" playsInline className="max-h-80 max-w-full rounded" />;
+  if (file.kind === 'image' && file.url) {
     return <a href={href} target="_blank" rel="noreferrer" className="block w-fit">
       <img src={href} alt={file.filename} loading="lazy" className="max-h-64 max-w-full rounded border border-white/10" />
     </a>;

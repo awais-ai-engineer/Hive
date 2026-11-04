@@ -200,8 +200,14 @@ class Attachment(Base):
 
     __tablename__ = "attachments"
 
+    __table_args__ = (CheckConstraint("(channel_id IS NOT NULL)::int + (space_id IS NOT NULL)::int = 1", name="attachments_owner_check"),)
     id: Mapped[str] = pk()
-    channel_id: Mapped[str] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"))
+    storage_key: Mapped[str] = mapped_column(Text)
+    kind: Mapped[str] = mapped_column(String(10))
+    space_id: Mapped[str | None] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE", name="attachments_space_fk"))
+    post_id: Mapped[str | None] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE", name="attachments_post_fk"), index=True)
+    position: Mapped[int | None] = mapped_column(SmallInteger)
+    channel_id: Mapped[str | None] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"))
     uploader_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     message_id: Mapped[str | None] = mapped_column(
         ForeignKey("messages.id", ondelete="CASCADE"), index=True
