@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ChannelChat } from '../../components/channel-chat';
+import { PostFeed } from '../../components/posts/post-feed';
 import { ChatHeader } from '../../components/home/chat-header';
+import { Rail } from '../../components/home/rail';
 import { Sidebar } from '../../components/home/sidebar';
 import { ThreadsView } from '../../components/home/threads-view';
 import { UnreadsView } from '../../components/home/unreads-view';
@@ -41,6 +43,7 @@ function Home() {
   const selected = search.get('c');
   const view = search.get('view');
   const threadParam = search.get('t');
+  const tab = search.get('tab') === 'posts' ? 'posts' : 'messages';
 
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [spacesReady, setSpacesReady] = useState(false);
@@ -71,15 +74,18 @@ function Home() {
       .catch(cause => { setError(requestError(cause)); setSpacesReady(true); });
   }, [loading, user]);
 
+  const spaceSlug = space?.slug ?? null;
+  const loadChannels = useCallback(async () => {
+    if (!spaceSlug) return [];
+    const list = await apiData<Channel[]>(`/api/spaces/${encodeURIComponent(spaceSlug)}/channels`);
+    setChannels(list);
+    return list;
+  }, [spaceSlug]);
   useEffect(() => {
-    if (!space) { setChannels([]); return; }
-    saveSetting(LAST_SPACE, space.slug);
-    let active = true;
-    apiData<Channel[]>(`/api/spaces/${encodeURIComponent(space.slug)}/channels`)
-      .then(list => { if (active) setChannels(list); })
-      .catch(cause => { if (active) setError(requestError(cause)); });
-    return () => { active = false; };
-  }, [space]);
+    if (!spaceSlug) { setChannels([]); return; }
+    saveSetting(LAST_SPACE, spaceSlug);
+    loadChannels().catch(cause => setError(requestError(cause)));
+  }, [spaceSlug, loadChannels]);
 
   const loadConversations = useCallback(() => {
     apiData<Conversation[]>('/api/dms').then(setConversations).catch(() => {});
@@ -138,6 +144,25 @@ function Home() {
         .off('thread:activity', refreshThreads).off('thread:read', refreshThreads).off('presence', onPresence).off('connect', onReconnect);
     };
   }, [user, selected, refreshConversations, refreshUnreads, refreshThreads]);
+
+  // Private channels appear or disappear when someone adds or removes the viewer.
+  useEffect(() => {
+    if (!user) return;
+    const onChannelChange = (data: { channelId: string; spaceId: string }, removed: boolean) => {
+      if (data.spaceId !== space?.id) return;
+      loadChannels().catch(() => {});
+      if (removed && data.channelId === selected) go({ c: null });
+    };
+    const onAdded = (data: { channelId: string; spaceId: string }) => onChannelChange(data, false);
+    const onRemoved = (data: { channelId: string; spaceId: string }) => onChannelChange(data, true);
+    socket.on('channel:added', onAdded).on('channel:removed', onRemoved);
+    return () => { socket.off('channel:added', onAdded).off('channel:removed', onRemoved); };
+  }, [user, space?.id, selected, loadChannels, go]);
+
+  async function channelCreated(created: Channel) {
+    await loadChannels().catch(() => {});
+    go({ c: created.id });
+  }
 
   const markRead = useCallback((channelId: string) => {
     setChannels(list => list.map(item => item.id === channelId && item.unread ? { ...item, unread: 0 } : item));
@@ -198,12 +223,16 @@ function Home() {
     </>;
   } else if (channel && space) {
     main = <>
-      <ChatHeader channel={channel} space={space} onMenu={() => setDrawer(true)} />
-      <ChannelChat key={channel.id} channel={channel} placeholder={`Message #${channel.name}`}
+      <ChatHeader channel={channel} space={space} tab={tab} onTab={next => go({ c: channel.id, tab: next === 'posts' ? 'posts' : null })}
+        onMenu={() => setDrawer(true)}
+        onLeft={() => { void loadChannels().catch(() => {}); go({ c: null }); }} />
+      {tab === 'posts' ? <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+        <Suspense fallback={<p className="text-white/50">Loading posts…</p>}><PostFeed space={space} /></Suspense>
+      </div> : <ChannelChat key={channel.id} channel={channel} space={space} placeholder={`Message #${channel.name}`}
         reason={channel.type === 'voice' ? 'Voice rooms coming soon' : !space.my_role ? 'Join this space to chat'
           : space.my_role === 'guest' ? 'You have read-only access' : ''}
         canModerate={myRank >= rank.moderator} tracksReads={!!space.my_role} onRead={markRead}
-        threadId={threadParam} onThreadChange={threadChange} />
+        threadId={threadParam} onThreadChange={threadChange} />}
     </>;
   } else if (view === 'threads') {
     main = <>
@@ -218,18 +247,22 @@ function Home() {
     </>;
   }
 
-  return <main className="mx-auto grid max-w-7xl gap-4 px-2 py-4 sm:px-4 md:grid-cols-[280px_minmax(0,1fr)]">
-    {drawer && <button type="button" aria-label="Close sidebar" onClick={() => setDrawer(false)} className="fixed inset-0 z-30 bg-black/60 md:hidden" />}
-    <aside className={`${drawer ? 'fixed inset-y-0 left-0 z-40 w-[85vw] max-w-[300px] p-4' : 'hidden'} min-w-0 rounded-none border-white/10 bg-[#0e1016] md:static md:z-auto md:block md:h-[calc(100vh-7rem)] md:w-auto md:max-w-none md:rounded-xl md:border md:bg-white/[0.03] md:p-4`}>
-      {spacesReady && !spaces.length && <p className="mb-3 text-sm text-white/50">You haven&apos;t joined a space yet. <Link href="/spaces" className="text-amber-400">Browse spaces</Link> or <Link href="/spaces/new" className="text-amber-400">create one</Link>.</p>}
-      <Sidebar spaces={spaces} space={space} channels={channels} conversations={conversations}
-        selected={selected} view={showView && view !== 'threads' ? 'unreads' : view}
-        unreadTotal={unreadTotal} threadsUnread={threadsUnread}
-        onSwitchSpace={next => go({ s: next })} onOpen={id => go({ c: id })} onView={next => go({ view: next })}
-        onPerson={username => void openPerson(username)} />
-    </aside>
-    <section className="min-h-[70vh] min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-3 sm:p-5">
-      {error && <p role="alert" className="mb-2 text-sm text-rose-400">{error}</p>}
+  // Full-screen app shell: workspace rail, purple sidebar, then the open conversation.
+  return <main className="flex h-dvh overflow-hidden bg-canvas">
+    {drawer && <button type="button" aria-label="Close sidebar" onClick={() => setDrawer(false)} className="fixed inset-0 z-30 bg-[rgb(0_0_0/0.5)] md:hidden" />}
+    <div className={`${drawer ? 'fixed inset-y-0 left-0 z-40 flex' : 'hidden'} h-full md:static md:z-auto md:flex`}>
+      <Rail spaces={spaces} current={space?.slug ?? null} onSwitch={next => go({ s: next })} unread={unreadTotal} />
+      <aside className="h-full w-[min(80vw,280px)] md:w-[280px]">
+        {spacesReady && !spaces.length && <p className="on-dark bg-[var(--sidebar-from)] px-4 pt-4 text-sm text-white/70">You haven&apos;t joined a space yet. <Link href="/spaces" className="underline">Browse spaces</Link> or <Link href="/spaces/new" className="underline">create one</Link>.</p>}
+        <Sidebar spaces={spaces} space={space} channels={channels} conversations={conversations}
+          selected={selected} view={showView && view !== 'threads' ? 'unreads' : view}
+          unreadTotal={unreadTotal} threadsUnread={threadsUnread}
+          onSwitchSpace={next => go({ s: next })} onOpen={id => go({ c: id })} onView={next => go({ view: next })}
+          onPerson={username => void openPerson(username)} onChannelCreated={channel => void channelCreated(channel)} />
+      </aside>
+    </div>
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface px-3 py-3 sm:px-6 sm:py-4">
+      {error && <p role="alert" className="mb-2 text-sm text-rose-500">{error}</p>}
       {main}
     </section>
   </main>;

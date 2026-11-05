@@ -14,6 +14,7 @@ class ChannelCreate(BaseModel):
     name: ChannelName
     type: ChannelType = ChannelType.text
     topic: ChannelTopic | None = None
+    is_private: bool = False
 
     @field_validator("type")
     @classmethod
@@ -45,4 +46,15 @@ class ChannelOut(BaseModel):
     name: str
     topic: str | None
     position: int
+    is_private: bool = False
     unread: int = 0
+
+
+class ChannelMemberIn(BaseModel):
+    username: str
+
+
+class ChannelMemberOut(BaseModel):
+    id: str
+    username: str
+    avatar_url: str | None

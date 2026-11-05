@@ -16,19 +16,19 @@ async def test_history_and_pagination(client, setup_chat):
                                 body=str(i), client_msg_id=str(uuid4())))
         await session.commit()
     path = f"/api/channels/{channel}/messages"
-    first = (await client.get(path)).json()
-    second = (await client.get(path, params={"before": first["items"][0]["id"]})).json()
-    third = (await client.get(path, params={"before": second["items"][0]["id"]})).json()
+    first = (await client.get(path, headers=ah)).json()
+    second = (await client.get(path, params={"before": first["items"][0]["id"]}, headers=ah)).json()
+    third = (await client.get(path, params={"before": second["items"][0]["id"]}, headers=ah)).json()
     assert [len(page["items"]) for page in (first, second, third)] == [50, 50, 20]
     assert [page["has_more"] for page in (first, second, third)] == [True, True, False]
     ids = [item["id"] for page in (third, second, first) for item in page["items"]]
     assert ids == sorted(set(ids)) and len(ids) == 120
-    newer = (await client.get(path, params={"after": ids[99]})).json()
+    newer = (await client.get(path, params={"after": ids[99]}, headers=ah)).json()
     assert [item["id"] for item in newer["items"]] == ids[100:]
     assert not newer["has_more"]
-    assert (await client.get(path, params={"before": ids[0], "after": ids[1]})).status_code == 422
+    assert (await client.get(path, params={"before": ids[0], "after": ids[1]}, headers=ah)).status_code == 422
     for limit in (0, 101):
-        assert (await client.get(path, params={"limit": limit})).status_code == 422
+        assert (await client.get(path, params={"limit": limit}, headers=ah)).status_code == 422
     assert (await client.get("/api/channels/missing/messages")).status_code == 404
     await client.post("/api/spaces", headers=ah, json={
         "type": "workspace", "name": "Private", "slug": "private"
@@ -94,7 +94,9 @@ async def test_permissions_validation_rate_limit(client, setup_chat, live_server
     private = (await client.get("/api/spaces/private/channels", headers=ah)).json()[0]["id"]
     for account in (bob, carol):
         async with connected(live_server, account) as (peer, _):
-            assert (await call(peer, "channel:join", {"channelId": channel}))["ok"]
+            # Community chat is members-only: the guest may read it, the outsider may not.
+            joined = await call(peer, "channel:join", {"channelId": channel})
+            assert joined["ok"] == (account is bob)
             assert (await send(peer, channel))["error"]["code"] == "forbidden"
             assert (await call(peer, "channel:join", {"channelId": private}))["error"]["code"] == "not_found"
     async with connected(live_server, alice) as (a, _):

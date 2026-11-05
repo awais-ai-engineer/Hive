@@ -1,11 +1,20 @@
 from datetime import UTC, datetime
 
 from fastapi import HTTPException
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Channel, ChannelType, MemberRole, Space, SpaceMember, SpaceType, User
+from app.db.models import (
+    Channel,
+    ChannelMember,
+    ChannelType,
+    MemberRole,
+    Space,
+    SpaceMember,
+    SpaceType,
+    User,
+)
 from app.spaces.permissions import ROLE_RANK
 from app.spaces.schemas import SpaceCreate, SpaceOut, SpacePatch
 
@@ -51,6 +60,7 @@ async def space_out(
         slug=space.slug,
         description=space.description,
         allowed_email_domain=space.allowed_email_domain,
+        public_chat=space.public_chat,
         created_at=space.created_at,
         member_count=count or 0,
         my_role=member.role if member else None,
@@ -128,6 +138,8 @@ async def update_space(session: AsyncSession, space: Space, data: SpacePatch) ->
     changes = data.model_dump(exclude_unset=True)
     if space.type == SpaceType.community and changes.get("allowed_email_domain") is not None:
         raise HTTPException(422, "Email domain is only allowed on workspaces")
+    if "public_chat" in changes and space.type != SpaceType.community:
+        raise HTTPException(422, "Public chat is only for communities")
     for key, value in changes.items():
         setattr(space, key, value)
     try:
@@ -177,10 +189,10 @@ async def list_members(session: AsyncSession, space: Space, cursor: str | None) 
     )
     more = len(rows) > 50
     rows = rows[:50]
-    from app.realtime.presence import online_ids
+    from app.realtime.presence import visible_online
     from app.spaces.schemas import MemberOut, MemberUserOut
 
-    online = await online_ids([user.id for _, user in rows])
+    online = await visible_online(session, [user.id for _, user in rows])
     result = [
         MemberOut(
             user=MemberUserOut(id=user.id, username=user.username, avatar_url=user.avatar_url),
@@ -198,3 +210,10 @@ async def get_member(session: AsyncSession, space_id: str, user_id: str) -> Spac
     if member is None:
         raise HTTPException(404, "Member not found")
     return member
+
+
+async def drop_private_access(session: AsyncSession, space_id: str, user_id: str) -> None:
+    """Remove a user's private-channel memberships in a space (they left or were kicked)."""
+    channel_ids = select(Channel.id).where(Channel.space_id == space_id)
+    await session.execute(delete(ChannelMember).where(
+        ChannelMember.user_id == user_id, ChannelMember.channel_id.in_(channel_ids)))

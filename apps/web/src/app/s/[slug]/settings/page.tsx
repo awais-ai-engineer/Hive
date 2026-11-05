@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { channelCreateSchema, inviteCreateSchema, spacePatchSchema } from '@hive/shared';
+import { SpaceKind } from '../../../../components/ui/space-kind';
 import { useAuth } from '../../../../lib/auth';
-import { apiData, requestError, type Channel, type Space } from '../../../../lib/spaces';
+import { apiData, requestError, spaceKindLabel, type Channel, type Space } from '../../../../lib/spaces';
 
 type Invite = { id: string; code: string; max_uses: number | null; uses: number;
   expires_at: string | null; revoked_at: string | null; created_at: string };
@@ -47,6 +48,12 @@ export default function SettingsPage() {
     try { await apiData(`/api/spaces/${encodeURIComponent(slug)}`, { method: 'PATCH', body: JSON.stringify(parsed.data) }); await load(); }
     catch (cause) { setError(requestError(cause)); }
     finally { setBusy(false); }
+  }
+
+  async function togglePublicChat(value: boolean) {
+    setError('');
+    try { await apiData(`/api/spaces/${encodeURIComponent(slug)}`, { method: 'PATCH', body: JSON.stringify({ public_chat: value }) }); await load(); }
+    catch (cause) { setError(requestError(cause)); }
   }
 
   async function addChannel(event: FormEvent<HTMLFormElement>) {
@@ -129,6 +136,16 @@ export default function SettingsPage() {
     <div><Link href={`/s/${slug}`} className="text-sm text-amber-400">← {space.name}</Link>
       <h1 className="mt-2 text-3xl font-bold">Space settings</h1></div>
     {error && <p role="alert" className="text-rose-400">{error}</p>}
+    <section className="card p-5"><h2 className="mb-2 flex items-center gap-2 text-xl font-semibold"><SpaceKind space={space} size={18} />Privacy</h2>
+      <p className="text-white/70"><strong>{spaceKindLabel(space)}.</strong> {space.type === 'workspace'
+        ? 'Only people you invite can find or open this space. Outsiders see nothing, not even that it exists. Chat, files and posts are visible to members only.'
+        : `Anyone can find this community and read its posts. ${space.public_chat ? 'Anyone can also read the chat without joining.' : 'Only members can read and join the chat.'} Posting always requires membership.`}</p>
+      {space.type === 'community' && <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl bg-brand-soft p-3">
+        <input type="checkbox" role="switch" className="mt-1" checked={space.public_chat} onChange={event => void togglePublicChat(event.target.checked)} />
+        <span><span className="block font-semibold">Public chat</span>
+          <span className="text-sm text-white/60">Let anyone read this community&apos;s chat without joining (posting still requires membership).</span></span>
+      </label>}
+    </section>
     <section><h2 className="mb-4 text-xl font-semibold">Details</h2>
       <form onSubmit={saveSpace} className="space-y-3">
         <label className="block">Name<input name="name" className="auth-input" required minLength={2} maxLength={60} defaultValue={space.name} /></label>

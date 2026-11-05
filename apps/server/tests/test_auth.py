@@ -34,7 +34,10 @@ async def test_signup_cookie_and_storage(client):
     assert response.status_code == 201
     body = response.json()
     assert body["token_type"] == "bearer"
-    assert set(body["user"]) == {"id", "username", "email", "avatar_url", "created_at"}
+    assert set(body["user"]) == {
+        "id", "username", "email", "avatar_url", "created_at", "display_name", "bio",
+        "status_text", "status_emoji", "dm_policy", "appear_offline",
+    }
     assert body["user"]["email"] == "alice@example.com"
     claims = decode_access_token(body["access_token"])
     assert claims["sub"] == body["user"]["id"]

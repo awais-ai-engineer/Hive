@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: hive
           POSTGRES_PASSWORD: hive
@@ -43,6 +43,8 @@ jobs:
         working-directory: apps/server
       - run: uv run pytest -q
         working-directory: apps/server
+      - run: uv run alembic upgrade head && uv run alembic check
+        working-directory: apps/server
   check:
     runs-on: ubuntu-latest
     steps:
@@ -53,5 +55,6 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @hive/shared build
       - run: pnpm typecheck
       - run: pnpm build

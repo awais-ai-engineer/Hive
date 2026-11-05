@@ -8,12 +8,13 @@ they are not "yours" until you join.)
 from datetime import UTC, datetime
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func, or_, select, union
+from sqlalchemy import and_, exists, func, or_, select, union
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (
     Channel,
+    ChannelMember,
     ChannelRead,
     ChannelType,
     DirectMember,
@@ -25,7 +26,7 @@ from app.db.models import (
 )
 from app.messages.schemas import Participant, Place, PlaceSpace
 from app.messages.service import readable, serialize, unread_counts
-from app.realtime.presence import online_ids
+from app.realtime.presence import visible_online
 
 EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
@@ -34,12 +35,18 @@ def _active_member():
     return or_(SpaceMember.banned_until.is_(None), SpaceMember.banned_until <= datetime.now(UTC))
 
 
+def visible_channel(user_id: str):
+    """Public channels, or private channels the user was added to."""
+    return or_(Channel.is_private.is_(False), exists().where(
+        ChannelMember.channel_id == Channel.id, ChannelMember.user_id == user_id))
+
+
 def my_channel_ids(user_id: str):
     """Subquery of every channel id the user belongs to (space member or DM participant)."""
     in_spaces = (
         select(Channel.id)
         .join(SpaceMember, SpaceMember.space_id == Channel.space_id)
-        .where(SpaceMember.user_id == user_id, _active_member())
+        .where(SpaceMember.user_id == user_id, _active_member(), visible_channel(user_id))
     )
     in_dms = select(DirectMember.channel_id).where(DirectMember.user_id == user_id)
     return union(in_spaces, in_dms).subquery()
@@ -62,7 +69,7 @@ async def places(session: AsyncSession, viewer_id: str, channel_ids: list[str]) 
             .order_by(User.username)
         ):
             people.setdefault(channel_id, []).append(user)
-    online = await online_ids(list({user.id for users in people.values() for user in users}))
+    online = await visible_online(session, list({user.id for users in people.values() for user in users}))
     result = {}
     for channel, space in rows:
         if channel.type == ChannelType.dm:
@@ -209,7 +216,8 @@ async def my_unreads(session: AsyncSession, user: User) -> dict:
     channel_rows = (await session.execute(
         select(Channel.id, SpaceMember.joined_at)
         .join(SpaceMember, SpaceMember.space_id == Channel.space_id)
-        .where(SpaceMember.user_id == user.id, _active_member(), Channel.type == ChannelType.text)
+        .where(SpaceMember.user_id == user.id, _active_member(), Channel.type == ChannelType.text,
+               visible_channel(user.id))
     )).all()
     since = {channel_id: joined for channel_id, joined in channel_rows}
     for channel_id in await session.scalars(

@@ -60,7 +60,9 @@ export function VoteButtons({
   }
 
   return (
-    <div className={`flex shrink-0 items-center gap-1 ${horizontal ? 'flex-row' : 'flex-wrap sm:w-14 sm:flex-col'}`}>
+    <div className={`flex shrink-0 items-center gap-1 ${horizontal
+      ? `flex-row rounded-full border px-1 py-0.5 ${current.my_vote === 1 ? 'border-brand/40 bg-brand-soft text-brand' : current.my_vote === -1 ? 'border-rose-400/40 bg-rose-500/10 text-rose-500' : 'border-white/10 bg-[var(--surface-2)]'}`
+      : 'flex-wrap sm:w-14 sm:flex-col'}`}>
       <button
         aria-label="Upvote"
         aria-pressed={current.my_vote === 1}
@@ -71,7 +73,7 @@ export function VoteButtons({
       >
         ▲
       </button>
-      <span aria-label="Score" className="text-xs font-semibold sm:text-sm">
+      <span aria-label="Score" className="min-w-5 text-center text-xs font-bold sm:text-sm">
         {current.score}
       </span>
       <button

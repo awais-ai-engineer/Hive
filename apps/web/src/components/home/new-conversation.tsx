@@ -37,7 +37,7 @@ export function NewConversation({ onOpened, onCancel }: { onOpened: (id: string)
   }
 
   const available = results.filter(result => !chosen.some(person => person.id === result.id));
-  return <form onSubmit={start} className="rounded-lg border border-white/10 bg-[#0b0d12] p-3">
+  return <form onSubmit={start} className="rounded-lg border border-white/10 bg-canvas p-3">
     {chosen.length > 0 && <ul className="mb-2 flex flex-wrap gap-1">{chosen.map(person => <li key={person.id}
       className="flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-sm text-amber-400">
       {person.username}

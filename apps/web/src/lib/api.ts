@@ -4,6 +4,12 @@ export type User = {
   email: string;
   avatar_url: string | null;
   created_at: string;
+  display_name?: string | null;
+  bio?: string | null;
+  status_text?: string | null;
+  status_emoji?: string | null;
+  dm_policy?: 'everyone' | 'workspaces' | 'nobody';
+  appear_offline?: boolean;
 };
 
 export type AuthSession = { access_token: string; token_type: string; user: User };

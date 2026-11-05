@@ -46,7 +46,7 @@ export function CommentComposer({
   }
 
   return (
-    <div className="rounded-lg border border-white/10 bg-[#0f1219] p-3">
+    <div className="rounded-lg border border-white/10 bg-surface p-3">
       {error && (
         <p role="alert" className="mb-2 text-xs text-rose-400">
           {error}
@@ -69,7 +69,7 @@ export function CommentComposer({
             void handleSend();
           }
         }}
-        className="w-full resize-y rounded border border-white/10 bg-[#0b0d12] p-2.5 text-sm text-white/90 placeholder-white/35 focus:border-amber-400/60 focus:outline-none disabled:opacity-50 min-h-24"
+        className="w-full resize-y rounded border border-white/10 bg-canvas p-2.5 text-sm text-white/90 placeholder-white/35 focus:border-amber-400/60 focus:outline-none disabled:opacity-50 min-h-24"
       />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-white/40">

@@ -2,8 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../lib/auth';
+import { Avatar } from './ui/avatar';
+import { Icon, Logo } from './ui/icons';
 import { DMS_CHANGED, type Conversation } from '../lib/dms';
 import { socket } from '../lib/socket';
 import { apiData } from '../lib/spaces';
@@ -14,6 +16,8 @@ export default function Nav() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [unread, setUnread] = useState(0);
+  const [menu, setMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
   // Total unread direct messages, refreshed on new DM activity and after reading.
@@ -39,6 +43,15 @@ export default function Nav() {
     };
   }, [user, pathname]);
 
+  useEffect(() => setMenu(false), [pathname]);
+  useEffect(() => {
+    if (!menu) return;
+    const close = (event: MouseEvent) => { if (!menuRef.current?.contains(event.target as Node)) setMenu(false); };
+    const esc = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenu(false); };
+    document.addEventListener('mousedown', close); document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc); };
+  }, [menu]);
+
   async function signOut() {
     setBusy(true);
     setError('');
@@ -47,24 +60,53 @@ export default function Nav() {
     finally { setBusy(false); }
   }
 
+  if (pathname?.startsWith('/home')) return null;
+
+  const link = (href: string, label: string) => {
+    const active = pathname === href || (href !== '/' && pathname?.startsWith(href));
+    return <Link href={href} aria-current={active ? 'page' : undefined}
+      className={`rounded-xl px-3 py-2 text-sm font-medium transition ${active ? 'bg-brand-soft text-brand' : 'text-white/65 hover:bg-[var(--surface-2)] hover:text-white'}`}>{label}</Link>;
+  };
   return (
-    <header className="border-b border-white/10 px-4 py-4">
-      <nav className="mx-auto flex max-w-5xl items-center justify-between" aria-label="Main navigation">
-        <Link href="/" className="text-xl font-bold text-amber-400">Hive</Link>
-        <div className="ml-auto mr-4 flex items-center gap-4 text-sm">
-          <Link href="/feed">Feed</Link>
-          <Link href="/spaces">Spaces</Link>
-          {user && <Link href="/home" className="flex items-center gap-1">Home
-            {unread > 0 && <span aria-label={`${unread} unread messages`} className="rounded-full bg-amber-400 px-1.5 text-xs font-semibold text-black">{unread > 99 ? '99+' : unread}</span>}
+    <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-surface/85 backdrop-blur">
+      <nav className="mx-auto flex h-16 max-w-6xl items-center gap-2 px-4" aria-label="Main navigation">
+        <Link href={user ? '/home' : '/'} className="mr-3 flex items-center gap-2 text-xl font-extrabold tracking-tight"><Logo size={30} />Hive</Link>
+        <div className="hidden items-center gap-1 sm:flex">
+          {user && <Link href="/home" className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-white/65 transition hover:bg-[var(--surface-2)] hover:text-white">Home
+            {unread > 0 && <span aria-label={`${unread} unread messages`} className="rounded-full bg-brand px-1.5 text-[11px] font-semibold leading-5 text-white">{unread > 99 ? '99+' : unread}</span>}
           </Link>}
+          {link('/feed', 'Feed')}
+          {link('/spaces', 'Explore')}
         </div>
-        {!loading && <div className="flex items-center gap-3 text-sm">
-          {user ? <><Link href="/me">{user.username}</Link><span>·</span>
-            <button onClick={signOut} disabled={busy} className="text-amber-400 disabled:opacity-40">Log out</button></>
-            : <><Link href="/login">Log in</Link><span>/</span><Link href="/signup">Sign up</Link></>}
+        {!loading && <div className="ml-auto flex items-center gap-2 text-sm">
+          {user ? <>
+            <Link href="/spaces/new" className="auth-button hidden h-10 sm:inline-flex"><Icon name="plus" size={16} />Create</Link>
+            <div ref={menuRef} className="relative ml-1">
+              <button type="button" aria-label="Account menu" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(value => !value)} className="rounded-full">
+                <Avatar name={user.username} src={user.avatar_url} size={36} /></button>
+              {menu && <div role="menu" className="card animate-in absolute right-0 z-40 mt-2 w-48 p-1 shadow-[var(--shadow-pop)]">
+                {([[`/u/${user.username}`, 'Your profile'], ['/settings', 'Settings']] as const).map(([href, label]) =>
+                  <Link key={href} role="menuitem" href={href} className="block rounded-lg px-3 py-2 text-sm hover:bg-[var(--surface-2)]">{label}</Link>)}
+                <button type="button" role="menuitem" onClick={signOut} disabled={busy} className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--surface-2)] disabled:opacity-40">Log out</button>
+              </div>}
+            </div>
+          </> : <>
+            <Link href="/login" className="rounded-xl px-3 py-2 font-medium text-white/70 hover:text-white">Log in</Link>
+            <Link href="/signup" className="auth-button h-10">Sign up</Link>
+          </>}
         </div>}
       </nav>
-      {error && <p role="alert" className="text-center text-rose-400">{error}</p>}
+      {error && <p role="alert" className="pb-2 text-center text-sm text-rose-500">{error}</p>}
+      {/* Phones: the main sections move to a bottom tab bar. */}
+      <nav aria-label="Sections" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-white/10 bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
+        {([['/home', 'Home', 'home'], ['/feed', 'Feed', 'layers'], ['/spaces', 'Explore', 'compass'], [user ? '/settings' : '/login', user ? 'You' : 'Log in', 'users']] as const).map(([href, label, icon]) => {
+          const active = pathname?.startsWith(href);
+          return <Link key={href} href={href} aria-current={active ? 'page' : undefined}
+            className={`flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${active ? 'text-brand' : 'text-white/55'}`}>
+            <Icon name={icon} size={22} />{label}{href === '/home' && unread > 0 && <span className="sr-only">{unread} unread</span>}
+          </Link>;
+        })}
+      </nav>
     </header>
   );
 }

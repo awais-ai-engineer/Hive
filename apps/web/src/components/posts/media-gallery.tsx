@@ -34,7 +34,7 @@ export function MediaGallery({ files, postId, full = false }: { files: Attachmen
     return () => { document.body.style.overflow = previous; window.removeEventListener('keydown', key); returnFocus.current?.focus(); };
   }, [lightbox, files.length]);
   if (!file) return null;
-  if (file.kind === 'video') return <video src={mediaUrl(file.url)} controls preload="metadata" playsInline className="mt-3 max-h-[512px] w-full rounded bg-black" />;
+  if (file.kind === 'video') return <video src={mediaUrl(file.url)} controls preload="metadata" playsInline className="mt-3 max-h-[512px] w-full rounded bg-[rgb(0_0_0)]" />;
   const image = <img src={mediaUrl(file.url)} alt={file.filename || `Image ${index + 1} of ${files.length}`} loading="lazy" className="max-h-[512px] w-full object-contain" />;
   const controls = <div className="flex items-center justify-between gap-3 p-2 text-sm text-amber-400">
     <button type="button" aria-label="Previous image" onClick={() => move(-1)}>‹</button>
@@ -42,13 +42,13 @@ export function MediaGallery({ files, postId, full = false }: { files: Attachmen
     {full && <div className="flex flex-wrap gap-1">{files.map((item, i) => <button key={item.id} aria-label={`Image ${i + 1}`} aria-pressed={index === i} onClick={() => setIndex(i)} className={`h-2 w-2 rounded-full ${i === index ? 'bg-amber-400' : 'bg-white/30'}`} />)}</div>}
     <button type="button" aria-label="Next image" onClick={() => move(1)}>›</button>
   </div>;
-  return <div className="mt-3 min-w-0 rounded bg-black/40" onKeyDown={event => {
+  return <div className="mt-3 min-w-0 rounded bg-[rgb(0_0_0/0.40)]" onKeyDown={event => {
     if (full && !lightbox && event.key === 'ArrowLeft') move(-1);
     if (full && !lightbox && event.key === 'ArrowRight') move(1);
   }}>
     {full ? <button type="button" className="block w-full" aria-label="Open image" onClick={() => setLightbox(true)}>{image}</button> : <Link href={`/p/${postId}`}>{image}</Link>}
     {files.length > 1 && controls}
-    {lightbox && <div ref={dialog} role="dialog" aria-modal="true" aria-label="Image gallery" className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/95 p-4" onClick={event => { if (event.target === event.currentTarget) setLightbox(false); }}>
+    {lightbox && <div ref={dialog} role="dialog" aria-modal="true" aria-label="Image gallery" className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[rgb(0_0_0/0.95)] p-4" onClick={event => { if (event.target === event.currentTarget) setLightbox(false); }}>
       <button className="absolute right-5 top-4 text-2xl text-white" aria-label="Close image" onClick={() => setLightbox(false)}>×</button>
       <img src={mediaUrl(file.url)} alt={file.filename} className="max-h-[80vh] max-w-full object-contain" />
       {files.length > 1 && controls}

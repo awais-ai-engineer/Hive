@@ -1,5 +1,8 @@
 'use client';
 
+import Link from 'next/link';
+import { Avatar } from '../ui/avatar';
+import { ReportDialog } from '../report-dialog';
 import { useState } from 'react';
 import type { Comment } from '@hive/shared';
 import { relativeTime, type VoteResult } from '../../lib/posts';
@@ -40,6 +43,7 @@ export function CommentItem({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [reporting, setReporting] = useState(false);
 
   const isAuthor = !!userId && comment.author?.id === userId;
   const canDelete = !comment.deleted && (isAuthor || canModerate);
@@ -95,7 +99,7 @@ export function CommentItem({
           [+]
         </button>
         <span className="font-medium text-white/60">
-          {comment.deleted ? '[deleted]' : `u/${comment.author?.username ?? 'deleted'}`}
+          {comment.deleted ? '[deleted]' : comment.author?.username ?? 'deleted'}
         </span>
         <span>·</span>
         <span>
@@ -120,11 +124,14 @@ export function CommentItem({
         >
           [–]
         </button>
-        <span className="font-semibold text-white/80">
+        {!comment.deleted && comment.author && <Link href={`/u/${comment.author.username}`} aria-label={`${comment.author.username}'s profile`}><Avatar name={comment.author.username} src={comment.author.avatar_url} size={24} /></Link>}
+        <span className="font-semibold text-white/85">
           {comment.deleted ? (
             <span className="italic text-white/40">[deleted]</span>
+          ) : comment.author ? (
+            <Link href={`/u/${comment.author.username}`} className="hover:underline">{comment.author.username}</Link>
           ) : (
-            `u/${comment.author?.username ?? 'deleted'}`
+            'deleted'
           )}
         </span>
         <span>·</span>
@@ -191,6 +198,7 @@ export function CommentItem({
               Delete
             </button>
           )}
+          {!isAuthor && !!userId && <button onClick={() => setReporting(true)} className="hover:text-amber-400 font-medium">Report</button>}
           <button onClick={handleShare} className="hover:text-amber-400 font-medium">
             {copied ? 'Copied link!' : 'Share'}
           </button>
@@ -226,11 +234,13 @@ export function CommentItem({
         </div>
       )}
 
+      <ReportDialog target={reporting ? { type: 'comment', id: comment.id, label: 'comment' } : null} onClose={() => setReporting(false)} />
+
       {/* Inline reply composer */}
       {replying && (
         <div className="mt-3">
           <CommentComposer
-            placeholder={`Reply to u/${comment.author?.username ?? 'author'}…`}
+            placeholder={`Reply to ${comment.author?.username ?? 'author'}…`}
             submitLabel="Reply"
             reason={commentReason}
             autoFocus

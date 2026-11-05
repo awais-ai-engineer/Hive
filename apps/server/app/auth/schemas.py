@@ -5,6 +5,8 @@ from email_validator import EmailNotValidError, validate_email
 from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints
 from pydantic_core import PydanticCustomError
 
+from app.db.models import DmPolicy
+
 Username = Annotated[
     str, StringConstraints(min_length=3, max_length=32, pattern=r"^[a-zA-Z0-9_]+$")
 ]
@@ -43,6 +45,12 @@ class UserOut(BaseModel):
     username: str
     email: str
     avatar_url: str | None
+    display_name: str | None
+    bio: str | None
+    status_text: str | None
+    status_emoji: str | None
+    dm_policy: DmPolicy
+    appear_offline: bool
     created_at: datetime
 
 

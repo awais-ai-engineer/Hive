@@ -1,6 +1,10 @@
 """Online presence: a Redis set of connected socket ids per user, shared by all instances."""
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
+from app.db.models import User
 from app.db.session import redis
 
 
@@ -34,3 +38,17 @@ async def online_ids(user_ids: list[str]) -> set[str]:
             pipe.scard(sockets_key(user_id))
         counts = await pipe.execute()
     return {user_id for user_id, count in zip(user_ids, counts, strict=True) if count}
+
+
+async def visible_online(session: AsyncSession, user_ids: list[str]) -> set[str]:
+    """Who to show as online: connected users, minus anyone who chose to appear offline.
+
+    Use this (not `online_ids`) for anything another person can see.
+    """
+    connected = await online_ids(user_ids)
+    if not connected:
+        return set()
+    hidden = await session.scalars(
+        select(User.id).where(User.id.in_(connected), User.appear_offline.is_(True))
+    )
+    return connected - set(hidden)

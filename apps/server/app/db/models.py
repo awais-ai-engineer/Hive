@@ -8,6 +8,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     Enum,
@@ -81,6 +82,19 @@ class ChannelType(str, enum.Enum):
     dm = "dm"
 
 
+class DmPolicy(str, enum.Enum):
+    everyone = "everyone"
+    workspaces = "workspaces"
+    nobody = "nobody"
+
+
+class ReportTarget(str, enum.Enum):
+    user = "user"
+    message = "message"
+    post = "post"
+    comment = "comment"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -89,6 +103,51 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True)
     password_hash: Mapped[str] = mapped_column(Text)
     avatar_url: Mapped[str | None] = mapped_column(Text)
+    # Storage key of the current avatar object (avatar_url is the public, versioned link to it).
+    avatar_key: Mapped[str | None] = mapped_column(Text)
+    display_name: Mapped[str | None] = mapped_column(String(50))
+    bio: Mapped[str | None] = mapped_column(String(300))
+    status_text: Mapped[str | None] = mapped_column(String(80))
+    status_emoji: Mapped[str | None] = mapped_column(String(16))
+    dm_policy: Mapped[DmPolicy] = mapped_column(
+        Enum(DmPolicy, name="dm_policy"), default=DmPolicy.everyone, server_default="everyone"
+    )
+    appear_offline: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    created_at: Mapped[datetime] = created_at()
+
+
+class UserBlock(Base):
+    """`blocker_id` blocked `blocked_id`: neither can start a 1:1 conversation with the other."""
+
+    __tablename__ = "user_blocks"
+    __table_args__ = (
+        CheckConstraint("blocker_id <> blocked_id", name="user_blocks_not_self_check"),
+        Index("ix_user_blocks_blocked_id", "blocked_id"),
+    )
+
+    blocker_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    blocked_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[datetime] = created_at()
+
+
+class Report(Base):
+    __tablename__ = "reports"
+    __table_args__ = (
+        CheckConstraint("char_length(reason) BETWEEN 1 AND 1000", name="reports_reason_check"),
+    )
+
+    id: Mapped[str] = pk()
+    reporter_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    target_type: Mapped[ReportTarget] = mapped_column(Enum(ReportTarget, name="report_target"))
+    target_id: Mapped[str] = mapped_column(String(26))
+    reason: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="open", server_default="open")
     created_at: Mapped[datetime] = created_at()
 
 
@@ -112,6 +171,8 @@ class Space(Base):
     slug: Mapped[str] = mapped_column(String(100), unique=True)
     description: Mapped[str | None] = mapped_column(Text)
     allowed_email_domain: Mapped[str | None] = mapped_column(String(255))
+    # Communities: posts are public, but chat is members-only unless the admins open it up.
+    public_chat: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = created_at()
 
@@ -137,6 +198,9 @@ class Channel(Base):
     __tablename__ = "channels"
     __table_args__ = (UniqueConstraint("space_id", "name", name="uq_channels_space_name"),)
 
+    # Private channels are visible only to the people in channel_members.
+    is_private: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
     id: Mapped[str] = pk()
     # Null for direct-message conversations, which live outside any space.
     space_id: Mapped[str | None] = mapped_column(
@@ -151,6 +215,21 @@ class Channel(Base):
     # Sorted participant ids of a DM, so the same group of people always gets one conversation.
     dm_key: Mapped[str | None] = mapped_column(Text, unique=True)
     created_at: Mapped[datetime] = created_at()
+
+
+class ChannelMember(Base):
+    """A member of a private channel (public channels don't need rows here)."""
+
+    __tablename__ = "channel_members"
+    __table_args__ = (Index("ix_channel_members_user_id", "user_id"),)
+
+    channel_id: Mapped[str] = mapped_column(
+        ForeignKey("channels.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    added_at: Mapped[datetime] = created_at()
 
 
 class DirectMember(Base):

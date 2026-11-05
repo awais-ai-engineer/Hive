@@ -8,7 +8,7 @@ from tests.helpers import call, connected, event, quiet, send
 
 
 async def test_threads(client, setup_chat, live_server):
-    alice, bob, _, _, _, _, _, channel = setup_chat
+    alice, bob, _, ah, _, _, _, channel = setup_chat
     async with connected(live_server, alice) as (a, aq), connected(live_server, bob) as (b, bq):
         for peer in (a, b):
             await call(peer, "channel:join", {"channelId": channel})
@@ -42,16 +42,16 @@ async def test_threads(client, setup_chat, live_server):
             "channelId": channel, "body": "Lost", "clientMsgId": str(uuid4()), "parentId": "nope",
         })
         assert missing["error"]["code"] == "not_found"
-    history = (await client.get(f"/api/channels/{channel}/messages")).json()["items"]
+    history = (await client.get(f"/api/channels/{channel}/messages", headers=ah)).json()["items"]
     assert [item["id"] for item in history] == [parent["id"]]
     assert history[0]["reply_count"] == 2
-    page = (await client.get(f"/api/messages/{parent['id']}/thread")).json()
+    page = (await client.get(f"/api/messages/{parent['id']}/thread", headers=ah)).json()
     assert page["parent"]["id"] == parent["id"]
     assert [item["id"] for item in page["items"]] == replies
     newer = (await client.get(f"/api/messages/{parent['id']}/thread",
-                              params={"after": replies[0]})).json()
+                              params={"after": replies[0]}, headers=ah)).json()
     assert [item["id"] for item in newer["items"]] == replies[1:]
-    assert (await client.get(f"/api/messages/{replies[0]}/thread")).status_code == 404
+    assert (await client.get(f"/api/messages/{replies[0]}/thread", headers=ah)).status_code == 404
 
 
 async def test_reactions(setup_chat, live_server):
@@ -130,7 +130,7 @@ async def test_attachments(client, setup_chat, live_server):
     assert download.headers["x-content-type-options"] == "nosniff"
     forged = files[0]["url"].rsplit("sig=", 1)[0] + "sig=" + "0" * 64
     assert (await client.get(forged)).status_code == 404
-    history = (await client.get(f"/api/channels/{channel}/messages")).json()["items"]
+    history = (await client.get(f"/api/channels/{channel}/messages", headers=ah)).json()["items"]
     assert history[-1]["attachments"][0]["filename"] == "photo.png"
 
 

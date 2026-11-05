@@ -170,9 +170,9 @@ export function ShareMenu({ post, isOpen, onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-label="Send to chat"
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-[rgb(0_0_0/0.60)] p-4 backdrop-blur-xs"
       >
-        <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#12151d] p-5 shadow-2xl">
+        <div className="w-full max-w-md rounded-xl border border-white/10 bg-surface p-5 shadow-2xl">
           <div className="flex items-center justify-between border-b border-white/10 pb-3">
             <h3 className="font-semibold text-white">↗ Send to chat</h3>
             <button
@@ -204,11 +204,11 @@ export function ShareMenu({ post, isOpen, onClose }: Props) {
                   placeholder="Search channels or DMs…"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full rounded border border-white/15 bg-[#0b0d12] p-2 text-sm text-white placeholder-white/35 focus:border-amber-400 focus:outline-none"
+                  className="w-full rounded border border-white/15 bg-canvas p-2 text-sm text-white placeholder-white/35 focus:border-amber-400 focus:outline-none"
                 />
               </div>
 
-              <div className="max-h-48 overflow-y-auto rounded border border-white/10 bg-[#0b0d12] p-1">
+              <div className="max-h-48 overflow-y-auto rounded border border-white/10 bg-canvas p-1">
                 {busy && destinations.length === 0 ? (
                   <p className="p-3 text-center text-xs text-white/40">Loading chats…</p>
                 ) : filtered.length === 0 ? (
@@ -241,7 +241,7 @@ export function ShareMenu({ post, isOpen, onClose }: Props) {
                   value={note}
                   onChange={e => setNote(e.target.value)}
                   placeholder="Write an optional message…"
-                  className="mt-1 w-full rounded border border-white/15 bg-[#0b0d12] p-2 text-sm text-white placeholder-white/30 focus:border-amber-400 focus:outline-none"
+                  className="mt-1 w-full rounded border border-white/15 bg-canvas p-2 text-sm text-white placeholder-white/30 focus:border-amber-400 focus:outline-none"
                 />
               </div>
 
@@ -272,7 +272,7 @@ export function ShareMenu({ post, isOpen, onClose }: Props) {
     <div
       ref={menuRef}
       role="menu"
-      className="absolute right-0 top-full z-30 mt-1 min-w-44 rounded-lg border border-white/15 bg-[#12151d] p-1 shadow-xl text-xs"
+      className="absolute right-0 top-full z-30 mt-1 min-w-44 rounded-lg border border-white/15 bg-surface p-1 shadow-xl text-xs"
     >
       <button
         type="button"
