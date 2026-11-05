@@ -7,6 +7,7 @@ import { badge, loadSetting, saveSetting } from '../../lib/home';
 import type { Channel, Space } from '../../lib/spaces';
 import { Avatar } from '../ui/avatar';
 import { Icon, type IconName } from '../ui/icons';
+import { CreateChannelDialog } from './create-channel-dialog';
 import { FindConversation } from './find-conversation';
 import { NewConversation } from './new-conversation';
 import { SpaceSwitcher } from './space-switcher';
@@ -26,6 +27,7 @@ type Props = {
   onOpen: (id: string) => void;
   onView: (view: 'unreads' | 'threads') => void;
   onPerson: (username: string) => void;
+  onChannelCreated: (channel: Channel) => void;
 };
 
 function Count({ value }: { value: number }) {
@@ -56,6 +58,7 @@ function NavItem({ icon, label, active, count, onClick, href }: {
 export function Sidebar(props: Props) {
   const { space, channels, conversations, selected, view } = props;
   const [collapsed, setCollapsed] = useState<Record<Section, boolean>>({ channels: false, conversations: false, direct: false });
+  const [creatingChannel, setCreatingChannel] = useState(false);
   const [composing, setComposing] = useState<'group' | 'direct' | null>(null);
   useEffect(() => { setCollapsed(current => loadSetting('hive:sidebar', current)); }, []);
   function toggle(section: Section) {
@@ -88,11 +91,11 @@ export function Sidebar(props: Props) {
         {space && <NavItem icon="users" label="Members" href={`/s/${space.slug}/members`} />}
       </ul>
 
-      {heading('channels', 'Channels', canAddChannel ? () => { window.location.href = `/s/${space!.slug}/settings`; } : undefined, 'Add channel')}
+      {heading('channels', 'Channels', canAddChannel ? () => setCreatingChannel(true) : undefined, 'Add channel')}
       {!collapsed.channels && <ul className="space-y-0.5">
         {!space && <li className="px-2.5 text-xs text-white/50">Join or create a space to see its channels.</li>}
         {channels.map(channel => <Row key={channel.id} active={channel.id === selected} unread={channel.unread} onClick={() => props.onOpen(channel.id)}>
-          <Icon name={channel.type === 'voice' ? 'volume' : 'hash'} size={16} className="shrink-0 opacity-70" />
+          <Icon name={channel.type === 'voice' ? 'volume' : channel.is_private ? 'lock' : 'hash'} size={16} className="shrink-0 opacity-70" />
           <span className="truncate">{channel.name}</span>
         </Row>)}
       </ul>}
@@ -119,5 +122,7 @@ export function Sidebar(props: Props) {
         {newForm('direct')}
       </ul>}
     </div>
+    {creatingChannel && space && <CreateChannelDialog space={space} onClose={() => setCreatingChannel(false)}
+      onCreated={channel => { setCreatingChannel(false); props.onChannelCreated(channel); }} />}
   </nav>;
 }

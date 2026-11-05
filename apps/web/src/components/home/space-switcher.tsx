@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import type { Space } from '../../lib/spaces';
+import { SpaceKind } from '../ui/space-kind';
 
 /** Current space name with a dropdown to switch to another of the viewer's spaces. */
 export function SpaceSwitcher({ spaces, current, onSwitch }: {
@@ -24,7 +25,7 @@ export function SpaceSwitcher({ spaces, current, onSwitch }: {
     <button type="button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}
       className="flex w-full items-center justify-between gap-2 rounded px-1 py-1 text-left text-lg font-bold hover:bg-white/5">
       <span className="min-w-0">
-        <span className="block truncate">{current?.name ?? 'Choose a space'}</span>
+        <span className="flex items-center gap-1.5"><span className="truncate">{current?.name ?? 'Choose a space'}</span>{current && <SpaceKind space={current} size={15} />}</span>
         {current && <span className="flex items-center gap-1.5 text-xs font-normal text-white/65"><span className="h-2 w-2 rounded-full bg-emerald-400" />{current.member_count} members</span>}
       </span><span aria-hidden className="text-sm text-white/60">▾</span>
     </button>
@@ -32,7 +33,7 @@ export function SpaceSwitcher({ spaces, current, onSwitch }: {
       {spaces.map(space => <button key={space.id} role="menuitem" type="button"
         onClick={() => { onSwitch(space.slug); setOpen(false); }}
         className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-white/10 ${space.id === current?.id ? 'text-amber-400' : 'text-white/80'}`}>
-        <span className="truncate">{space.name}</span><span className="text-xs capitalize text-white/40">{space.type}</span>
+        <span className="flex min-w-0 items-center gap-1.5"><SpaceKind space={space} /><span className="truncate">{space.name}</span></span><span className="text-xs text-white/40">{space.type === 'workspace' ? 'Private' : 'Public'}</span>
       </button>)}
       <div className="my-1 border-t border-white/10" />
       <Link role="menuitem" href="/spaces" className="block px-3 py-1.5 text-sm text-white/70 hover:bg-white/10">Browse spaces</Link>

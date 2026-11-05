@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { spaceCreateSchema, type SpaceCreateInput } from '@hive/shared';
+import { Icon } from '../../../components/ui/icons';
 import { useAuth } from '../../../lib/auth';
 import { apiData, requestError, type Space } from '../../../lib/spaces';
 
@@ -16,7 +17,7 @@ export default function NewSpacePage() {
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
-  const [type, setType] = useState<'community' | 'workspace'>('community');
+  const [type, setType] = useState<'community' | 'workspace'>('workspace');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -45,21 +46,34 @@ export default function NewSpacePage() {
   }
 
   if (!loading && !user) return null;
-  return <main className="mx-auto max-w-lg px-4 py-12">
+  const kinds = [
+    { value: 'workspace', icon: 'lock', title: 'Private workspace', text: 'For your team or company. Only people you invite can see it. Chat, files and posts stay private.' },
+    { value: 'community', icon: 'globe', title: 'Public community', text: 'For open groups. Anyone can find it and read posts; members can chat.' },
+  ] as const;
+  return <main className="mx-auto max-w-xl px-4 py-12">
     <h1 className="text-3xl font-bold">Create a space</h1>
-    <form className="mt-6 space-y-4" onSubmit={submit}>
-      <fieldset><legend className="mb-2">Space type</legend><div className="flex gap-5">
-        {(['community', 'workspace'] as const).map(option => <label key={option} className="flex items-center gap-2 capitalize">
-          <input type="radio" name="type" checked={type === option} onChange={() => setType(option)} />{option}
-        </label>)}
-      </div></fieldset>
-      <label className="block">Name<input className="auth-input" required minLength={2} maxLength={60} value={name}
-        onChange={event => { setName(event.target.value); if (!slugEdited) setSlug(makeSlug(event.target.value)); }} /></label>
-      <label className="block">Slug<input className="auth-input" required minLength={3} maxLength={50} value={slug}
-        onChange={event => { setSlugEdited(true); setSlug(event.target.value); }} /></label>
-      <label className="block">Description<textarea className="auth-input" name="description" maxLength={500} rows={3} /></label>
-      {type === 'workspace' && <label className="block">Allowed email domain
-        <input className="auth-input" name="allowed_email_domain" placeholder="acme.test" /></label>}
+    <p className="mt-2 text-white/60">Choose who this space is for. You can invite people right after.</p>
+    <form className="mt-6 space-y-5" onSubmit={submit}>
+      <fieldset><legend className="sr-only">Space type</legend>
+        <div className="grid gap-3 sm:grid-cols-2" role="radiogroup">
+          {kinds.map(kind => <label key={kind.value} className={`card cursor-pointer p-4 transition ${type === kind.value ? 'ring-2 ring-[var(--brand)]' : 'hover:bg-brand-soft'}`}>
+            <input className="sr-only" type="radio" name="type" checked={type === kind.value} onChange={() => setType(kind.value)} />
+            <span className="flex items-center gap-2 font-semibold"><span className="text-brand"><Icon name={kind.icon} size={20} /></span>{kind.title}</span>
+            <span className="mt-2 block text-sm text-white/60">{kind.text}</span>
+          </label>)}
+        </div>
+      </fieldset>
+      <label className="block font-medium">Name<input className="auth-input" required minLength={2} maxLength={60} value={name}
+        onChange={event => { setName(event.target.value); if (!slugEdited) setSlug(makeSlug(event.target.value)); }} />
+        <span className="text-sm font-normal text-white/55">What people will see in the sidebar and search.</span></label>
+      <label className="block font-medium">Slug<input className="auth-input" required minLength={3} maxLength={50} value={slug}
+        onChange={event => { setSlugEdited(true); setSlug(event.target.value); }} />
+        <span className="text-sm font-normal text-white/55">Used in the web address: /s/{slug || 'your-space'}. Lowercase letters, numbers and dashes.</span></label>
+      <label className="block font-medium">Description<textarea className="auth-input" name="description" maxLength={500} rows={3} />
+        <span className="text-sm font-normal text-white/55">Optional. A sentence about what this space is for.</span></label>
+      {type === 'workspace' && <label className="block font-medium">Allowed email domain
+        <input className="auth-input" name="allowed_email_domain" placeholder="acme.test" />
+        <span className="text-sm font-normal text-white/55">Optional. People with an email at this domain can join without an invite.</span></label>}
       {error && <p role="alert" className="text-rose-400">{error}</p>}
       <button disabled={busy || loading} className="auth-button">{busy ? 'Creating…' : 'Create space'}</button>
     </form>

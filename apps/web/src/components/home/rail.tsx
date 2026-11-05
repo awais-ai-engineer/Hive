@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
-import type { Space } from '../../lib/spaces';
+import { spaceKindLabel, type Space } from '../../lib/spaces';
 import { Avatar, colourFor } from '../ui/avatar';
 import { Icon, Logo } from '../ui/icons';
 
@@ -25,19 +25,27 @@ export function Rail({ spaces, current, onSwitch, unread }: {
 }) {
   const { user, logout } = useAuth();
   const { dark, toggle } = useTheme();
+  const workspaces = spaces.filter(space => space.type === 'workspace');
+  const communities = spaces.filter(space => space.type === 'community');
+  const tileFor = (space: Space) => {
+    const active = space.slug === current;
+    const label = `${space.name} (${spaceKindLabel(space)})`;
+    return <button key={space.id} type="button" title={label} aria-label={label} aria-current={active ? 'page' : undefined}
+      onClick={() => onSwitch(space.slug)}
+      className={`${tile} relative shrink-0 text-base font-bold ${active ? 'ring-2 ring-white/90 ring-offset-2 ring-offset-[var(--rail)]' : 'opacity-80 hover:opacity-100 hover:rounded-xl'}`}
+      style={{ background: colourFor(space.slug) }}>
+      <span style={{ color: '#fff' }}>{space.name[0]?.toUpperCase()}</span>
+      <span aria-hidden className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--rail)]" style={{ color: '#fff' }}>
+        <Icon name={space.type === 'workspace' ? 'lock' : 'globe'} size={10} /></span>
+    </button>;
+  };
   const tile = 'flex h-11 w-11 items-center justify-center rounded-2xl transition';
   return <nav aria-label="Spaces" className="on-dark flex h-full w-[72px] shrink-0 flex-col items-center gap-2 bg-[var(--rail)] py-3">
     <Link href="/feed" aria-label="Feed" className="mb-2"><Logo size={34} /></Link>
     <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto px-2">
-      {spaces.map(space => {
-        const active = space.slug === current;
-        return <button key={space.id} type="button" title={space.name} aria-label={space.name} aria-current={active ? 'page' : undefined}
-          onClick={() => onSwitch(space.slug)}
-          className={`${tile} relative text-base font-bold ${active ? 'ring-2 ring-white/90 ring-offset-2 ring-offset-[var(--rail)]' : 'opacity-80 hover:opacity-100 hover:rounded-xl'}`}
-          style={{ background: colourFor(space.slug) }}>
-          <span style={{ color: '#fff' }}>{space.name[0]?.toUpperCase()}</span>
-        </button>;
-      })}
+      {workspaces.map(tileFor)}
+      {workspaces.length > 0 && communities.length > 0 && <div role="separator" className="my-1 h-px w-8 bg-white/15" />}
+      {communities.map(tileFor)}
       <Link href="/spaces/new" aria-label="Create a space" className={`${tile} border border-dashed border-white/25 text-white/70 hover:border-white/60 hover:text-white`}>
         <Icon name="plus" />
       </Link>

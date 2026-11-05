@@ -5,9 +5,10 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../../lib/auth';
 import { socket } from '../../../lib/socket';
+import { SpaceKind } from '../../../components/ui/space-kind';
 import { ChannelChat } from '../../../components/channel-chat';
 import { PostFeed } from '../../../components/posts/post-feed';
-import { apiData, requestError, type Channel, type Member, type Space } from '../../../lib/spaces';
+import { apiData, requestError, spaceKindLabel, type Channel, type Member, type Space } from '../../../lib/spaces';
 
 const rank: Record<string, number> = { owner: 5, admin: 4, moderator: 3, member: 2, guest: 1 };
 
@@ -90,7 +91,7 @@ export default function SpacePage() {
     <aside className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
       <h1 className="text-xl font-bold">{space?.name ?? (error === 'Space not found' ? 'Space not found' : 'Space')}</h1>
       {space && <>
-        <p className="mt-1 text-sm text-white/50">{space.member_count} members</p>
+        <p className="mt-1 flex items-center gap-1.5 text-sm text-white/50"><SpaceKind space={space} />{spaceKindLabel(space)} · {space.member_count} members</p>
         <Link className="mt-3 inline-block text-sm text-amber-400" href={`/s/${slug}/members`}>View members</Link>
         {canAdmin && <Link className="ml-3 inline-block text-sm text-amber-400" href={`/s/${slug}/settings`}>Settings</Link>}
         <h2 className="mb-2 mt-6 text-sm font-semibold uppercase text-white/50">Channels</h2>
@@ -98,7 +99,7 @@ export default function SpacePage() {
           <button onClick={() => router.replace(`/s/${slug}?tab=chat&c=${item.id}`)}
             className={`w-full rounded px-2 py-1 text-left ${item.id === channel?.id ? 'bg-white/10 text-amber-400' : 'text-white/70'}`}>
             <span className="flex items-center justify-between gap-2">
-              <span className={`truncate ${item.unread && item.id !== channel?.id ? 'font-semibold text-white' : ''}`}>{item.type === 'voice' ? '🔊' : '#'} {item.name}</span>
+              <span className={`truncate ${item.unread && item.id !== channel?.id ? 'font-semibold text-white' : ''}`}>{item.type === 'voice' ? '🔊' : item.is_private ? '🔒' : '#'} {item.name}</span>
               {item.unread > 0 && item.id !== channel?.id && <span aria-label={`${item.unread} unread`}
                 className="rounded-full bg-amber-400 px-1.5 text-xs font-semibold text-black">{item.unread > 99 ? '99+' : item.unread}</span>}
             </span>
@@ -130,7 +131,7 @@ export default function SpacePage() {
         {space.my_role && rank[space.my_role] >= rank.member && <Link href={`/s/${slug}/submit`} className="auth-button mb-5 inline-block">Create post</Link>}
         <PostFeed space={space} />
       </>}
-      {space && tab === 'chat' && channel && <ChannelChat key={`${channel.id}:${user?.id ?? 'anonymous'}`} channel={channel} placeholder={`Message #${channel.name}`}
+      {space && tab === 'chat' && channel && <ChannelChat key={`${channel.id}:${user?.id ?? 'anonymous'}`} channel={channel} space={space} placeholder={`Message #${channel.name}`}
         reason={channel.type === 'voice' ? 'Voice rooms coming soon' : !user ? 'Log in to chat'
           : !space.my_role ? 'Join this space to chat' : space.my_role === 'guest' ? 'You have read-only access' : ''}
         canModerate={!!space.my_role && rank[space.my_role] >= rank.moderator} tracksReads={!!space.my_role} onRead={clearUnread} />}

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { conversationTitle, type Conversation } from '../../lib/dms';
 import { apiData, type Channel, type Member, type Space } from '../../lib/spaces';
+import { ChannelMembers } from './channel-members';
 import { Avatar } from '../ui/avatar';
 import { Icon, type IconName } from '../ui/icons';
 
@@ -17,6 +18,8 @@ type Props = {
   tab?: ChatTab;
   onTab?: (tab: ChatTab) => void;
   onMenu: () => void;
+  /** Called after the viewer leaves the open private channel. */
+  onLeft?: () => void;
 };
 
 function Stack({ people, total, href }: { people: { id: string; username: string; avatar_url: string | null }[]; total: number; href?: string }) {
@@ -36,8 +39,10 @@ function Tab({ active, icon, label, onClick }: { active: boolean; icon: IconName
 }
 
 /** Top of the main area: what is open, who is in it, and the Messages/Posts tabs for space channels. */
-export function ChatHeader({ title, channel, space, conversation, tab = 'messages', onTab, onMenu }: Props) {
+export function ChatHeader({ title, channel, space, conversation, tab = 'messages', onTab, onMenu, onLeft }: Props) {
   const [members, setMembers] = useState<Member[]>([]);
+  const [panel, setPanel] = useState(false);
+  useEffect(() => setPanel(false), [channel?.id]);
   useEffect(() => {
     if (!space || !channel) return;
     let active = true;
@@ -70,9 +75,15 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
         {menu}
         <div className="min-w-0 flex-1">
           <h1 className="flex items-center gap-1.5 truncate text-xl font-bold">
-            <Icon name={channel.type === 'voice' ? 'volume' : 'hash'} size={20} className="shrink-0 text-white/45" />{channel.name}</h1>
-          <p className="truncate text-sm text-white/55">{channel.topic || `${space.name} · ${space.type === 'community' ? 'Community' : 'Workspace'}`}</p>
+            <Icon name={channel.type === 'voice' ? 'volume' : channel.is_private ? 'lock' : 'hash'} size={20} className="shrink-0 text-white/45" />{channel.name}</h1>
+          <p className="truncate text-sm text-white/55">{channel.is_private && <span className="mr-2 rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand">Private channel</span>}{channel.topic || `${space.name} · ${space.type === 'community' ? 'Community' : 'Workspace'}`}</p>
         </div>
+        {channel.is_private && <div className="relative">
+          <button type="button" onClick={() => setPanel(open => !open)} aria-expanded={panel} className="btn-ghost flex items-center gap-1.5 text-sm">
+            <Icon name="users" size={15} />Members</button>
+          {panel && <ChannelMembers space={space} channel={channel} isAdmin={space.my_role === 'owner' || space.my_role === 'admin'}
+            onLeft={() => { setPanel(false); onLeft?.(); }} />}
+        </div>}
         <Stack people={members.map(member => member.user)} total={space.member_count} href={`/s/${space.slug}/members`} />
       </div>
       {onTab && channel.type !== 'voice' && <div role="tablist" aria-label="Channel views" className="mt-3 flex gap-6">

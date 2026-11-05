@@ -7,6 +7,7 @@ export type Space = {
   allowed_email_domain: string | null;
   created_at: string;
   member_count: number;
+  public_chat: boolean;
   my_role: 'owner' | 'admin' | 'moderator' | 'member' | 'guest' | null;
 };
 
@@ -18,6 +19,7 @@ export type Channel = {
   topic: string | null;
   position: number;
   unread: number;
+  is_private: boolean;
 };
 
 export type Member = {
@@ -35,3 +37,5 @@ export async function apiData<T>(path: string, init?: RequestInit): Promise<T> {
 export function requestError(error: unknown) {
   return error instanceof Error ? error.message : 'Something went wrong. Please try again.';
 }
+
+export const spaceKindLabel = (space: Pick<Space, 'type'>) => space.type === 'workspace' ? 'Private workspace' : 'Public community';

@@ -4,12 +4,15 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useAuth } from '../lib/auth';
 import { socket } from '../lib/socket';
 import { useChannelMessages, type ChatMessage } from '../lib/use-channel-messages';
+import { JoinPrompt } from './join-prompt';
 import { Composer } from './composer';
 import { MessageItem } from './message-item';
 import { ThreadPanel } from './thread-panel';
 
 type Props = {
   channel: { id: string; name: string };
+  /** Set for space channels, so non-members of a community can be asked to join. */
+  space?: { name: string; slug: string };
   placeholder: string;
   /** Why the viewer can't post here ('' when they can). */
   reason: string;
@@ -22,7 +25,7 @@ type Props = {
   onThreadChange?: (threadId: string | null) => void;
 };
 
-export function ChannelChat({ channel, placeholder, reason, canModerate, tracksReads, onRead, ...thread }: Props) {
+export function ChannelChat({ channel, space, placeholder, reason, canModerate, tracksReads, onRead, ...thread }: Props) {
   const { user } = useAuth();
   const chat = useChannelMessages(channel.id);
   const [error, setError] = useState('');
@@ -99,6 +102,8 @@ export function ChannelChat({ channel, placeholder, reason, canModerate, tracksR
   const typingText = names.length > 2 ? 'Several people are typing…'
     : names.length === 2 ? `${names[0]} and ${names[1]} are typing…`
     : names.length === 1 ? `${names[0]} is typing…` : '';
+
+  if (space && chat.error.startsWith('Join this community')) return <JoinPrompt space={space} loggedIn={!!user} />;
 
   return <div className="flex min-h-0 min-w-0 flex-1 gap-4">
    <div className="flex min-h-0 min-w-0 flex-1 flex-col">

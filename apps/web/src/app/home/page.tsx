@@ -74,15 +74,18 @@ function Home() {
       .catch(cause => { setError(requestError(cause)); setSpacesReady(true); });
   }, [loading, user]);
 
+  const spaceSlug = space?.slug ?? null;
+  const loadChannels = useCallback(async () => {
+    if (!spaceSlug) return [];
+    const list = await apiData<Channel[]>(`/api/spaces/${encodeURIComponent(spaceSlug)}/channels`);
+    setChannels(list);
+    return list;
+  }, [spaceSlug]);
   useEffect(() => {
-    if (!space) { setChannels([]); return; }
-    saveSetting(LAST_SPACE, space.slug);
-    let active = true;
-    apiData<Channel[]>(`/api/spaces/${encodeURIComponent(space.slug)}/channels`)
-      .then(list => { if (active) setChannels(list); })
-      .catch(cause => { if (active) setError(requestError(cause)); });
-    return () => { active = false; };
-  }, [space]);
+    if (!spaceSlug) { setChannels([]); return; }
+    saveSetting(LAST_SPACE, spaceSlug);
+    loadChannels().catch(cause => setError(requestError(cause)));
+  }, [spaceSlug, loadChannels]);
 
   const loadConversations = useCallback(() => {
     apiData<Conversation[]>('/api/dms').then(setConversations).catch(() => {});
@@ -141,6 +144,25 @@ function Home() {
         .off('thread:activity', refreshThreads).off('thread:read', refreshThreads).off('presence', onPresence).off('connect', onReconnect);
     };
   }, [user, selected, refreshConversations, refreshUnreads, refreshThreads]);
+
+  // Private channels appear or disappear when someone adds or removes the viewer.
+  useEffect(() => {
+    if (!user) return;
+    const onChannelChange = (data: { channelId: string; spaceId: string }, removed: boolean) => {
+      if (data.spaceId !== space?.id) return;
+      loadChannels().catch(() => {});
+      if (removed && data.channelId === selected) go({ c: null });
+    };
+    const onAdded = (data: { channelId: string; spaceId: string }) => onChannelChange(data, false);
+    const onRemoved = (data: { channelId: string; spaceId: string }) => onChannelChange(data, true);
+    socket.on('channel:added', onAdded).on('channel:removed', onRemoved);
+    return () => { socket.off('channel:added', onAdded).off('channel:removed', onRemoved); };
+  }, [user, space?.id, selected, loadChannels, go]);
+
+  async function channelCreated(created: Channel) {
+    await loadChannels().catch(() => {});
+    go({ c: created.id });
+  }
 
   const markRead = useCallback((channelId: string) => {
     setChannels(list => list.map(item => item.id === channelId && item.unread ? { ...item, unread: 0 } : item));
@@ -202,10 +224,11 @@ function Home() {
   } else if (channel && space) {
     main = <>
       <ChatHeader channel={channel} space={space} tab={tab} onTab={next => go({ c: channel.id, tab: next === 'posts' ? 'posts' : null })}
-        onMenu={() => setDrawer(true)} />
+        onMenu={() => setDrawer(true)}
+        onLeft={() => { void loadChannels().catch(() => {}); go({ c: null }); }} />
       {tab === 'posts' ? <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         <Suspense fallback={<p className="text-white/50">Loading posts…</p>}><PostFeed space={space} /></Suspense>
-      </div> : <ChannelChat key={channel.id} channel={channel} placeholder={`Message #${channel.name}`}
+      </div> : <ChannelChat key={channel.id} channel={channel} space={space} placeholder={`Message #${channel.name}`}
         reason={channel.type === 'voice' ? 'Voice rooms coming soon' : !space.my_role ? 'Join this space to chat'
           : space.my_role === 'guest' ? 'You have read-only access' : ''}
         canModerate={myRank >= rank.moderator} tracksReads={!!space.my_role} onRead={markRead}
@@ -235,7 +258,7 @@ function Home() {
           selected={selected} view={showView && view !== 'threads' ? 'unreads' : view}
           unreadTotal={unreadTotal} threadsUnread={threadsUnread}
           onSwitchSpace={next => go({ s: next })} onOpen={id => go({ c: id })} onView={next => go({ view: next })}
-          onPerson={username => void openPerson(username)} />
+          onPerson={username => void openPerson(username)} onChannelCreated={channel => void channelCreated(channel)} />
       </aside>
     </div>
     <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface px-3 py-3 sm:px-6 sm:py-4">

@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { SpaceKind } from '../../components/ui/space-kind';
 import { useAuth } from '../../lib/auth';
-import { apiData, requestError, type Space } from '../../lib/spaces';
+import { apiData, requestError, spaceKindLabel, type Space } from '../../lib/spaces';
 
 type Page = { items: Space[]; next_cursor: string | null };
 
@@ -62,7 +63,7 @@ export default function SpacesPage() {
       <ul className="mt-6 grid gap-4 sm:grid-cols-2">
         {items.map(space => <li key={space.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
           <Link href={`/s/${space.slug}`} className="text-xl font-semibold text-amber-400">{space.name}</Link>
-          <p className="mt-1 text-sm text-white/50">/s/{space.slug} · {space.member_count} members</p>
+          <p className="mt-1 flex items-center gap-1.5 text-sm text-white/50"><SpaceKind space={space} />{spaceKindLabel(space)} · {space.member_count} members</p>
           {space.description && <p className="mt-3 text-white/70">{space.description}</p>}
         </li>)}
       </ul>

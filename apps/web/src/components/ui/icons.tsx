@@ -30,6 +30,8 @@ const paths: Record<string, string> = {
   file: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8ZM14 2v6h6',
   send: 'm22 2-7 20-4-9-9-4ZM22 2 11 13',
   trending: 'm23 6-9.5 9.5-5-5L1 18M17 6h6v6',
+  lock: 'M5 11h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1Zm2 0V7a5 5 0 0 1 10 0v4',
+  globe: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20Z',
   activity: 'M22 12h-4l-3 9L9 3l-3 9H2',
 };
 
