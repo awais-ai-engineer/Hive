@@ -1,11 +1,12 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { postCreateSchema } from '@hive/shared';
 import { useAuth } from '../../../lib/auth';
 import { apiData, requestError, type Space } from '../../../lib/spaces';
 import type { Post } from '../../../lib/posts';
+import { CommentSection } from '../../../components/comments/comment-section';
 import { PostCard } from '../../../components/posts/post-card';
 import { socket } from '../../../lib/socket';
 
@@ -74,6 +75,11 @@ export default function PostPage() {
           finally { setBusy(false); }
         }}>Confirm delete</button><button className="ml-4" onClick={() => setConfirm(false)}>Cancel</button>
       </div>}
+      <section id="comments" aria-label="Comments" className="mt-8 scroll-mt-20">
+        <Suspense fallback={<p className="text-white/50">Loading comments…</p>}>
+          <CommentSection postId={post.id} space={space} postDeleted={post.deleted} />
+        </Suspense>
+      </section>
     </>}
   </main>;
 }

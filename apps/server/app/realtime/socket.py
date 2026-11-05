@@ -18,7 +18,16 @@ from sqlalchemy import select
 
 from app.auth.security import decode_access_token
 from app.core.config import settings
-from app.db.models import Channel, ChannelType, Message, Space, SpaceMember, SpaceType, User
+from app.db.models import (
+    Channel,
+    ChannelType,
+    Message,
+    Post,
+    Space,
+    SpaceMember,
+    SpaceType,
+    User,
+)
 from app.db.session import SessionLocal
 from app.dms.service import participant_ids, partner_ids
 from app.messages import service
@@ -215,6 +224,37 @@ async def watch_space(sid, data, session, user):
 @chat_event("space:unwatch", SpaceIn)
 async def unwatch_space(sid, data, session, user):
     await sio.leave_room(sid, f"space:{data.spaceId}")
+
+
+@sio.on("post:watch")
+async def watch_post(sid: str, data: object = None) -> dict:
+    if not isinstance(data, dict) or "postId" not in data:
+        return {"ok": False, "error": {"code": "invalid", "message": "Invalid input"}}
+    post_id = data["postId"]
+    identity = await sio.get_session(sid) or {}
+    user_id = identity.get("user_id")
+    async with SessionLocal() as session:
+        post = await session.get(Post, post_id)
+        if post is None:
+            return {"ok": False, "error": {"code": "not_found", "message": "Post not found"}}
+        space = await session.get(Space, post.space_id)
+        if space is None:
+            return {"ok": False, "error": {"code": "not_found", "message": "Post not found"}}
+        if space.type == SpaceType.workspace:
+            if not user_id:
+                return {"ok": False, "error": {"code": "not_found", "message": "Post not found"}}
+            member = await member_for(session, space.id, user_id)
+            if member is None:
+                return {"ok": False, "error": {"code": "not_found", "message": "Post not found"}}
+    await sio.enter_room(sid, f"post:{post_id}")
+    return {"ok": True}
+
+
+@sio.on("post:unwatch")
+async def unwatch_post(sid: str, data: object = None) -> dict:
+    if isinstance(data, dict) and "postId" in data:
+        await sio.leave_room(sid, f"post:{data['postId']}")
+    return {"ok": True}
 
 
 @chat_event("sync", SyncIn)

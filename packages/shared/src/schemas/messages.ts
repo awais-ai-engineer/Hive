@@ -17,6 +17,10 @@ export const messageSchema = z.object({
   body: z.string().nullable(), client_msg_id: z.string().nullable(),
   created_at: z.string(), edited_at: z.string().nullable(), deleted: z.boolean(),
   reply_count: z.number(), reactions: z.array(reactionSchema), attachments: z.array(attachmentSchema),
+  post_previews: z.array(z.object({
+    id: z.string(), title: z.string(), score: z.number(), comment_count: z.number(), deleted: z.boolean(),
+    space: z.object({ slug: z.string(), name: z.string() }),
+  })).optional(),
 });
 export type Reaction = z.infer<typeof reactionSchema>;
 export type Attachment = z.infer<typeof attachmentSchema>;

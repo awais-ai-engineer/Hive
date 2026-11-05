@@ -8,7 +8,7 @@ from app.auth.optional import get_optional_user
 from app.db.models import User
 from app.db.session import get_session
 from app.posts import service
-from app.posts.schemas import PostCreate, PostOut, PostPatch, VoteIn
+from app.posts.schemas import PostCreate, PostOut, PostPatch, RepostCreate, VoteIn
 from app.realtime.socket import sio
 
 router = APIRouter(tags=["posts"])
@@ -34,6 +34,17 @@ async def feed(
 @router.post("/spaces/{slug}/posts", response_model=PostOut, status_code=201)
 async def create(slug: str, data: PostCreate, session: Session, user: CurrentUser):
     post = await service.create(session, user, slug, data)
+    await sio.emit(
+        "post:new",
+        {"postId": post["id"], "spaceId": post["space"]["id"]},
+        room=f"space:{post['space']['id']}",
+    )
+    return post
+
+
+@router.post("/posts/{post_id}/repost", response_model=PostOut, status_code=201)
+async def repost(post_id: str, data: RepostCreate, session: Session, user: CurrentUser):
+    post = await service.repost(session, user, post_id, data)
     await sio.emit(
         "post:new",
         {"postId": post["id"], "spaceId": post["space"]["id"]},

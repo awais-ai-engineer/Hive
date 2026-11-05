@@ -8,9 +8,12 @@ from sqlalchemy.dialects.postgresql import insert
 from ulid import ULID
 
 from app.auth.security import hash_password
+from app.core.config import settings
 from app.db.models import (
     Channel,
     ChannelType,
+    Comment,
+    CommentVote,
     DirectMember,
     Invite,
     MemberRole,
@@ -22,6 +25,7 @@ from app.db.models import (
     SpaceMember,
     SpaceType,
     User,
+    new_id,
 )
 from app.db.session import SessionLocal, engine
 from app.posts.ranking import hot_score
@@ -179,6 +183,7 @@ async def seed() -> None:
         await seed_thread(session, seeded_spaces["hive-devs"].id, accounts)
         await seed_direct_messages(session, accounts)
         await seed_posts(session, seeded_spaces, accounts)
+        await seed_discussion(session, seeded_spaces, accounts)
         await seed_media(session, seeded_spaces, accounts)
         await session.commit()
     print(f"Acme invite: http://localhost:3000/invite/{code}")
@@ -329,6 +334,119 @@ async def seed_media(session, spaces, accounts):
         session.add(Attachment(id=attachment_id, space_id=spaces["hive-devs"].id, post_id=post.id,
             uploader_id=accounts["alice"].id, position=position, filename=f"mascot-{position + 1}.png",
             content_type="image/png", kind="image", size=len(data), storage_key=key))
+
+
+# Comment trees: (post title, [(key, parent key, author, body, {voter: value})]).
+SEED_COMMENTS = [
+    ("Cursor pagination beats OFFSET for chat history", [
+        ("a", None, "alice", "This bit us in production: page 40 took seconds with OFFSET.", {"bob": 1, "carol": 1}),
+        ("a1", "a", "bob", "Did you index (channel_id, id) or only id?", {"alice": 1}),
+        ("a1a", "a1", "alice", "Composite index. Single-column was not enough for the filter.", {"bob": 1, "carol": 1}),
+        ("a1a1", "a1a", "carol", "Same here; EXPLAIN showed an index-only scan afterwards.", {}),
+        ("b", None, "carol", "How do you jump to an exact message, like a permalink?", {"alice": 1}),
+        ("b1", "b", "bob", "Load the page around it with before= and after= cursors.", {"carol": 1}),
+        ("c", None, "bob", "Offsets are fine for admin tables with small data.", {"alice": -1}),
+        ("c1", "c", "carol", "True, as long as nothing is inserted while you page.", {}),
+    ]),
+    ("Show us what you are building this week", [
+        ("a", None, "bob", "A CLI that turns my reading list into weekly emails.", {"alice": 1, "carol": 1}),
+        ("a1", "a", "alice", "Nice! Which library sends the emails?", {}),
+        ("a1a", "a1", "bob", "Plain SMTP for now, maybe a provider later.", {"alice": 1}),
+        ("b", None, "carol", "A tiny bot that welcomes new members in #general.", {"alice": 1, "bob": 1}),
+        ("b1", "b", "alice", "Ship it to Hive Developers when it's ready!", {"carol": 1}),
+        ("b1a", "b1", "carol", "Will do, after rate limiting is in place.", {}),
+        ("x", None, "alice", "Removed by the author.", {}),
+        ("x1", "x", "bob", "Replies stay readable even when the parent is deleted.", {"carol": 1}),
+    ]),
+    ("Idempotent message sends with client IDs", [
+        ("a", None, "carol", "Do you also dedupe on the server when the client retries after a timeout?", {"alice": 1}),
+        ("a1", "a", "bob", "Yes, the unique index does that: the retry gets the original message back.", {"alice": 1, "carol": 1}),
+        ("a1a", "a1", "carol", "And no second broadcast, right?", {}),
+        ("a1a1", "a1a", "alice", "Right, only the first insert broadcasts.", {"carol": 1}),
+        ("b", None, "alice", "UUIDv4 from crypto.randomUUID() is enough for this.", {"bob": 1}),
+        ("c", None, "bob", "Bonus: it makes optimistic UI easy to reconcile.", {"alice": 1, "carol": 1}),
+        ("c1", "c", "carol", "Match pending messages by client id when the ack arrives.", {}),
+        ("d", None, "carol", "Great write-up, thanks!", {}),
+        ("d1", "d", "bob", "Glad it helped.", {}),
+    ]),
+]
+DELETED_COMMENT = ("Show us what you are building this week", "x")
+
+
+async def seed_discussion(session, spaces: dict, accounts: dict) -> None:
+    """Comment trees, one repost and a shared post link in chat (idempotent)."""
+    devs = spaces["hive-devs"]
+    for title, comments in SEED_COMMENTS:
+        post = await session.scalar(select(Post).where(Post.space_id == devs.id, Post.title == title))
+        created: dict[str, Comment] = {}
+        for key, parent_key, author, body, votes in comments:
+            parent = created.get(parent_key) if parent_key else None
+            comment = await session.scalar(select(Comment).where(
+                Comment.post_id == post.id, Comment.author_id == accounts[author].id,
+                Comment.parent_id == (parent.id if parent else None) if parent else Comment.parent_id.is_(None),
+                Comment.body == body,
+            )) if (title, key) != DELETED_COMMENT else await session.scalar(select(Comment).where(
+                Comment.post_id == post.id, Comment.author_id == accounts[author].id,
+                Comment.parent_id.is_(None), Comment.deleted_at.is_not(None),
+            ))
+            if comment is None:
+                comment_id = new_id()
+                comment = Comment(
+                    id=comment_id, post_id=post.id, author_id=accounts[author].id,
+                    parent_id=parent.id if parent else None,
+                    path=f"{parent.path}.{comment_id}" if parent else comment_id,
+                    depth=parent.depth + 1 if parent else 0, body=body,
+                )
+                session.add(comment)
+                await session.flush()
+            created[key] = comment
+            for voter, value in votes.items():
+                await session.execute(insert(CommentVote).values(
+                    comment_id=comment.id, user_id=accounts[voter].id, value=value,
+                ).on_conflict_do_nothing())
+        deleted = created.get(DELETED_COMMENT[1]) if title == DELETED_COMMENT[0] else None
+        if deleted is not None and deleted.deleted_at is None:
+            deleted.deleted_at = datetime.now(UTC)
+            deleted.body = None
+        await session.flush()
+        # Recompute every counter from the data so reruns stay consistent.
+        for comment in created.values():
+            values = list(await session.scalars(
+                select(CommentVote.value).where(CommentVote.comment_id == comment.id)
+            ))
+            comment.upvotes, comment.downvotes = values.count(1), values.count(-1)
+            comment.score = comment.upvotes - comment.downvotes
+            comment.reply_count = await session.scalar(select(func.count()).where(
+                Comment.parent_id == comment.id, Comment.deleted_at.is_(None)
+            ))
+        post.comment_count = await session.scalar(select(func.count()).where(
+            Comment.post_id == post.id, Comment.deleted_at.is_(None)
+        ))
+
+    # One repost of a Hive Developers post into Python Pakistan.
+    original = await session.scalar(select(Post).where(
+        Post.space_id == devs.id, Post.title == "Idempotent message sends with client IDs"))
+    target = spaces["python-pk"]
+    await session.execute(insert(Post).values(
+        id=new_id(), space_id=target.id, author_id=accounts["carol"].id, title=original.title,
+        repost_of_id=original.id,
+    ).on_conflict_do_nothing(constraint="posts_repost_once"))
+    await session.flush()
+    original.repost_count = await session.scalar(select(func.count()).where(
+        Post.repost_of_id == original.id, Post.deleted_at.is_(None)))
+    repost = await session.scalar(select(Post).where(
+        Post.repost_of_id == original.id, Post.space_id == target.id))
+    repost.hot = hot_score(repost.score, repost.created_at)
+
+    # A chat message sharing a post link, so the preview card shows in #general.
+    general = await session.scalar(select(Channel).where(
+        Channel.space_id == devs.id, Channel.name == "general"))
+    link = f"{settings.web_origin}/p/{original.id}"
+    await session.execute(insert(Message).values(
+        channel_id=general.id, author_id=accounts["bob"].id,
+        body=f"Worth a read before we touch the composer again: {link}",
+        client_msg_id=str(uuid5(NAMESPACE_URL, "hive/share/idempotent-sends")),
+    ).on_conflict_do_nothing(index_elements=["author_id", "client_msg_id"]))
 
 
 if __name__ == "__main__":

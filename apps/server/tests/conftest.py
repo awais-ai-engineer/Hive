@@ -37,6 +37,7 @@ async def database():
         await connection.close()
     assert engine.url.database == "hive_test"
     async with engine.begin() as connection:
+        await connection.execute(text("CREATE EXTENSION IF NOT EXISTS ltree"))
         await connection.run_sync(Base.metadata.drop_all)
         await connection.run_sync(Base.metadata.create_all)
     yield

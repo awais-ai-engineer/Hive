@@ -109,6 +109,25 @@ class AttachmentOut(BaseModel):
     url: str
 
 
+class PostSummaryPlace(BaseModel):
+    id: str
+    slug: str
+    name: str
+
+
+class PostSummary(BaseModel):
+    id: str
+    title: str
+    space: PostSummaryPlace
+    author: AuthorOut | None
+    url: str | None = None
+    domain: str | None = None
+    media: list[AttachmentOut] = Field(default_factory=list)
+    score: int = 0
+    comment_count: int = 0
+    deleted: bool = False
+
+
 class MessageOut(BaseModel):
     id: str
     channel_id: str
@@ -122,6 +141,7 @@ class MessageOut(BaseModel):
     reply_count: int
     reactions: list[ReactionOut]
     attachments: list[AttachmentOut]
+    post_previews: list[PostSummary] = Field(default_factory=list)
 
 
 class MessagePage(BaseModel):

@@ -23,10 +23,13 @@ from app.db.models import Base
 config.set_main_option("sqlalchemy.url", settings.database_url)
 target_metadata = Base.metadata
 
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
+
+def compare_type(context, inspected_column, metadata_column, inspected_type, metadata_type):
+    meta_name = metadata_type.__class__.__name__.lower()
+    insp_name = inspected_type.__class__.__name__.lower()
+    if "ltree" in meta_name and "ltree" in insp_name:
+        return False
+    return None
 
 
 def run_migrations_offline() -> None:
@@ -47,6 +50,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        compare_type=compare_type,
     )
 
     with context.begin_transaction():
@@ -54,7 +58,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=compare_type,
+    )
 
     with context.begin_transaction():
         context.run_migrations()
