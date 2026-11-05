@@ -22,7 +22,27 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.types import UserDefinedType
 from ulid import ULID
+
+
+class LTree(UserDefinedType):
+    """PostgreSQL ltree data type for hierarchical path querying."""
+
+    cache_ok = True
+
+    def get_col_spec(self, **kw):
+        return "LTREE"
+
+    def bind_processor(self, dialect):
+        def process(value):
+            return value
+        return process
+
+    def result_processor(self, dialect, coltype):
+        def process(value):
+            return value
+        return process
 
 
 def new_id() -> str:
@@ -259,6 +279,7 @@ class Post(Base):
         Index("posts_space_hot", "space_id", "hot", "id"),
         Index("posts_space_top", "space_id", "score", "id"),
         Index("posts_author_idx", "author_id"),
+        UniqueConstraint("author_id", "space_id", "repost_of_id", name="posts_repost_once"),
     )
     id: Mapped[str] = pk()
     space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"))
@@ -270,6 +291,10 @@ class Post(Base):
     upvotes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     downvotes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     comment_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    repost_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    repost_of_id: Mapped[str | None] = mapped_column(
+        ForeignKey("posts.id", ondelete="SET NULL"), index=True
+    )
     hot: Mapped[float] = mapped_column(Float, default=0, server_default="0")
     edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -286,4 +311,44 @@ class PostVote(Base):
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     value: Mapped[int] = mapped_column(SmallInteger)
+    created_at: Mapped[datetime] = created_at()
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+    __table_args__ = (
+        Index("comments_path_gist", "path", postgresql_using="gist"),
+        Index("comments_post_parent_id", "post_id", "parent_id", "id"),
+        Index("comments_author_idx", "author_id"),
+    )
+
+    id: Mapped[str] = pk()
+    post_id: Mapped[str] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
+    author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    parent_id: Mapped[str | None] = mapped_column(
+        ForeignKey("comments.id", ondelete="CASCADE"), nullable=True
+    )
+    path: Mapped[str] = mapped_column(LTree(), nullable=False)
+    depth: Mapped[int] = mapped_column(SmallInteger, default=0, server_default="0", nullable=False)
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    score: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    upvotes: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    downvotes: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    reply_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = created_at()
+
+
+class CommentVote(Base):
+    __tablename__ = "comment_votes"
+    __table_args__ = (CheckConstraint("value IN (-1, 1)", name="comment_votes_value_check"),)
+
+    comment_id: Mapped[str] = mapped_column(
+        ForeignKey("comments.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    value: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     created_at: Mapped[datetime] = created_at()

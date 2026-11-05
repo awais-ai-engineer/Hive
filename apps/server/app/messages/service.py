@@ -1,10 +1,13 @@
+import re
 from datetime import UTC, datetime
+from urllib.parse import urlparse
 
 from fastapi import HTTPException
 from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.db.models import (
     Attachment,
     Channel,
@@ -13,13 +16,22 @@ from app.db.models import (
     DirectMember,
     MemberRole,
     Message,
+    Post,
     Reaction,
     Space,
+    SpaceMember,
     SpaceType,
     User,
 )
 from app.db.session import redis
-from app.messages.schemas import AttachmentOut, AuthorOut, MessageOut, SendIn
+from app.messages.schemas import (
+    AttachmentOut,
+    AuthorOut,
+    MessageOut,
+    PostSummary,
+    PostSummaryPlace,
+    SendIn,
+)
 from app.spaces.permissions import require_role
 from app.spaces.service import member_for
 from app.storage.attachments import serialize_files
@@ -54,8 +66,10 @@ async def writable(session: AsyncSession, channel_id: str, user_id: str):
     return channel
 
 
-async def serialize(session: AsyncSession, rows: list[tuple[Message, User]]) -> list[dict]:
-    """Turn (message, author) rows into MessageOut dicts, batch-loading reactions and files."""
+async def serialize(
+    session: AsyncSession, rows: list[tuple[Message, User]], viewer_id: str | None = None
+) -> list[dict]:
+    """Turn (message, author) rows into MessageOut dicts, batch-loading reactions, files, and post previews."""
     ids = [message.id for message, _ in rows]
     reactions: dict[str, dict[str, list[str]]] = {}
     attachments: dict[str, list[AttachmentOut]] = {}
@@ -67,47 +81,163 @@ async def serialize(session: AsyncSession, rows: list[tuple[Message, User]]) -> 
         )
         for message_id, emoji, user_id in reaction_rows:
             reactions.setdefault(message_id, {}).setdefault(emoji, []).append(user_id)
-        files = list(await session.scalars(
-            select(Attachment).where(Attachment.message_id.in_(ids)).order_by(Attachment.id)
-        ))
+        files = list(
+            await session.scalars(
+                select(Attachment).where(Attachment.message_id.in_(ids)).order_by(Attachment.id)
+            )
+        )
         serialized = await serialize_files(files)
         for file in files:
             if file.id in serialized:
                 attachments.setdefault(file.message_id, []).append(serialized[file.id])
+
+    # Extract post links from message bodies: {WEB_ORIGIN}/p/<26-char id>, max 3 per message
+    origins = [re.escape(settings.web_origin)]
+    if "localhost" in settings.web_origin:
+        origins.append(r"http://127.0.0.1:3000")
+    origin_pattern = "|".join(origins)
+    post_link_re = re.compile(rf"(?:{origin_pattern})/p/([0-9A-Za-z]{{26}})")
+
+    post_ids_per_message = {}
+    all_post_ids = set()
+    for message, _ in rows:
+        if message.body and message.deleted_at is None:
+            found = []
+            for pid in post_link_re.findall(message.body):
+                if pid not in found:
+                    found.append(pid)
+                if len(found) == 3:
+                    break
+            post_ids_per_message[message.id] = found
+            all_post_ids.update(found)
+
+    previews_by_id = {}
+    if all_post_ids:
+        post_rows = (
+            await session.execute(
+                select(Post, Space, User)
+                .select_from(Post)
+                .join(Space, Space.id == Post.space_id)
+                .outerjoin(User, User.id == Post.author_id)
+                .where(Post.id.in_(all_post_ids))
+            )
+        ).all()
+
+        # Check permissions for viewer: community posts are visible; workspace posts require membership
+        allowed_space_ids = set()
+        workspace_ids = {s.id for _, s, _ in post_rows if s.type == SpaceType.workspace}
+        if workspace_ids and viewer_id:
+            allowed_space_ids = set(
+                await session.scalars(
+                    select(SpaceMember.space_id).where(
+                        SpaceMember.space_id.in_(workspace_ids),
+                        SpaceMember.user_id == viewer_id,
+                        or_(
+                            SpaceMember.banned_until.is_(None),
+                            SpaceMember.banned_until <= datetime.now(UTC),
+                        ),
+                    )
+                )
+            )
+
+        readable_posts = [
+            (p, s, a)
+            for p, s, a in post_rows
+            if (s.type == SpaceType.community or s.id in allowed_space_ids)
+        ]
+        readable_post_ids = [p.id for p, _, _ in readable_posts]
+
+        first_files = (
+            list(
+                await session.scalars(
+                    select(Attachment).where(
+                        Attachment.post_id.in_(readable_post_ids), Attachment.position == 0
+                    )
+                )
+            )
+            if readable_post_ids
+            else []
+        )
+        serialized_first_files = await serialize_files(first_files)
+        post_media = {
+            f.post_id: [serialized_first_files[f.id]]
+            for f in first_files
+            if f.id in serialized_first_files
+        }
+
+        for p, s, a in readable_posts:
+            p_deleted = p.deleted_at is not None
+            domain = (
+                re.sub(r"^www\.", "", urlparse(p.url).hostname or "", flags=re.IGNORECASE)
+                if p.url
+                else None
+            )
+            previews_by_id[p.id] = PostSummary(
+                id=p.id,
+                title="[deleted]" if p_deleted else p.title,
+                space=PostSummaryPlace(id=s.id, slug=s.slug, name=s.name),
+                author=None if p_deleted else (AuthorOut.model_validate(a) if a else None),
+                url=None if p_deleted else p.url,
+                domain=None if p_deleted else domain,
+                media=[] if p_deleted else post_media.get(p.id, []),
+                score=p.score,
+                comment_count=p.comment_count,
+                deleted=p_deleted,
+            )
+
     result = []
     for message, author in rows:
         deleted = message.deleted_at is not None
-        result.append(MessageOut(
-            id=message.id, channel_id=message.channel_id, parent_id=message.parent_id,
-            author=AuthorOut.model_validate(author),
-            body=None if deleted else message.body,
-            client_msg_id=message.client_msg_id, created_at=message.created_at,
-            edited_at=message.edited_at, deleted=deleted, reply_count=message.reply_count,
-            reactions=[] if deleted else [
-                {"emoji": emoji, "count": len(users), "user_ids": users}
-                for emoji, users in reactions.get(message.id, {}).items()
-            ],
-            attachments=[] if deleted else attachments.get(message.id, []),
-        ).model_dump(mode="json"))
+        previews = [
+            previews_by_id[pid]
+            for pid in post_ids_per_message.get(message.id, [])
+            if pid in previews_by_id
+        ]
+        result.append(
+            MessageOut(
+                id=message.id,
+                channel_id=message.channel_id,
+                parent_id=message.parent_id,
+                author=AuthorOut.model_validate(author),
+                body=None if deleted else message.body,
+                client_msg_id=message.client_msg_id,
+                created_at=message.created_at,
+                edited_at=message.edited_at,
+                deleted=deleted,
+                reply_count=message.reply_count,
+                reactions=[]
+                if deleted
+                else [
+                    {"emoji": emoji, "count": len(users), "user_ids": users}
+                    for emoji, users in reactions.get(message.id, {}).items()
+                ],
+                attachments=[] if deleted else attachments.get(message.id, []),
+                post_previews=[] if deleted else previews,
+            ).model_dump(mode="json")
+        )
     return result
 
 
-async def message_out(session: AsyncSession, message: Message) -> dict:
+async def message_out(
+    session: AsyncSession, message: Message, viewer_id: str | None = None
+) -> dict:
     author = await session.get(User, message.author_id)
-    return (await serialize(session, [(message, author)]))[0]
+    return (await serialize(session, [(message, author)], viewer_id))[0]
 
 
 def _with_authors():
     return select(Message, User).join(User, User.id == Message.author_id)
 
 
-async def _page(session, query, newest_first: bool, limit: int) -> dict:
+async def _page(
+    session, query, newest_first: bool, limit: int, viewer_id: str | None = None
+) -> dict:
     rows = list((await session.execute(query.limit(limit + 1))).all())
     more = len(rows) > limit
     rows = rows[:limit]
     if newest_first:
         rows.reverse()
-    return {"items": await serialize(session, rows), "has_more": more}
+    return {"items": await serialize(session, rows, viewer_id), "has_more": more}
 
 
 async def history(session, channel_id, user_id, before=None, after=None, limit=50):
@@ -121,7 +251,7 @@ async def history(session, channel_id, user_id, before=None, after=None, limit=5
     if after is not None:
         query = query.where(Message.id > after)
     query = query.order_by(Message.id.asc() if after is not None else Message.id.desc())
-    return await _page(session, query, after is None, limit)
+    return await _page(session, query, after is None, limit, user_id)
 
 
 async def thread(session, message_id, user_id, after=None, limit=100):
@@ -134,7 +264,7 @@ async def thread(session, message_id, user_id, after=None, limit=100):
         query = query.where(Message.id > after)
     rows = list((await session.execute(query.order_by(Message.id.asc()).limit(limit + 1))).all())
     author = await session.get(User, parent.author_id)
-    outputs = await serialize(session, [(parent, author), *rows[:limit]])
+    outputs = await serialize(session, [(parent, author), *rows[:limit]], user_id)
     return {"parent": outputs[0], "items": outputs[1:], "has_more": len(rows) > limit}
 
 
@@ -175,7 +305,7 @@ async def send(session: AsyncSession, user: User, data: SendIn):
         existing = await session.scalar(existing_query)  # lost a race with a concurrent retry
     if existing.channel_id != data.channelId or existing.parent_id != data.parentId:
         raise HTTPException(422, "Client message ID belongs to another message")
-    return await message_out(session, existing), False, None
+    return await message_out(session, existing, user.id), False, None
 
 
 async def _finish_insert(session, user, data: SendIn, message: Message):
@@ -201,8 +331,8 @@ async def _finish_insert(session, user, data: SendIn, message: Message):
     await session.commit()
     if parent is not None:
         await session.refresh(parent)
-    message_dict = await message_out(session, message)
-    parent_dict = await message_out(session, parent) if parent is not None else None
+    message_dict = await message_out(session, message, user.id)
+    parent_dict = await message_out(session, parent, user.id) if parent is not None else None
     return message_dict, True, parent_dict
 
 
@@ -224,7 +354,7 @@ async def change(session: AsyncSession, user: User, message_id: str, body: str |
         message.body = body
         message.edited_at = datetime.now(UTC)
     await session.commit()
-    return await message_out(session, message)
+    return await message_out(session, message, user.id)
 
 
 async def toggle_reaction(session: AsyncSession, user: User, message_id: str, emoji: str):
@@ -250,7 +380,7 @@ async def toggle_reaction(session: AsyncSession, user: User, message_id: str, em
             .on_conflict_do_nothing()
         )
     await session.commit()
-    out = await message_out(session, message)
+    out = await message_out(session, message, user.id)
     return {"messageId": message.id, "channelId": message.channel_id, "reactions": out["reactions"]}
 
 

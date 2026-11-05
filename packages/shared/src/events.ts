@@ -26,6 +26,12 @@ export const SocketEvents = {
   Sync: 'sync',
   PostNew: 'post:new',
   PostScore: 'post:score',
+  PostWatch: 'post:watch',
+  PostUnwatch: 'post:unwatch',
+  CommentNew: 'comment:new',
+  CommentUpdated: 'comment:updated',
+  CommentDeleted: 'comment:deleted',
+  CommentScore: 'comment:score',
 } as const;
 
 export interface PingAck {

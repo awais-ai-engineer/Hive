@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import type { Attachment } from '@hive/shared';
 import { API_URL } from '../lib/api';
@@ -76,6 +77,14 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
     </p>}
     {message.attachments.length > 0 && <div className="mt-1 flex flex-wrap gap-2">
       {message.attachments.map(file => <AttachmentView key={file.id} file={file} />)}
+    </div>}
+    {!message.deleted && !!message.post_previews?.length && <div className="mt-1 flex flex-col gap-2">
+      {message.post_previews.map(preview => <Link key={preview.id} href={`/p/${preview.id}`}
+        className="block w-full max-w-md rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 hover:border-amber-400/60">
+        <span className="block text-xs text-white/45">{preview.space.name}</span>
+        <span className="block truncate font-semibold text-white/90">{preview.deleted ? '[deleted]' : preview.title}</span>
+        <span className="block text-xs text-white/45">▲ {preview.score} · 💬 {preview.comment_count}</span>
+      </Link>)}
     </div>}
     {message.reactions.length > 0 && <div className="mt-1 flex flex-wrap gap-1">
       {message.reactions.map(reaction => {

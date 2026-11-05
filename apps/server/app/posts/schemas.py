@@ -59,6 +59,21 @@ class VoteIn(BaseModel):
         return value
 
 
+class RepostCreate(BaseModel):
+    spaceSlug: str
+    title: str | None = Field(default=None, max_length=300)
+
+    @field_validator("title")
+    @classmethod
+    def title_trim(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            return None
+        return value
+
+
 class Author(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
@@ -70,6 +85,20 @@ class Place(BaseModel):
     id: str
     slug: str
     name: str
+    type: str = "community"
+
+
+class PostSummary(BaseModel):
+    id: str
+    title: str
+    space: Place
+    author: Author | None
+    url: str | None = None
+    domain: str | None = None
+    media: list[AttachmentOut] = Field(default_factory=list)
+    score: int = 0
+    comment_count: int = 0
+    deleted: bool = False
 
 
 class PostOut(BaseModel):
@@ -85,6 +114,8 @@ class PostOut(BaseModel):
     upvotes: int
     downvotes: int
     comment_count: int
+    repost_count: int = 0
+    repost_of: PostSummary | None = None
     my_vote: int
     created_at: datetime
     edited_at: datetime | None

@@ -54,7 +54,7 @@ Ports 5434 and 6380 avoid clashing with other local Postgres/Redis instances.
 3. [x] Real-time chat: idempotent send, optimistic UI, reconnect sync
 4. [x] Threads, reactions, uploads, presence, unread counts
 5. [x] Posts, voting, hot/top/new ranking
-6. Nested comments (ltree), public community pages
+6. [x] Nested comments (ltree), public community pages
 7. WebRTC voice/video, huddles
 8. Webhooks, slash commands, OAuth bots
 9. Search, notifications, moderation queue
@@ -210,3 +210,26 @@ server because it grants privileged storage access; never put it in frontend env
 The API streams uploads through the Storage REST API, signs all files for a response in one
 request, and caches signed URLs in Redis. `SIGNED_URL_SECONDS` defaults to 3600. Browsers get
 only expiring signed URLs; ordinary files use download disposition. No storage SDK is required.
+
+## Comments, reposts & sharing
+
+- **Nested comments** store their ancestry in a Postgres `ltree` path (`<root id>.<child id>…`;
+  ULIDs are valid labels). A GiST index makes "this subtree" (`path <@ ANY(...)`) one indexed
+  query, so a page of 20 top-level comments plus five levels of replies (max 300 comments) loads
+  in a constant number of SQL statements no matter how big the thread is. The tree is built and
+  sorted in Python; deeper chains continue via `GET /api/comments/{id}`. Deleted comments keep
+  their place as `[deleted]` so replies stay readable.
+- **Best** sorting uses the lower bound of the Wilson score interval (80% confidence) instead of
+  raw score: one upvote with no downvotes is not treated as better than 40 up and 5 down, because
+  the uncertainty of tiny samples is taken into account. Top, New and Old are also available, and
+  sorting applies among siblings at every level. Paging cursors carry the value Postgres computed,
+  so no comment is repeated or skipped between pages.
+- **Comment votes** use the same race-safe pattern as post votes (row lock, SQL arithmetic,
+  `CHECK (value IN (-1, 1))`). New comments, edits, deletions and score changes are pushed live to
+  everyone viewing the post (`post:watch`).
+- **Reposts** share a community post into another space you belong to, always pointing at the
+  root original. Workspace posts cannot be reposted, so private content never leaves its
+  workspace.
+- **Sharing:** copy link, the device's native share sheet, or send to a channel or DM. Hive post
+  links in chat show a preview card, but only for viewers who can read that post; nothing from a
+  private workspace is revealed to outsiders.

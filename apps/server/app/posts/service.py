@@ -6,7 +6,8 @@ from datetime import UTC, datetime, timedelta
 from urllib.parse import urlparse
 
 from fastapi import HTTPException
-from sqlalchemy import or_, select, tuple_
+from sqlalchemy import func, or_, select, tuple_, update
+from sqlalchemy.exc import IntegrityError
 
 from app.db.models import (
     Attachment,
@@ -20,7 +21,7 @@ from app.db.models import (
 )
 from app.db.session import redis
 from app.posts.ranking import hot_score
-from app.posts.schemas import Author, Place, PostOut
+from app.posts.schemas import Author, Place, PostOut, PostSummary
 from app.spaces.permissions import require_role
 from app.spaces.service import load_space, member_for
 from app.storage import get_storage
@@ -83,6 +84,53 @@ async def serialize(session, rows, viewer_id=None):
     for file in files:
         if file.id in serialized:
             media.setdefault(file.post_id, []).append(serialized[file.id])
+
+    repost_ids = list(
+        {row[0].repost_of_id for row in rows if getattr(row[0], "repost_of_id", None)}
+    )
+    repost_map = {}
+    if repost_ids:
+        repost_rows = (
+            await session.execute(
+                select(Post, Space, User)
+                .select_from(Post)
+                .join(Space, Space.id == Post.space_id)
+                .outerjoin(User, User.id == Post.author_id)
+                .where(Post.id.in_(repost_ids))
+            )
+        ).all()
+        repost_files = list(
+            await session.scalars(
+                select(Attachment)
+                .where(Attachment.post_id.in_(repost_ids), Attachment.position == 0)
+            )
+        )
+        repost_serialized_files = await serialize_files(repost_files)
+        repost_media = {
+            f.post_id: [repost_serialized_files[f.id]]
+            for f in repost_files
+            if f.id in repost_serialized_files
+        }
+        for r_post, r_space, r_author in repost_rows:
+            r_deleted = r_post.deleted_at is not None
+            r_domain = (
+                re.sub(r"^www\.", "", urlparse(r_post.url).hostname or "", flags=re.IGNORECASE)
+                if r_post.url
+                else None
+            )
+            repost_map[r_post.id] = PostSummary(
+                id=r_post.id,
+                title="[deleted]" if r_deleted else r_post.title,
+                space=Place(id=r_space.id, slug=r_space.slug, name=r_space.name, type=r_space.type.value),
+                author=None if r_deleted else (Author.model_validate(r_author) if r_author else None),
+                url=None if r_deleted else r_post.url,
+                domain=None if r_deleted else r_domain,
+                media=[] if r_deleted else repost_media.get(r_post.id, []),
+                score=r_post.score,
+                comment_count=r_post.comment_count,
+                deleted=r_deleted,
+            )
+
     result = []
     for post, space, author in rows:
         vote = votes.get(post.id, 0)
@@ -92,10 +140,22 @@ async def serialize(session, rows, viewer_id=None):
             if post.url
             else None
         )
+        r_summary = None
+        if post.repost_of_id:
+            if post.repost_of_id in repost_map:
+                r_summary = repost_map[post.repost_of_id]
+            else:
+                r_summary = PostSummary(
+                    id=post.repost_of_id,
+                    title="[deleted]",
+                    space=Place(id="", slug="", name=""),
+                    author=None,
+                    deleted=True,
+                )
         result.append(
             PostOut(
                 id=post.id,
-                space=Place(id=space.id, slug=space.slug, name=space.name),
+                space=Place(id=space.id, slug=space.slug, name=space.name, type=space.type.value),
                 author=None if deleted else Author.model_validate(author) if author else None,
                 title="[deleted]" if deleted else post.title,
                 body=None if deleted else post.body,
@@ -105,6 +165,8 @@ async def serialize(session, rows, viewer_id=None):
                 upvotes=post.upvotes,
                 downvotes=post.downvotes,
                 comment_count=post.comment_count,
+                repost_count=post.repost_count,
+                repost_of=r_summary,
                 my_vote=vote,
                 created_at=post.created_at,
                 edited_at=post.edited_at,
@@ -282,11 +344,82 @@ async def remove(session, user, post_id):
     post.deleted_at = datetime.now(UTC)
     post.body = None
     post.url = None
+    if post.repost_of_id:
+        await session.execute(
+            update(Post)
+            .where(Post.id == post.repost_of_id)
+            .values(repost_count=func.greatest(0, Post.repost_count - 1))
+        )
     keys = list(
         await session.scalars(select(Attachment.storage_key).where(Attachment.post_id == post_id))
     )
     await session.commit()
     await get_storage().delete(keys)
+
+
+async def repost(session, user, post_id, data):
+    orig_post = await session.get(Post, post_id)
+    if orig_post is None:
+        raise HTTPException(404, "Post not found")
+    orig_space = await session.get(Space, orig_post.space_id)
+    if orig_space is None:
+        raise HTTPException(404, "Space not found")
+    await visible_space(session, orig_space, user.id)
+
+    if orig_post.deleted_at is not None:
+        raise HTTPException(422, "Cannot repost a deleted post")
+    if orig_space.type != SpaceType.community:
+        raise HTTPException(403, "Workspace posts cannot be reposted")
+
+    # Reposting a repost points to the root original
+    root_id = orig_post.repost_of_id if orig_post.repost_of_id else orig_post.id
+    root_post = await session.get(Post, root_id)
+    if root_post is None or root_post.deleted_at is not None:
+        raise HTTPException(422, "Original post not found or deleted")
+    root_space = await session.get(Space, root_post.space_id)
+    if root_space.type != SpaceType.community:
+        raise HTTPException(403, "Workspace posts cannot be reposted")
+
+    target_space, target_member = await load_space(session, data.spaceSlug, user)
+    require_role(target_member.role if target_member else None, MemberRole.member)
+
+    # Check duplicate repost into same space
+    existing = await session.scalar(
+        select(Post.id).where(
+            Post.author_id == user.id,
+            Post.space_id == target_space.id,
+            Post.repost_of_id == root_post.id,
+        )
+    )
+    if existing:
+        raise HTTPException(409, "Post already reposted to this space")
+
+    count = await redis.eval(
+        "local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],600) end; return n",
+        1,
+        f"rl:post:{user.id}",
+    )
+    if count > 5:
+        raise HTTPException(429, "Too many posts; try again later")
+
+    title = data.title.strip() if data.title and data.title.strip() else orig_post.title
+    new_post = Post(
+        space_id=target_space.id,
+        author_id=user.id,
+        title=title,
+        repost_of_id=root_post.id,
+    )
+    session.add(new_post)
+    await session.flush()
+    root_post.repost_count = Post.repost_count + 1
+    new_post.hot = hot_score(0, new_post.created_at)
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(409, "Post already reposted to this space") from None
+
+    return await get_post(session, new_post.id, user.id)
 
 
 async def vote(session, user, post_id, value):
