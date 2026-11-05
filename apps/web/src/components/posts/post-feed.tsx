@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Icon } from '../ui/icons';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../lib/auth';
 import { fetchPosts, type Post, type VoteResult } from '../../lib/posts';
@@ -70,12 +71,15 @@ export function PostFeed({ space }: { space?: Space }) {
   const update = (id: string, value: VoteResult) => setPosts(list => list.map(post => post.id === id ? { ...post, ...value } : post));
   return <div className="min-w-0 space-y-4">
     <div className="flex flex-wrap items-center gap-3">
-      {['hot', 'new', 'top'].map(value => <button key={value} aria-pressed={sort === value} className={`rounded px-3 py-2 capitalize ${sort === value ? 'bg-white/10 text-amber-400' : 'text-white/60'}`} onClick={() => change('sort', value)}>{value}</button>)}
-      {sort === 'top' && <select aria-label="Time range" value={period} onChange={event => change('t', event.target.value)} className="rounded border border-white/15 bg-canvas p-2 text-sm">
+      {([['hot', 'Hot', 'trending'], ['new', 'Latest', 'sparkles'], ['top', 'Top', 'activity']] as const).map(([value, label, icon]) =>
+        <button key={value} aria-pressed={sort === value} onClick={() => change('sort', value)}
+          className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-medium transition ${sort === value ? 'bg-brand-soft text-brand shadow-sm' : 'text-white/60 hover:bg-[var(--surface-2)] hover:text-white'}`}>
+          <Icon name={icon} size={16} />{label}</button>)}
+      {sort === 'top' && <select aria-label="Time range" value={period} onChange={event => change('t', event.target.value)} className="rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm">
         {Object.entries({ day: 'Today', week: 'This week', month: 'This month', year: 'This year', all: 'All time' }).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </select>}
     </div>
-    {fresh && <button onClick={() => void load()} className="rounded-full bg-amber-400/15 px-4 py-2 text-sm text-amber-400">New posts — refresh</button>}
+    {fresh && <button onClick={() => void load()} className="mx-auto block rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-[var(--shadow-pop)]">↑ New posts</button>}
     {error && <p role="alert" className="text-rose-400">{error}</p>}
     {busy ? <p className="text-white/50">Loading posts…</p> : !posts.length && !error && <p className="py-8 text-center text-white/40">No posts yet.</p>}
     {posts.map(post => {
