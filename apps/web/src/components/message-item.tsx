@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import type { Attachment } from '@hive/shared';
 import { API_URL } from '../lib/api';
+import { Avatar } from './ui/avatar';
 import { chatRequest } from '../lib/socket';
 import { requestError } from '../lib/spaces';
 import type { ChatMessage } from '../lib/use-channel-messages';
@@ -58,20 +59,25 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
     void run('reaction:toggle', { messageId: message.id, emoji });
   }
 
-  return <article data-message-id={message.id} className={`group relative rounded px-2 py-1 hover:bg-white/[0.03] ${grouped ? '' : 'mt-4'}`}>
-    {!grouped && <div className="mb-1 flex items-center gap-2">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-400/15 text-sm text-amber-400">{message.author.username[0].toUpperCase()}</span>
+  const time = new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return <article data-message-id={message.id} className={`group relative flex gap-3 rounded-xl px-2 py-1 transition hover:bg-[var(--surface-2)] ${grouped ? '' : 'mt-3 pt-2'}`}>
+    <div className="w-10 shrink-0">
+      {grouped ? <time dateTime={message.created_at} className="hidden pt-1 text-right text-[10px] text-white/35 group-hover:block">{time}</time>
+        : <Avatar name={message.author.username} src={message.author.avatar_url} size={40} />}
+    </div>
+    <div className="min-w-0 flex-1">
+    {!grouped && <div className="flex items-baseline gap-2">
       <span className="truncate font-semibold">{message.author.username}</span>
       <time dateTime={message.created_at} title={new Date(message.created_at).toLocaleString()} className="shrink-0 text-xs text-white/40">
-        {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        {time}
       </time>
     </div>}
     {editing ? <textarea autoFocus aria-label="Edit message" value={draft} maxLength={4000}
-      className="w-full rounded border border-amber-400/50 bg-[#0b0d12] p-2" onChange={event => setDraft(event.target.value)}
+      className="w-full rounded-xl border border-brand/50 bg-surface p-2" onChange={event => setDraft(event.target.value)}
       onKeyDown={event => {
         if (event.key === 'Escape') setEditing(false);
         if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void saveEdit(); }
-      }} /> : (message.body || message.deleted) && <p className={`whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${message.deleted ? 'italic text-white/40' : 'text-white/85'}`}>
+      }} /> : (message.body || message.deleted) && <p className={`whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${message.deleted ? 'italic text-white/40' : 'text-white/90'} leading-relaxed`}>
       {message.deleted ? 'Message deleted' : message.body}
       {message.edited_at && !message.deleted && <span className="ml-2 text-xs text-white/40">(edited)</span>}
     </p>}
@@ -91,24 +97,25 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
         const mine = !!userId && reaction.user_ids.includes(userId);
         return <button key={reaction.emoji} disabled={!canWrite || !live} onClick={() => react(reaction.emoji)}
           aria-pressed={mine} aria-label={`${reaction.emoji} ${reaction.count}`}
-          className={`rounded-full border px-2 text-sm ${mine ? 'border-amber-400/70 bg-amber-400/15' : 'border-white/15'} disabled:cursor-default`}>
-          {reaction.emoji} <span className="text-xs text-white/70">{reaction.count}</span>
+          className={`flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-sm transition ${mine ? 'border-brand/50 bg-brand-soft' : 'border-white/10 bg-[var(--surface-2)] hover:border-white/25'} disabled:cursor-default`}>
+          {reaction.emoji} <span className={`text-xs font-semibold ${mine ? 'text-brand' : 'text-white/70'}`}>{reaction.count}</span>
         </button>;
       })}
     </div>}
-    {onReply && message.reply_count > 0 && <button onClick={() => onReply(message)} className="mt-1 text-xs font-semibold text-amber-400">
+    {onReply && message.reply_count > 0 && <button onClick={() => onReply(message)} className="mt-1 rounded-lg px-1 text-xs font-semibold text-brand hover:bg-brand-soft">
       {message.reply_count} {message.reply_count === 1 ? 'reply' : 'replies'}
     </button>}
     {message.status === 'sending' && <span className="text-xs text-white/40">Sending…</span>}
     {message.status === 'failed' && <p className="text-xs text-rose-400">Failed: {message.error} <button className="underline" onClick={() => onRetry(message)}>Retry</button></p>}
-    {live && (canWrite || own || canModerate) && <div className="flex flex-wrap justify-end gap-3 text-xs text-amber-400 sm:absolute sm:right-2 sm:top-1 sm:rounded sm:bg-[#151821] sm:px-2 sm:py-1 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+    {live && (canWrite || own || canModerate) && <div className="mt-1 flex flex-wrap gap-3 text-xs font-medium text-brand sm:absolute sm:-top-3 sm:right-3 sm:mt-0 sm:gap-1 sm:rounded-xl sm:border sm:border-white/10 sm:bg-surface sm:p-1 sm:shadow-[var(--shadow-card)] sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 [&>button]:rounded-lg [&>button]:px-2 [&>button]:py-1 [&>button:hover]:bg-[var(--surface-2)]">
       {canWrite && <button aria-label="Add reaction" aria-expanded={picker} onClick={() => setPicker(value => !value)}>React</button>}
       {canWrite && onReply && <button aria-label="Reply in thread" onClick={() => onReply(message)}>Reply</button>}
       {own && <button aria-label="Edit message" onClick={() => { setEditing(true); setDraft(message.body ?? ''); }}>Edit</button>}
       {(own || canModerate) && <button aria-label="Delete message" onClick={() => void run('message:delete', { messageId: message.id })}>Delete</button>}
     </div>}
-    {picker && <div role="menu" className="mt-1 flex w-fit gap-1 rounded border border-white/15 bg-[#151821] p-1">
+    {picker && <div role="menu" className="mt-1 flex w-fit gap-1 rounded-2xl border border-white/10 bg-surface p-1 shadow-[var(--shadow-pop)]">
       {QUICK_REACTIONS.map(emoji => <button key={emoji} role="menuitem" onClick={() => react(emoji)} className="rounded px-1 text-lg hover:bg-white/10">{emoji}</button>)}
     </div>}
+    </div>
   </article>;
 }

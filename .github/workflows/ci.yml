@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: hive
           POSTGRES_PASSWORD: hive
@@ -43,6 +43,30 @@ jobs:
         working-directory: apps/server
       - run: uv run pytest -q
         working-directory: apps/server
+      - run: uv run alembic upgrade head && uv run alembic check
+        working-directory: apps/server
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @hive/shared build
+      - run: pnpm --filter @hive/web exec playwright install --with-deps chromium
+      - run: uv run python -m app.seed
+        working-directory: apps/server
+      - name: Browser accessibility and preference checks
+        run: |
+          (cd apps/server && uv run uvicorn app.main:app --port 4000 > /tmp/hive-api.log 2>&1) &
+          pnpm --filter @hive/web dev > /tmp/hive-web.log 2>&1 &
+          for attempt in $(seq 1 90); do
+            if curl --silent --fail http://localhost:3000/login > /dev/null; then break; fi
+            sleep 2
+          done
+          pnpm --filter @hive/web test:ui
+      - name: Browser failure logs
+        if: failure()
+        run: cat /tmp/hive-api.log /tmp/hive-web.log || true
   check:
     runs-on: ubuntu-latest
     steps:
@@ -53,5 +77,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @hive/shared build
+      - run: pnpm --filter @hive/shared test:theme
+      - run: pnpm --filter @hive/web lint:tokens
       - run: pnpm typecheck
       - run: pnpm build

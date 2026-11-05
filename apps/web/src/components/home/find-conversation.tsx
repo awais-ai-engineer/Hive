@@ -72,7 +72,7 @@ export function FindConversation({ channels, conversations, onOpen, onPerson }: 
   return <div className="relative">
     <input ref={input} value={query} aria-label="Find a conversation" placeholder="Find a conversation  (Ctrl+K)"
       role="combobox" aria-expanded={open && options.length > 0} aria-controls="find-results"
-      className="w-full rounded-md border border-white/15 bg-[#0b0d12] px-3 py-1.5 text-sm focus:border-amber-400 focus:outline-none"
+      className="w-full rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/55 focus:border-white/40 focus:outline-none"
       onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
       onChange={event => { setQuery(event.target.value); setOpen(true); }}
       onKeyDown={event => {
@@ -82,7 +82,7 @@ export function FindConversation({ channels, conversations, onOpen, onPerson }: 
         else if (event.key === 'Enter' && options[active]) { event.preventDefault(); choose(options[active]); }
       }} />
     {open && query.trim() && <ul id="find-results" role="listbox"
-      className="absolute inset-x-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-md border border-white/15 bg-[#151821] py-1 shadow-xl">
+      className="on-surface absolute inset-x-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-md border border-white/15 bg-surface py-1 shadow-xl">
       {options.map((option, index) => <li key={`${option.kind}:${option.id}`} role="option" aria-selected={index === active}>
         <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => choose(option)}
           className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm ${index === active ? 'bg-white/10 text-amber-400' : 'text-white/80'}`}>

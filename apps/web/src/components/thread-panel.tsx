@@ -42,7 +42,7 @@ export function ThreadPanel({ channelId, parentId, userId, reason, canWrite, can
 
   const blocked = reason || (thread.parent?.deleted ? 'This message was deleted' : '');
   const shared = { userId, canModerate, onError: setError, onRetry: () => {} };
-  return <aside aria-label="Thread" className="fixed inset-0 z-20 flex flex-col bg-[#0b0d12] p-4 md:inset-y-0 md:left-auto md:w-[400px] md:border-l md:border-white/10">
+  return <aside aria-label="Thread" className="fixed inset-0 z-20 flex flex-col bg-surface p-4 md:inset-y-0 md:left-auto md:w-[400px] md:border-l md:border-white/10 md:shadow-[var(--shadow-pop)] xl:static xl:z-auto xl:-my-4 xl:-mr-6 xl:w-[380px] xl:shrink-0 xl:shadow-none">
     <div className="mb-3 flex items-center justify-between">
       <h2 className="font-semibold">Thread</h2>
       <button onClick={onClose} aria-label="Close thread" className="text-xl text-white/60 hover:text-white">×</button>

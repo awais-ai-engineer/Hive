@@ -83,7 +83,7 @@ export default function MembersPage() {
           {(mayChangeRole || mayKick || (user && space?.my_role && member.user.id !== user.id)) && <div className="flex items-center gap-2">
             {user && space?.my_role && member.user.id !== user.id && <button onClick={() => message(member)} className="text-sm text-amber-400">Message</button>}
             {mayChangeRole && <select aria-label={`Role for ${member.user.username}`} defaultValue={member.role ?? 'guest'}
-              onChange={event => updateRole(member, event.target.value)} className="rounded bg-[#171a22] px-2 py-1">
+              onChange={event => updateRole(member, event.target.value)} className="rounded bg-surface px-2 py-1">
               <option value={member.role ?? 'guest'} disabled>Change role</option>
               {choices.map(role => <option key={role} value={role}>{role}</option>)}
             </select>}

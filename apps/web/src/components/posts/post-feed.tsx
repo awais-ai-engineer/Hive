@@ -71,7 +71,7 @@ export function PostFeed({ space }: { space?: Space }) {
   return <div className="min-w-0 space-y-4">
     <div className="flex flex-wrap items-center gap-3">
       {['hot', 'new', 'top'].map(value => <button key={value} aria-pressed={sort === value} className={`rounded px-3 py-2 capitalize ${sort === value ? 'bg-white/10 text-amber-400' : 'text-white/60'}`} onClick={() => change('sort', value)}>{value}</button>)}
-      {sort === 'top' && <select aria-label="Time range" value={period} onChange={event => change('t', event.target.value)} className="rounded border border-white/15 bg-[#0b0d12] p-2 text-sm">
+      {sort === 'top' && <select aria-label="Time range" value={period} onChange={event => change('t', event.target.value)} className="rounded border border-white/15 bg-canvas p-2 text-sm">
         {Object.entries({ day: 'Today', week: 'This week', month: 'This month', year: 'This year', all: 'All time' }).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </select>}
     </div>

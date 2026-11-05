@@ -100,10 +100,11 @@ export function ChannelChat({ channel, placeholder, reason, canModerate, tracksR
     : names.length === 2 ? `${names[0]} and ${names[1]} are typing…`
     : names.length === 1 ? `${names[0]} is typing…` : '';
 
-  return <div className="min-w-0">
+  return <div className="flex min-h-0 min-w-0 flex-1 gap-4">
+   <div className="flex min-h-0 min-w-0 flex-1 flex-col">
     {user && !chat.connected && <p role="status" className="mb-2 rounded bg-amber-400/10 px-3 py-2 text-sm text-amber-400">Reconnecting…</p>}
     {(error || chat.error) && <p role="alert" className="mb-2 text-sm text-rose-400">{error || chat.error}</p>}
-    <div ref={list} aria-label="Channel messages" className="h-[50vh] min-h-64 overflow-y-auto overscroll-contain [overflow-anchor:none]"
+    <div ref={list} aria-label="Channel messages" className="min-h-40 flex-1 overflow-y-auto overscroll-contain pr-1 [overflow-anchor:none]"
       onScroll={() => {
         const element = list.current!;
         nearBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
@@ -129,6 +130,7 @@ export function ChannelChat({ channel, placeholder, reason, canModerate, tracksR
     <p role="status" className="min-h-7 py-1 text-xs text-white/50">{typingText}</p>
     <Composer channelId={channel.id} placeholder={placeholder} reason={reason} sendTyping
       onSend={(body, files) => { nearBottom.current = true; void chat.send(body, undefined, files); }} />
+   </div>
     {threadId && <ThreadPanel key={threadId} channelId={channel.id} parentId={threadId} userId={user?.id}
       reason={reason} canWrite={canWrite} canModerate={canModerate} onClose={closeThread} />}
   </div>;

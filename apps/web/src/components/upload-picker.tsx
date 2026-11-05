@@ -15,9 +15,14 @@ async function fileKind(file: File) {
   return 'file';
 }
 
-export function UploadPicker({ path, mediaOnly = false, maxFiles = 5, onChange, onBusy }: {
+/** Handles that let a parent (e.g. the chat composer) open the file dialog or add dropped files. */
+export type UploadControls = { open: () => void; add: (files: File[]) => void };
+
+export function UploadPicker({ path, mediaOnly = false, maxFiles = 5, onChange, onBusy, compact = false, controls }: {
   path: string; mediaOnly?: boolean; maxFiles?: number;
   onChange: (files: Attachment[]) => void; onBusy: (busy: boolean) => void;
+  /** Compact: no drop zone or button of its own, only the chips of chosen files. */
+  compact?: boolean; controls?: { current: UploadControls | null };
 }) {
   const [rows, setRows] = useState<Row[]>([]);
   const current = useRef<Row[]>([]);
@@ -55,6 +60,25 @@ export function UploadPicker({ path, mediaOnly = false, maxFiles = 5, onChange, 
         .catch(cause => { if (cause.name !== 'AbortError') update(current.current.map(item => item.id === row.id ? { ...item, error: cause.message } : item)); });
     }
     if (picker.current) picker.current.value = '';
+  }
+  if (controls) controls.current = { open: () => picker.current?.click(), add: files => void add(files) };
+  if (compact) {
+    return <div className="min-w-0">
+      <input ref={picker} type="file" multiple aria-label="Choose files" onChange={event => void add(Array.from(event.target.files ?? []))} className="sr-only" />
+      {rows.length > 0 && <ul className="flex flex-wrap gap-2 px-3 pt-3">{rows.map(row => <li key={row.id} className="flex w-44 max-w-full items-center gap-2 rounded-xl border border-white/10 bg-[var(--surface-2)] p-2 text-xs">
+        {row.file.type.startsWith('image/') ? <img src={row.preview} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />
+          : <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">📄</span>}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium">{row.file.name}</span>
+          {!row.attachment && !row.error && <progress aria-label={`Uploading ${row.file.name}`} value={row.progress} max={100} className="h-1 w-full accent-[var(--brand)]" />}
+          {row.error && <span role="alert" className="block truncate text-rose-500">{row.error}</span>}
+        </span>
+        <button type="button" className="shrink-0 text-white/50 hover:text-rose-500" aria-label={`Remove ${row.file.name}`} onClick={() => {
+          row.controller.abort(); URL.revokeObjectURL(row.preview); update(current.current.filter(item => item.id !== row.id));
+        }}>✕</button>
+      </li>)}</ul>}
+      {error && <p role="alert" className="px-3 pt-2 text-xs text-rose-500">{error}</p>}
+    </div>;
   }
   return <div className="my-3 min-w-0 rounded border border-dashed border-white/20 p-3" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); void add(Array.from(event.dataTransfer.files)); }}>
     <input ref={picker} type="file" multiple accept={mediaOnly ? 'image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm' : undefined} aria-label={mediaOnly ? 'Choose media' : 'Choose files'} onChange={event => void add(Array.from(event.target.files ?? []))} className="sr-only" />

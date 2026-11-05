@@ -47,6 +47,8 @@ export default function Nav() {
     finally { setBusy(false); }
   }
 
+  if (pathname?.startsWith('/home')) return null;
+
   return (
     <header className="border-b border-white/10 px-4 py-4">
       <nav className="mx-auto flex max-w-5xl items-center justify-between" aria-label="Main navigation">

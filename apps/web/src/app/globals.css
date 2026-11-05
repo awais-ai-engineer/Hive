@@ -1,14 +1,124 @@
 @import 'tailwindcss';
 
+/* Light/dark switching: the html element gets class "dark" (see layout.tsx). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens. Every colour in the app comes from here, so one change restyles everything and
+ * light/dark themes stay in sync.
+ *
+ * The existing components were written against white-on-dark utilities (text-white/60,
+ * bg-white/5, border-white/10) with an amber accent. Remapping those palette entries to tokens
+ * turns them into "foreground at N% opacity" and "brand colour", so every page follows the
+ * active theme without rewriting each class.
+ */
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --color-white: var(--fg);
+  --color-black: var(--on-brand);
+  --color-amber-300: var(--brand-soft-fg);
+  --color-amber-400: var(--brand);
+  --color-amber-500: var(--brand-strong);
+
+  --color-surface: var(--surface);
+  --color-canvas: var(--canvas);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-soft: var(--brand-soft);
+  --color-muted: var(--muted);
+
+  --radius-card: 1rem;
+  --shadow-card: 0 1px 2px rgb(16 12 40 / 0.04), 0 4px 16px rgb(16 12 40 / 0.06);
+  --shadow-pop: 0 12px 40px rgb(16 12 40 / 0.18);
+}
+
+:root {
+  color-scheme: light;
+  --canvas: #f6f5fb;          /* page background */
+  --surface: #ffffff;         /* cards, panels */
+  --surface-2: #f1effa;       /* hover, subtle fills */
+  --fg: #1c1631;              /* main text (also the "white" utilities) */
+  --fg-base: #1c1631;
+  --muted: #6b6585;
+  --brand: #6d4aff;           /* Hive purple */
+  --brand-strong: #5a36f0;
+  --brand-soft: #efeaff;
+  --brand-soft-fg: #5b3be8;
+  --on-brand: #ffffff;
+  --ring: #8b6dff;
+  /* Sidebar: deep purple in light mode, like the product mockup. */
+  --sidebar-from: #2b1d63;
+  --sidebar-to: #3a2585;
+  --sidebar-fg: #ffffff;
+  --rail: #1d1446;
+}
+
+.dark {
+  color-scheme: dark;
+  --canvas: #0d0b17;
+  --surface: #15121f;
+  --surface-2: #1e1a2d;
+  --fg: #ece9f7;
+  --fg-base: #ece9f7;
+  --muted: #9a94b3;
+  --brand: #8b6dff;
+  --brand-strong: #a088ff;
+  --brand-soft: #241d42;
+  --brand-soft-fg: #c3b4ff;
+  --on-brand: #ffffff;
+  --ring: #a088ff;
+  --sidebar-from: #120e22;
+  --sidebar-to: #171230;
+  --sidebar-fg: #ece9f7;
+  --rail: #0a0814;
+}
+
+html { background: var(--canvas); }
+
 body {
-  background: #0b0d12;
-  color: #e6e8ee;
+  background: var(--canvas);
+  color: var(--fg);
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+/* Pop-ups and forms rendered inside the sidebar go back to normal page colours. */
+.on-surface { --fg: var(--fg-base); color: var(--fg-base); }
+
+/* Inside the purple sidebar and rail, "white" utilities really are white. */
+.on-dark {
+  --fg: var(--sidebar-fg);
+  --brand-soft-fg: #d8ccff;
+  color: var(--sidebar-fg);
+}
+
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+::selection { background: color-mix(in srgb, var(--brand) 25%, transparent); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-in { animation: rise 160ms ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+}
+
+/* ---- Components ------------------------------------------------------------------------- */
+
+.card {
+  @apply rounded-2xl border border-white/[0.07] bg-surface shadow-[var(--shadow-card)];
 }
 
 .auth-input {
-  @apply mt-2 block w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 outline-none focus:border-amber-400;
+  @apply mt-2 block w-full rounded-xl border border-white/15 bg-surface px-3 py-2 text-white outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20;
 }
 
 .auth-button {
-  @apply rounded-lg bg-amber-400 px-4 py-2 font-medium text-black disabled:opacity-40;
+  @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2 font-semibold text-white shadow-sm transition hover:bg-brand-strong disabled:opacity-40;
+  --fg: var(--on-brand);
 }
+
+.btn-ghost {
+  @apply inline-flex items-center gap-2 rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm font-medium transition hover:bg-[var(--surface-2)];
+}
+
+/* Brand-filled elements keep white text even though "white" means the theme foreground. */
+.bg-brand, .bg-amber-400, .bg-amber-500 { --fg: var(--on-brand); }

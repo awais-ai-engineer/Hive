@@ -23,9 +23,12 @@ export function SpaceSwitcher({ spaces, current, onSwitch }: {
   return <div ref={box} className="relative">
     <button type="button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}
       className="flex w-full items-center justify-between gap-2 rounded px-1 py-1 text-left text-lg font-bold hover:bg-white/5">
-      <span className="truncate">{current?.name ?? 'Choose a space'}</span><span aria-hidden className="text-sm text-white/50">▾</span>
+      <span className="min-w-0">
+        <span className="block truncate">{current?.name ?? 'Choose a space'}</span>
+        {current && <span className="flex items-center gap-1.5 text-xs font-normal text-white/65"><span className="h-2 w-2 rounded-full bg-emerald-400" />{current.member_count} members</span>}
+      </span><span aria-hidden className="text-sm text-white/60">▾</span>
     </button>
-    {open && <div role="menu" className="absolute inset-x-0 top-full z-30 mt-1 rounded-md border border-white/15 bg-[#151821] py-1 shadow-xl">
+    {open && <div role="menu" className="on-surface absolute inset-x-0 top-full z-30 mt-1 rounded-md border border-white/15 bg-surface py-1 shadow-xl">
       {spaces.map(space => <button key={space.id} role="menuitem" type="button"
         onClick={() => { onSwitch(space.slug); setOpen(false); }}
         className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-white/10 ${space.id === current?.id ? 'text-amber-400' : 'text-white/80'}`}>
