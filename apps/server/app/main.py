@@ -17,6 +17,7 @@ from app.invites.router import router as invites_router
 from app.messages.router import router as messages_router
 from app.posts.router import router as posts_router
 from app.realtime.socket import sio
+from app.reports.router import router as reports_router
 from app.spaces.router import router as spaces_router
 from app.storage.base import StorageError
 from app.uploads.router import router as uploads_router
@@ -43,15 +44,17 @@ api.add_middleware(
 )
 api.include_router(health.router, prefix="/api")
 api.include_router(auth_router, prefix="/api")
+# Before users: /users/search must win over /users/{username}.
+api.include_router(dms_router, prefix="/api")
 api.include_router(users_router, prefix="/api")
 api.include_router(spaces_router, prefix="/api")
 api.include_router(channels_router, prefix="/api")
 api.include_router(invites_router, prefix="/api")
 api.include_router(messages_router, prefix="/api")
 api.include_router(uploads_router, prefix="/api")
-api.include_router(dms_router, prefix="/api")
 api.include_router(posts_router, prefix="/api")
 api.include_router(comments_router, prefix="/api")
+api.include_router(reports_router, prefix="/api")
 
 # One ASGI app: Socket.IO handles /socket.io, everything else goes to FastAPI.
 app = socketio.ASGIApp(sio, other_asgi_app=api)

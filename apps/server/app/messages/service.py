@@ -36,6 +36,7 @@ from app.messages.schemas import (
 from app.spaces.permissions import require_role
 from app.spaces.service import member_for
 from app.storage.attachments import serialize_files
+from app.users.blocks import blocked_among
 
 MAX_REACTION_KINDS = 20
 
@@ -71,9 +72,24 @@ async def readable(session: AsyncSession, channel_id: str, user_id: str | None):
     return channel, member
 
 
+async def _check_not_blocked(session: AsyncSession, channel_id: str, user_id: str) -> None:
+    """In a 1:1 chat, a block in either direction stops new messages and reactions.
+
+    Group chats are unaffected: a block only prevents opening new conversations.
+    """
+    people = list(await session.scalars(
+        select(DirectMember.user_id).where(DirectMember.channel_id == channel_id)
+    ))
+    if len(people) == 2 and await blocked_among(
+        session, user_id, [person for person in people if person != user_id]
+    ):
+        raise HTTPException(403, "You can't message this person")
+
+
 async def writable(session: AsyncSession, channel_id: str, user_id: str):
     channel, member = await readable(session, channel_id, user_id)
     if channel.type == ChannelType.dm:
+        await _check_not_blocked(session, channel.id, user_id)
         return channel
     require_role(member.role if member else None, MemberRole.member)
     if channel.type != ChannelType.text:

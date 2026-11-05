@@ -26,7 +26,7 @@ from app.db.models import (
 )
 from app.messages.schemas import Participant, Place, PlaceSpace
 from app.messages.service import readable, serialize, unread_counts
-from app.realtime.presence import online_ids
+from app.realtime.presence import visible_online
 
 EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
@@ -69,7 +69,7 @@ async def places(session: AsyncSession, viewer_id: str, channel_ids: list[str]) 
             .order_by(User.username)
         ):
             people.setdefault(channel_id, []).append(user)
-    online = await online_ids(list({user.id for users in people.values() for user in users}))
+    online = await visible_online(session, list({user.id for users in people.values() for user in users}))
     result = {}
     for channel, space in rows:
         if channel.type == ChannelType.dm:

@@ -82,6 +82,19 @@ class ChannelType(str, enum.Enum):
     dm = "dm"
 
 
+class DmPolicy(str, enum.Enum):
+    everyone = "everyone"
+    workspaces = "workspaces"
+    nobody = "nobody"
+
+
+class ReportTarget(str, enum.Enum):
+    user = "user"
+    message = "message"
+    post = "post"
+    comment = "comment"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -90,6 +103,51 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True)
     password_hash: Mapped[str] = mapped_column(Text)
     avatar_url: Mapped[str | None] = mapped_column(Text)
+    # Storage key of the current avatar object (avatar_url is the public, versioned link to it).
+    avatar_key: Mapped[str | None] = mapped_column(Text)
+    display_name: Mapped[str | None] = mapped_column(String(50))
+    bio: Mapped[str | None] = mapped_column(String(300))
+    status_text: Mapped[str | None] = mapped_column(String(80))
+    status_emoji: Mapped[str | None] = mapped_column(String(16))
+    dm_policy: Mapped[DmPolicy] = mapped_column(
+        Enum(DmPolicy, name="dm_policy"), default=DmPolicy.everyone, server_default="everyone"
+    )
+    appear_offline: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    created_at: Mapped[datetime] = created_at()
+
+
+class UserBlock(Base):
+    """`blocker_id` blocked `blocked_id`: neither can start a 1:1 conversation with the other."""
+
+    __tablename__ = "user_blocks"
+    __table_args__ = (
+        CheckConstraint("blocker_id <> blocked_id", name="user_blocks_not_self_check"),
+        Index("ix_user_blocks_blocked_id", "blocked_id"),
+    )
+
+    blocker_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    blocked_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[datetime] = created_at()
+
+
+class Report(Base):
+    __tablename__ = "reports"
+    __table_args__ = (
+        CheckConstraint("char_length(reason) BETWEEN 1 AND 1000", name="reports_reason_check"),
+    )
+
+    id: Mapped[str] = pk()
+    reporter_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    target_type: Mapped[ReportTarget] = mapped_column(Enum(ReportTarget, name="report_target"))
+    target_id: Mapped[str] = mapped_column(String(26))
+    reason: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="open", server_default="open")
     created_at: Mapped[datetime] = created_at()
 
 

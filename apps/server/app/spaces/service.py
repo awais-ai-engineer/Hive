@@ -189,10 +189,10 @@ async def list_members(session: AsyncSession, space: Space, cursor: str | None) 
     )
     more = len(rows) > 50
     rows = rows[:50]
-    from app.realtime.presence import online_ids
+    from app.realtime.presence import visible_online
     from app.spaces.schemas import MemberOut, MemberUserOut
 
-    online = await online_ids([user.id for _, user in rows])
+    online = await visible_online(session, [user.id for _, user in rows])
     result = [
         MemberOut(
             user=MemberUserOut(id=user.id, username=user.username, avatar_url=user.avatar_url),

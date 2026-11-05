@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import get_current_user
@@ -100,12 +101,10 @@ async def post_upload(slug: str, file: UploadFile, session: Session, user: Curre
 @router.get("/attachments/{attachment_id}")
 async def download(attachment_id: str, exp: int, sig: str, session: Session):
     attachment = await session.get(Attachment, attachment_id)
-    if (
-        settings.storage_driver != "local"
-        or not verify(attachment_id, exp, sig)
-        or attachment is None
-    ):
+    if settings.storage_driver != "local" or not verify(attachment_id, exp, sig):
         raise HTTPException(404, "File not found")
+    if attachment is None:
+        return await local_avatar(session, attachment_id)
     target = path_for(attachment.storage_key)
     if not target.exists():
         raise HTTPException(404, "File not found")
@@ -115,5 +114,21 @@ async def download(attachment_id: str, exp: int, sig: str, session: Session):
         media_type=attachment.content_type if inline else "application/octet-stream",
         filename=attachment.filename,
         content_disposition_type="inline" if inline else "attachment",
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=3600"},
+    )
+
+
+async def local_avatar(session: AsyncSession, version: str) -> FileResponse:
+    """Signed avatar links reuse the download route; the version is the end of the storage key."""
+    key = await session.scalar(
+        select(User.avatar_key).where(User.avatar_key.like(f"avatars/%/{version}"))
+    )
+    target = path_for(key) if key else None
+    if target is None or not target.exists():
+        raise HTTPException(404, "File not found")
+    with target.open("rb") as handle:
+        _, content_type = detect_kind(handle.read(16))
+    return FileResponse(
+        target, media_type=content_type, content_disposition_type="inline",
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=3600"},
     )

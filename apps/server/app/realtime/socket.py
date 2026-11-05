@@ -82,9 +82,11 @@ async def connect(sid: str, environ: dict, auth: dict | None = None) -> None:
             user = await session.get(User, payload["sub"])
             if user is None:
                 raise ConnectionRefusedError("unauthorized")
+            hidden = user.appear_offline
             await sio.save_session(sid, {"user_id": user.id, "username": user.username})
         await sio.enter_room(sid, f"user:{user.id}")
-        if await presence.add_socket(user.id, sid):
+        # People who appear offline connect silently.
+        if await presence.add_socket(user.id, sid) and not hidden:
             await broadcast_presence(user.id, True)
     log.info("socket connected %s", sid)
 
@@ -94,7 +96,10 @@ async def disconnect(sid: str, *args: object) -> None:
     identity = await sio.get_session(sid)
     user_id = identity.get("user_id")
     if user_id and await presence.remove_socket(user_id, sid):
-        await broadcast_presence(user_id, False)
+        async with SessionLocal() as session:
+            user = await session.get(User, user_id)
+        if user is not None and not user.appear_offline:
+            await broadcast_presence(user_id, False)
     typing_times.pop(sid, None)
     log.info("socket disconnected %s", sid)
 

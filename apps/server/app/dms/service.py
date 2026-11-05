@@ -13,10 +13,22 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from app.db.models import Attachment, Channel, ChannelType, DirectMember, Message, SpaceMember, User
+from app.db.models import (
+    Attachment,
+    Channel,
+    ChannelType,
+    DirectMember,
+    DmPolicy,
+    Message,
+    Space,
+    SpaceMember,
+    SpaceType,
+    User,
+)
 from app.dms.schemas import DirectCreate, DirectOut, LastMessage, Participant, UserResult
 from app.messages.service import unread_counts
-from app.realtime.presence import online_ids
+from app.realtime.presence import visible_online
+from app.users.blocks import blocked_among, not_blocked_with
 
 EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
@@ -40,11 +52,40 @@ async def search_users(session: AsyncSession, me: User, query: str) -> list[User
         return []
     rows = await session.scalars(
         select(User)
-        .where(User.id != me.id, User.username.ilike(f"{pattern}%", escape="\\"), _shares_space(me.id))
+        .where(User.id != me.id, User.username.ilike(f"{pattern}%", escape="\\"), _shares_space(me.id),
+                not_blocked_with(me.id))
         .order_by(func.length(User.username), User.username)
         .limit(10)
     )
     return [UserResult(id=row.id, username=row.username, avatar_url=row.avatar_url) for row in rows]
+
+
+async def _shares_workspace(session: AsyncSession, me: str, other: str) -> bool:
+    mine, theirs = aliased(SpaceMember), aliased(SpaceMember)
+    return await session.scalar(select(exists().where(
+        mine.user_id == me, theirs.user_id == other, mine.space_id == theirs.space_id,
+        _active(mine), _active(theirs),
+        mine.space_id.in_(select(Space.id).where(Space.type == SpaceType.workspace)),
+    ))) is True
+
+
+async def _check_may_start(session: AsyncSession, me: User, targets: list[User]) -> None:
+    """Privacy rules for creating a NEW conversation (existing ones keep working).
+
+    - Blocks: either side having blocked the other forbids it.
+    - dm_policy of each target: 'nobody' refuses everyone; 'workspaces' needs an active
+      workspace (not just a community) in common; 'everyone' only needs a shared space,
+      which the lookup already guarantees.
+    """
+    if await blocked_among(session, me.id, [user.id for user in targets]):
+        raise HTTPException(403, "You can't message this person")
+    for user in targets:
+        refused = user.dm_policy == DmPolicy.nobody or (
+            user.dm_policy == DmPolicy.workspaces
+            and not await _shares_workspace(session, me.id, user.id)
+        )
+        if refused:
+            raise HTTPException(403, f"{user.username} isn't accepting new messages")
 
 
 async def open_conversation(session: AsyncSession, me: User, data: DirectCreate) -> DirectOut:
@@ -60,6 +101,12 @@ async def open_conversation(session: AsyncSession, me: User, data: DirectCreate)
         raise HTTPException(404, f"User not found: {min(missing)}")
     ids = sorted({me.id, *(user.id for user in users)})
     key = ":".join(ids)
+    if await session.scalar(select(Channel.id).where(Channel.dm_key == key)) is not None:
+        # A 1:1 chat stays closed while either side has a block; groups keep working.
+        if len(ids) == 2 and await blocked_among(session, me.id, [u.id for u in users]):
+            raise HTTPException(403, "You can't message this person")
+    else:
+        await _check_may_start(session, me, users)
     await session.execute(
         insert(Channel).values(type=ChannelType.dm, name="dm", dm_key=key)
         .on_conflict_do_nothing(index_elements=["dm_key"])
@@ -115,7 +162,7 @@ async def list_conversations(
         select(Attachment.message_id).where(Attachment.message_id.in_([m.id for m in last.values()]))
     )) if last else set()
     unread = await unread_counts(session, me.id, ids, EPOCH)
-    online = await online_ids(list({user.id for users in people.values() for user in users}))
+    online = await visible_online(session, list({user.id for users in people.values() for user in users}))
     result = []
     for channel in channels:
         others = people.get(channel.id, [])
