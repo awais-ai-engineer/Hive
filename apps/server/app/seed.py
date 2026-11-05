@@ -11,6 +11,7 @@ from app.auth.security import hash_password
 from app.core.config import settings
 from app.db.models import (
     Channel,
+    ChannelMember,
     ChannelType,
     Comment,
     CommentVote,
@@ -29,6 +30,22 @@ from app.db.models import (
 )
 from app.db.session import SessionLocal, engine
 from app.posts.ranking import hot_score
+
+
+async def seed_private_channel(session, acme: Space, accounts: dict) -> None:
+    """A private "leadership" channel in acme for alice and dave (idempotent)."""
+    channel = await session.scalar(
+        select(Channel).where(Channel.space_id == acme.id, Channel.name == "leadership")
+    )
+    if channel is None:
+        channel = Channel(space_id=acme.id, name="leadership", type=ChannelType.text,
+                          position=10, is_private=True)
+        session.add(channel)
+        await session.flush()
+    channel.is_private = True
+    for username in ("alice", "dave"):
+        if await session.get(ChannelMember, (channel.id, accounts[username].id)) is None:
+            session.add(ChannelMember(channel_id=channel.id, user_id=accounts[username].id))
 
 
 async def seed() -> None:
@@ -133,6 +150,7 @@ async def seed() -> None:
                     channel.type = channel_type
                     channel.position = position
         acme = seeded_spaces["acme"]
+        await seed_private_channel(session, acme, accounts)
         invitation = await session.scalar(select(Invite).where(Invite.space_id == acme.id).limit(1))
         if invitation is None:
             invitation = Invite(

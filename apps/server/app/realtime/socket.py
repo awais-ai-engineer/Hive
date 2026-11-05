@@ -20,6 +20,7 @@ from app.auth.security import decode_access_token
 from app.core.config import settings
 from app.db.models import (
     Channel,
+    ChannelMember,
     ChannelType,
     Message,
     Post,
@@ -167,8 +168,20 @@ async def send(sid, data, session, user):
                 for participant in await participant_ids(session, channel.id):
                     await sio.emit("dm:activity", activity, room=f"user:{participant}")
             else:
-                await sio.emit("channel:activity", activity, room=f"space:{channel.space_id}")
+                await emit_channel_activity(session, channel, activity)
     return {"message": message}
+
+
+async def emit_channel_activity(session, channel: Channel, activity: dict) -> None:
+    """Public channels tell the whole space; private ones only tell their own members."""
+    if not channel.is_private:
+        await sio.emit("channel:activity", activity, room=f"space:{channel.space_id}")
+        return
+    member_ids = await session.scalars(
+        select(ChannelMember.user_id).where(ChannelMember.channel_id == channel.id)
+    )
+    for member_id in member_ids:
+        await sio.emit("channel:activity", activity, room=f"user:{member_id}")
 
 
 @chat_event("message:edit", EditIn)
@@ -287,14 +300,25 @@ async def typing_stop(sid, data, session, user):
     await typing(sid, data, session, user, False)
 
 
+async def user_sockets(user_id: str) -> set[str]:
+    """All socket ids of a user. The user room supplies local sockets; Redis also tracks
+    sockets on other instances."""
+    sockets = {sid for sid, _ in sio.manager.get_participants("/", f"user:{user_id}")}
+    sockets.update(await presence.socket_ids(user_id))
+    return sockets
+
+
+async def evict_from_channel(user_id: str, channel_id: str) -> None:
+    """Stop live messages of one channel for a user who lost access to it."""
+    for sid in await user_sockets(user_id):
+        await sio.leave_room(sid, f"channel:{channel_id}")
+
+
 async def evict_from_space(user_id: str, space_id: str) -> None:
     """Stop live updates for a user who lost access to a space (left, kicked)."""
     async with SessionLocal() as session:
         channels = list(await session.scalars(select(Channel.id).where(Channel.space_id == space_id)))
-    # The user room supplies local sockets; Redis also tracks sockets on other instances.
-    sockets = {sid for sid, _ in sio.manager.get_participants("/", f"user:{user_id}")}
-    sockets.update(await presence.socket_ids(user_id))
-    for sid in sockets:
+    for sid in await user_sockets(user_id):
         await sio.leave_room(sid, f"space:{space_id}")
         for channel_id in channels:
             await sio.leave_room(sid, f"channel:{channel_id}")

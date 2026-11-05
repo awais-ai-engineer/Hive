@@ -8,6 +8,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     Enum,
@@ -112,6 +113,8 @@ class Space(Base):
     slug: Mapped[str] = mapped_column(String(100), unique=True)
     description: Mapped[str | None] = mapped_column(Text)
     allowed_email_domain: Mapped[str | None] = mapped_column(String(255))
+    # Communities: posts are public, but chat is members-only unless the admins open it up.
+    public_chat: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = created_at()
 
@@ -137,6 +140,9 @@ class Channel(Base):
     __tablename__ = "channels"
     __table_args__ = (UniqueConstraint("space_id", "name", name="uq_channels_space_name"),)
 
+    # Private channels are visible only to the people in channel_members.
+    is_private: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
     id: Mapped[str] = pk()
     # Null for direct-message conversations, which live outside any space.
     space_id: Mapped[str | None] = mapped_column(
@@ -151,6 +157,21 @@ class Channel(Base):
     # Sorted participant ids of a DM, so the same group of people always gets one conversation.
     dm_key: Mapped[str | None] = mapped_column(Text, unique=True)
     created_at: Mapped[datetime] = created_at()
+
+
+class ChannelMember(Base):
+    """A member of a private channel (public channels don't need rows here)."""
+
+    __tablename__ = "channel_members"
+    __table_args__ = (Index("ix_channel_members_user_id", "user_id"),)
+
+    channel_id: Mapped[str] = mapped_column(
+        ForeignKey("channels.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    added_at: Mapped[datetime] = created_at()
 
 
 class DirectMember(Base):

@@ -15,6 +15,7 @@ from app.spaces.schemas import MemberRoleIn, SpaceCreate, SpaceOut, SpacePatch
 from app.spaces.service import (
     create_space,
     discover,
+    drop_private_access,
     get_member,
     list_members,
     load_space,
@@ -103,6 +104,7 @@ async def leave_space(slug: str, session: Session, user: CurrentUser):
     if member.role == MemberRole.owner:
         raise HTTPException(409, "Owner cannot leave")
     await session.delete(member)
+    await drop_private_access(session, space.id, user.id)
     await session.commit()
     await evict_from_space(user.id, space.id)
 
@@ -140,5 +142,6 @@ async def kick_member(slug: str, user_id: str, session: Session, user: CurrentUs
     target = await get_member(session, space.id, user_id)
     require_below(actor_member.role, target.role)
     await session.delete(target)
+    await drop_private_access(session, space.id, user_id)
     await session.commit()
     await evict_from_space(user_id, space.id)

@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.db.models import (
     Attachment,
     Channel,
+    ChannelMember,
     ChannelRead,
     ChannelType,
     DirectMember,
@@ -39,9 +40,19 @@ from app.storage.attachments import serialize_files
 MAX_REACTION_KINDS = 20
 
 
+async def in_private_channel(session: AsyncSession, channel_id: str, user_id: str | None) -> bool:
+    return user_id is not None and await session.get(ChannelMember, (channel_id, user_id)) is not None
+
+
 async def readable(session: AsyncSession, channel_id: str, user_id: str | None):
-    """Returns (channel, space member). Direct messages are visible to their participants only
-    and have no space member."""
+    """Returns (channel, space member) if the viewer may read this channel's messages.
+
+    - DMs: participants only (no space member).
+    - Workspaces: members only; everyone else gets 404, so private spaces stay invisible.
+    - Private channels: only the people added to them; 404 for everyone else.
+    - Community chat: members only, unless the admins turned on public chat. Posts are separate
+      and stay public.
+    """
     channel = await session.get(Channel, channel_id)
     if channel is None:
         raise HTTPException(404, "Channel not found")
@@ -53,6 +64,10 @@ async def readable(session: AsyncSession, channel_id: str, user_id: str | None):
     member = await member_for(session, channel.space_id, user_id)
     if space is None or (space.type == SpaceType.workspace and member is None):
         raise HTTPException(404, "Channel not found")
+    if channel.is_private and (member is None or not await in_private_channel(session, channel.id, user_id)):
+        raise HTTPException(404, "Channel not found")
+    if space.type == SpaceType.community and member is None and not space.public_chat:
+        raise HTTPException(403, "Join this community to read its chat")
     return channel, member
 
 
@@ -437,6 +452,6 @@ async def sync(session: AsyncSession, user_id: str, channels: dict):
                 session, channel_id, user_id, after=cursor if cursor is not None else "", limit=100
             )
         except HTTPException as error:
-            if error.status_code != 404:
+            if error.status_code not in (403, 404):
                 raise
     return result

@@ -42,6 +42,7 @@ class SpacePatch(BaseModel):
     name: SpaceName | None = None
     description: Description | None = None
     allowed_email_domain: Annotated[str, StringConstraints(pattern=DOMAIN_PATTERN)] | None = None
+    public_chat: bool | None = None
 
     @field_validator("allowed_email_domain")
     @classmethod
@@ -50,11 +51,11 @@ class SpacePatch(BaseModel):
             raise ValueError("Domain is too long")
         return value
 
-    @field_validator("name")
+    @field_validator("name", "public_chat")
     @classmethod
     def name_not_null(cls, value):
         if value is None:
-            raise ValueError("Name cannot be null")
+            raise ValueError("Value cannot be null")
         return value
 
 
@@ -67,6 +68,7 @@ class SpaceOut(BaseModel):
     slug: str
     description: str | None
     allowed_email_domain: str | None
+    public_chat: bool = False
     created_at: datetime
     member_count: int
     my_role: MemberRole | None
