@@ -78,7 +78,7 @@ export default function MembersPage() {
           && member.user.id !== user?.id;
         const choices = roles.filter(role => rank[role] < rankYou);
         return <li key={member.user.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <div><span aria-label={member.online ? 'Online' : 'Offline'} className={`mr-2 inline-block h-2 w-2 rounded-full ${member.online ? 'bg-emerald-400' : 'bg-white/20'}`} /><span className="font-medium">{member.user.username}</span>
+          <div><span aria-label={member.online ? 'Online' : 'Offline'} className={`mr-2 inline-block h-2 w-2 rounded-full ${member.online ? 'bg-emerald-400' : 'bg-white/20'}`} /><Link href={`/u/${member.user.username}`} className="font-medium hover:underline">{member.user.username}</Link>
             <span className="ml-3 rounded bg-white/10 px-2 py-1 text-xs capitalize">{member.role}</span></div>
           {(mayChangeRole || mayKick || (user && space?.my_role && member.user.id !== user.id)) && <div className="flex items-center gap-2">
             {user && space?.my_role && member.user.id !== user.id && <button onClick={() => message(member)} className="text-sm text-amber-400">Message</button>}

@@ -1,0 +1,225 @@
+'use client';
+
+import Link from 'next/link';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Avatar } from '../../components/ui/avatar';
+import { apiFetch, responseData, uploadFile, type User } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
+import { apiData, requestError } from '../../lib/spaces';
+
+type Section = 'profile' | 'privacy' | 'blocked';
+const sections: [Section, string][] = [['profile', 'Profile'], ['privacy', 'Privacy'], ['blocked', 'Blocked people']];
+const EMOJI = ['😀', '🙂', '😎', '🤔', '🎉', '🔥', '💡', '🎧', '📅', '🚌', '🤒', '🌴', '☕', '🚀'];
+const PRESETS = [['📅', 'In a meeting'], ['🚌', 'Commuting'], ['🤒', 'Out sick'], ['🌴', 'On holiday'], ['🎧', 'Focusing']];
+
+function Saved({ show }: { show: boolean }) {
+  return <span role="status" className="text-sm font-medium text-emerald-500">{show ? 'Saved' : ''}</span>;
+}
+
+async function patchMe(body: object) {
+  return responseData<User>(await apiFetch('/api/me', { method: 'PATCH', body: JSON.stringify(body) }));
+}
+
+function ProfileCard({ user, updateUser }: { user: User; updateUser: (user: User) => void }) {
+  const [displayName, setDisplayName] = useState(user.display_name ?? '');
+  const [username, setUsername] = useState(user.username);
+  const [bio, setBio] = useState(user.bio ?? '');
+  const [emoji, setEmoji] = useState(user.status_emoji ?? '');
+  const [statusText, setStatusText] = useState(user.status_text ?? '');
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState('');
+  const [progress, setProgress] = useState<number | null>(null);
+  const [photoError, setPhotoError] = useState('');
+  const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!file) { setPreview(''); return; }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  function pick(chosen?: File) {
+    setPhotoError('');
+    if (!chosen) return;
+    if (!chosen.type.startsWith('image/')) return setPhotoError('Please choose an image file.');
+    if (chosen.size > 5 * 1024 * 1024) return setPhotoError('That image is over 5 MB. Please pick a smaller one.');
+    setFile(chosen);
+  }
+  function resetPicker() {
+    setFile(null);
+    if (input.current) input.current.value = '';
+  }
+  async function upload() {
+    if (!file) return;
+    setProgress(0); setPhotoError('');
+    try { updateUser(await uploadFile<User>('/api/me/avatar', file, setProgress)); resetPicker(); }
+    catch (cause) { setPhotoError(requestError(cause)); }
+    finally { setProgress(null); }
+  }
+  async function removePhoto() {
+    setPhotoError('');
+    try { updateUser(await responseData<User>(await apiFetch('/api/me/avatar', { method: 'DELETE' }))); resetPicker(); }
+    catch (cause) { setPhotoError(requestError(cause)); }
+  }
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true); setError(''); setSaved(false);
+    try {
+      updateUser(await patchMe({ username: username.trim(), display_name: displayName.trim(), bio: bio.trim(), status_text: statusText.trim(), status_emoji: emoji }));
+      setSaved(true);
+    } catch (cause) { setError(requestError(cause)); }
+    finally { setBusy(false); }
+  }
+
+  return <form onSubmit={save} className="card space-y-6 p-5 sm:p-6">
+    <div>
+      <h2 className="text-lg font-bold">Profile photo</h2>
+      <div className="mt-3 flex flex-wrap items-center gap-4">
+        <Avatar name={user.username} src={preview || user.avatar_url} size={80} />
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <input ref={input} id="photo" type="file" accept="image/*" className="peer sr-only" onChange={event => pick(event.target.files?.[0])} />
+            <label htmlFor="photo" className="btn-ghost cursor-pointer peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-[var(--ring)]">Upload photo</label>
+            {file && <button type="button" onClick={upload} disabled={progress !== null} className="auth-button text-sm">
+              {progress !== null ? `Uploading ${progress}%` : 'Use this photo'}</button>}
+            {file && progress === null && <button type="button" className="btn-ghost" onClick={resetPicker}>Cancel</button>}
+            {user.avatar_url && !file && <button type="button" onClick={removePhoto} className="btn-ghost text-rose-500">Remove</button>}
+          </div>
+          {progress !== null && <div role="progressbar" aria-label="Upload progress" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} className="h-1.5 w-48 overflow-hidden rounded-full bg-[var(--surface-2)]">
+            <div className="h-full bg-brand transition-all" style={{ width: `${progress}%` }} /></div>}
+          <p className="text-xs text-white/50">PNG, JPG or GIF, up to 5 MB.</p>
+          {photoError && <p role="alert" className="text-sm text-rose-500">{photoError}</p>}
+        </div>
+      </div>
+    </div>
+
+    <div className="grid gap-4 sm:grid-cols-2">
+      <label className="block text-sm font-medium">Display name
+        <input className="auth-input" value={displayName} maxLength={60} placeholder={user.username} onChange={event => setDisplayName(event.target.value)} />
+      </label>
+      <label className="block text-sm font-medium">Username
+        <input className="auth-input" value={username} required minLength={3} maxLength={32} pattern="[a-zA-Z0-9_]+" aria-describedby="uname-hint" onChange={event => setUsername(event.target.value)} />
+        <span id="uname-hint" className="mt-1 block text-xs font-normal text-white/50">People mention you with @{username || 'username'}</span>
+      </label>
+    </div>
+
+    <label className="block text-sm font-medium">About you
+      <textarea className="auth-input resize-none" rows={3} maxLength={300} value={bio} onChange={event => setBio(event.target.value)} placeholder="A line or two about what you do." />
+      <span className="mt-1 block text-right text-xs font-normal text-white/50" aria-live="polite">{bio.length}/300</span>
+    </label>
+
+    <fieldset>
+      <legend className="text-sm font-medium">Status</legend>
+      <div className="mt-2 flex gap-2">
+        <span aria-hidden className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border border-white/15 bg-surface text-xl">{emoji || '💬'}</span>
+        <input aria-label="Status text" className="auth-input !mt-0" value={statusText} maxLength={80} placeholder="What are you up to?" onChange={event => setStatusText(event.target.value)} />
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label="Status emoji">
+        {EMOJI.map(item => <button key={item} type="button" aria-pressed={emoji === item} onClick={() => setEmoji(emoji === item ? '' : item)}
+          className={`h-9 w-9 rounded-lg text-lg transition hover:bg-[var(--surface-2)] ${emoji === item ? 'bg-brand-soft ring-2 ring-brand' : ''}`}>{item}</button>)}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {PRESETS.map(([e, t]) => <button key={t} type="button" onClick={() => { setEmoji(e); setStatusText(t); }}
+          className="rounded-full border border-white/10 bg-[var(--surface-2)] px-3 py-1 text-sm hover:border-brand/50">{e} {t}</button>)}
+        {(emoji || statusText) && <button type="button" onClick={() => { setEmoji(''); setStatusText(''); }} className="text-sm font-medium text-brand hover:underline">Clear</button>}
+      </div>
+    </fieldset>
+
+    {error && <p role="alert" className="text-sm text-rose-500">{error}</p>}
+    <div className="flex items-center gap-3">
+      <button disabled={busy} className="auth-button">{busy ? 'Saving…' : 'Save changes'}</button>
+      <Saved show={saved} />
+    </div>
+  </form>;
+}
+
+const POLICIES = [
+  ['everyone', 'Everyone in your spaces', 'Anyone who shares a space with you can start a conversation.'],
+  ['workspaces', 'Only people in your workspaces', 'People you only share a community with can’t message you first.'],
+  ['nobody', 'Nobody new', 'Existing conversations keep working. No one can start a new one.'],
+] as const;
+
+function PrivacyCard({ user, updateUser }: { user: User; updateUser: (user: User) => void }) {
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+  async function change(body: object) {
+    setError(''); setSaved(false);
+    try { updateUser(await patchMe(body)); setSaved(true); }
+    catch (cause) { setError(requestError(cause)); }
+  }
+  const policy = user.dm_policy ?? 'everyone';
+  const offline = !!user.appear_offline;
+  return <div className="space-y-5">
+    <section className="card p-5 sm:p-6">
+      <h2 className="text-lg font-bold">Who can send you new direct messages</h2>
+      <div role="radiogroup" aria-label="Who can send you new direct messages" className="mt-3 space-y-2">
+        {POLICIES.map(([value, title, text]) => <label key={value} className={`flex cursor-pointer gap-3 rounded-xl border p-3 transition ${policy === value ? 'border-brand bg-brand-soft' : 'border-white/10 hover:bg-[var(--surface-2)]'}`}>
+          <input type="radio" name="dm_policy" className="mt-1 accent-[var(--brand)]" checked={policy === value} onChange={() => void change({ dm_policy: value })} />
+          <span><span className="block font-semibold">{title}</span><span className="block text-sm text-white/60">{text}</span></span>
+        </label>)}
+      </div>
+    </section>
+    <section className="card flex items-start justify-between gap-4 p-5 sm:p-6">
+      <div><h2 id="offline-label" className="text-lg font-bold">Appear offline</h2>
+        <p className="mt-1 text-sm text-white/60">Others will see you as offline, even while you’re using Hive.</p></div>
+      <button type="button" role="switch" aria-checked={offline} aria-labelledby="offline-label" onClick={() => void change({ appear_offline: !offline })}
+        className={`relative mt-1 h-6 w-11 shrink-0 rounded-full transition ${offline ? 'bg-brand' : 'bg-white/20'}`}>
+        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-[#fff] shadow transition-all ${offline ? 'left-[22px]' : 'left-0.5'}`} /></button>
+    </section>
+    <p className="rounded-2xl bg-brand-soft p-4 text-sm text-brand">Your email is never shown to other people. Profiles show only spaces you both belong to.</p>
+    {error && <p role="alert" className="text-sm text-rose-500">{error}</p>}
+    <Saved show={saved} />
+  </div>;
+}
+
+type Blocked = { id: string; username: string; avatar_url: string | null };
+
+function BlockedCard() {
+  const [list, setList] = useState<Blocked[] | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => { apiData<Blocked[]>('/api/me/blocks').then(setList).catch(cause => setError(requestError(cause))); }, []);
+  async function unblock(person: Blocked) {
+    setError('');
+    try {
+      const response = await apiFetch(`/api/me/blocks/${person.id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Could not unblock. Please try again.');
+      setList(current => current?.filter(item => item.id !== person.id) ?? null);
+    } catch (cause) { setError(requestError(cause)); }
+  }
+  return <section className="card p-5 sm:p-6">
+    <h2 className="text-lg font-bold">Blocked people</h2>
+    {error && <p role="alert" className="mt-2 text-sm text-rose-500">{error}</p>}
+    {list === null ? !error && <p className="mt-3 text-sm text-white/60">Loading…</p>
+      : list.length === 0 ? <p className="mt-3 text-sm text-white/60">You haven’t blocked anyone.</p>
+      : <ul className="mt-3 divide-y divide-white/10">{list.map(person => <li key={person.id} className="flex items-center gap-3 py-3">
+        <Avatar name={person.username} src={person.avatar_url} size={36} />
+        <Link href={`/u/${person.username}`} className="flex-1 truncate font-medium hover:underline">{person.username}</Link>
+        <button type="button" className="btn-ghost" onClick={() => void unblock(person)}>Unblock</button>
+      </li>)}</ul>}
+  </section>;
+}
+
+export default function SettingsPage() {
+  const { user, loading, updateUser } = useAuth();
+  const [section, setSection] = useState<Section>('profile');
+  if (loading) return <main className="p-16 text-center text-white/60">Loading…</main>;
+  if (!user) return <main className="p-16 text-center"><Link className="font-semibold text-brand hover:underline" href="/login?next=/settings">Log in to see your settings</Link></main>;
+  return <main className="mx-auto max-w-4xl px-4 py-8">
+    <h1 className="mb-6 text-3xl font-extrabold tracking-tight">Settings</h1>
+    <div className="grid gap-6 md:grid-cols-[200px_1fr]">
+      <nav aria-label="Settings sections" className="flex gap-1 overflow-x-auto md:flex-col">
+        {sections.map(([id, label]) => <button key={id} type="button" aria-current={section === id ? 'page' : undefined} onClick={() => setSection(id)}
+          className={`whitespace-nowrap rounded-xl px-3 py-2 text-left text-sm font-medium transition ${section === id ? 'bg-brand-soft text-brand' : 'text-white/65 hover:bg-[var(--surface-2)] hover:text-white'}`}>{label}</button>)}
+      </nav>
+      <div className="min-w-0">
+        {section === 'profile' && <ProfileCard user={user} updateUser={updateUser} />}
+        {section === 'privacy' && <PrivacyCard user={user} updateUser={updateUser} />}
+        {section === 'blocked' && <BlockedCard />}
+      </div>
+    </div>
+  </main>;
+}

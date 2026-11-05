@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import type { Attachment } from '@hive/shared';
 import { API_URL } from '../lib/api';
+import { ReportDialog } from './report-dialog';
 import { Avatar } from './ui/avatar';
 import { chatRequest } from '../lib/socket';
 import { requestError } from '../lib/spaces';
@@ -44,6 +45,8 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [picker, setPicker] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const statusEmoji = (message.author as { status_emoji?: string | null }).status_emoji;
   const own = userId === message.author.id;
   const live = !message.deleted && !message.status;
 
@@ -63,11 +66,12 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
   return <article data-message-id={message.id} className={`group relative flex gap-3 rounded-xl px-2 py-1 transition hover:bg-[var(--surface-2)] ${grouped ? '' : 'mt-3 pt-2'}`}>
     <div className="w-10 shrink-0">
       {grouped ? <time dateTime={message.created_at} className="hidden pt-1 text-right text-[10px] text-white/35 group-hover:block">{time}</time>
-        : <Avatar name={message.author.username} src={message.author.avatar_url} size={40} />}
+        : <Link href={`/u/${message.author.username}`} aria-label={`${message.author.username}'s profile`}><Avatar name={message.author.username} src={message.author.avatar_url} size={40} /></Link>}
     </div>
     <div className="min-w-0 flex-1">
     {!grouped && <div className="flex items-baseline gap-2">
-      <span className="truncate font-semibold">{message.author.username}</span>
+      <Link href={`/u/${message.author.username}`} className="truncate font-semibold hover:underline">{message.author.username}</Link>
+      {statusEmoji && <span aria-hidden>{statusEmoji}</span>}
       <time dateTime={message.created_at} title={new Date(message.created_at).toLocaleString()} className="shrink-0 text-xs text-white/40">
         {time}
       </time>
@@ -107,15 +111,17 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
     </button>}
     {message.status === 'sending' && <span className="text-xs text-white/40">Sending…</span>}
     {message.status === 'failed' && <p className="text-xs text-rose-400">Failed: {message.error} <button className="underline" onClick={() => onRetry(message)}>Retry</button></p>}
-    {live && (canWrite || own || canModerate) && <div className="mt-1 flex flex-wrap gap-3 text-xs font-medium text-brand sm:absolute sm:-top-3 sm:right-3 sm:mt-0 sm:gap-1 sm:rounded-xl sm:border sm:border-white/10 sm:bg-surface sm:p-1 sm:shadow-[var(--shadow-card)] sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 [&>button]:rounded-lg [&>button]:px-2 [&>button]:py-1 [&>button:hover]:bg-[var(--surface-2)]">
+    {live && (canWrite || own || canModerate || !!userId) && <div className="mt-1 flex flex-wrap gap-3 text-xs font-medium text-brand sm:absolute sm:-top-3 sm:right-3 sm:mt-0 sm:gap-1 sm:rounded-xl sm:border sm:border-white/10 sm:bg-surface sm:p-1 sm:shadow-[var(--shadow-card)] sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 [&>button]:rounded-lg [&>button]:px-2 [&>button]:py-1 [&>button:hover]:bg-[var(--surface-2)]">
       {canWrite && <button aria-label="Add reaction" aria-expanded={picker} onClick={() => setPicker(value => !value)}>React</button>}
       {canWrite && onReply && <button aria-label="Reply in thread" onClick={() => onReply(message)}>Reply</button>}
       {own && <button aria-label="Edit message" onClick={() => { setEditing(true); setDraft(message.body ?? ''); }}>Edit</button>}
+      {!own && !!userId && !message.id.startsWith('pending:') && <button aria-label="Report message" onClick={() => setReporting(true)}>Report</button>}
       {(own || canModerate) && <button aria-label="Delete message" onClick={() => void run('message:delete', { messageId: message.id })}>Delete</button>}
     </div>}
     {picker && <div role="menu" className="mt-1 flex w-fit gap-1 rounded-2xl border border-white/10 bg-surface p-1 shadow-[var(--shadow-pop)]">
       {QUICK_REACTIONS.map(emoji => <button key={emoji} role="menuitem" onClick={() => react(emoji)} className="rounded px-1 text-lg hover:bg-white/10">{emoji}</button>)}
     </div>}
     </div>
+    <ReportDialog target={reporting ? { type: 'message', id: message.id, label: 'message' } : null} onClose={() => setReporting(false)} />
   </article>;
 }

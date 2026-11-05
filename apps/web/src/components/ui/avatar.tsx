@@ -1,3 +1,5 @@
+import { API_URL } from '../../lib/api';
+
 /** Round avatar: the user's picture, or their initial on a colour derived from their name. */
 const palette = ['#7c5cff', '#ec4899', '#f59e0b', '#10b981', '#0ea5e9', '#ef4444', '#8b5cf6', '#14b8a6'];
 
@@ -13,7 +15,7 @@ export function Avatar({ name, src, size = 32, online, square = false }: {
   const shape = square ? 'rounded-xl' : 'rounded-full';
   return <span className="relative inline-flex shrink-0" style={{ width: size, height: size }}>
     {src
-      ? <img src={src} alt="" className={`h-full w-full object-cover ${shape}`} />
+      ? <img src={src.startsWith('/') ? `${API_URL}${src}` : src} alt="" className={`h-full w-full object-cover ${shape}`} />
       : <span aria-hidden className={`flex h-full w-full items-center justify-center font-semibold text-white ${shape}`}
           style={{ background: colourFor(name), fontSize: size * 0.42, color: '#fff' }}>{name[0]?.toUpperCase()}</span>}
     {online !== undefined && <span aria-label={online ? 'Online' : 'Offline'}

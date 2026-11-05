@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { relativeTime, type Post, type PostSummary, type VoteResult } from '../../lib/posts';
 import { Avatar } from '../ui/avatar';
+import { ReportDialog } from '../report-dialog';
 import { Icon } from '../ui/icons';
 import { MediaGallery, mediaUrl } from './media-gallery';
 import { RepostDialog } from './repost-dialog';
@@ -34,6 +35,7 @@ export function PostCard({ post, combined = false, full = false, reason, onChang
   const { user } = useAuth();
   const [reposting, setReposting] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const canRepost = !!user && !post.deleted && post.space.type !== 'workspace';
   const original = post.repost_of;
   const thumb = !full ? post.media?.find(file => file.kind === 'image') : undefined;
@@ -42,8 +44,9 @@ export function PostCard({ post, combined = false, full = false, reason, onChang
 
   return <article className="card animate-in min-w-0 p-4 sm:p-5">
     <header className="flex items-center gap-2 text-sm">
-      <Avatar name={author} src={post.author?.avatar_url} size={30} />
-      <span className="font-semibold">{author}</span>
+      {post.author ? <Link href={`/u/${post.author.username}`} aria-label={`${author}'s profile`}><Avatar name={author} src={post.author.avatar_url} size={30} /></Link>
+        : <Avatar name={author} size={30} />}
+      {post.author ? <Link href={`/u/${post.author.username}`} className="font-semibold hover:underline">{author}</Link> : <span className="font-semibold">{author}</span>}
       <span className="text-white/40">·</span>
       <time dateTime={post.created_at} className="text-white/50">{relativeTime(post.created_at)}</time>
       {(combined || original) && <>
@@ -80,8 +83,10 @@ export function PostCard({ post, combined = false, full = false, reason, onChang
       {!canRepost && post.repost_count > 0 && <span className={action}>🔁 {post.repost_count}</span>}
       {!post.deleted && <button type="button" className={action} aria-haspopup="menu" aria-expanded={sharing}
         onClick={() => setSharing(value => !value)}><Icon name="send" size={15} />Share</button>}
+      {!!user && !post.deleted && post.author && post.author.id !== user.id && <button type="button" className={action} onClick={() => setReporting(true)}><Icon name="flag" size={15} />Report</button>}
       <ShareMenu post={post} isOpen={sharing} onClose={() => setSharing(false)} />
     </footer>
+    <ReportDialog target={reporting ? { type: 'post', id: post.id, label: 'post' } : null} onClose={() => setReporting(false)} />
     <RepostDialog post={post} isOpen={reposting} onClose={() => setReposting(false)} />
   </article>;
 }

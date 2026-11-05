@@ -57,7 +57,7 @@ export function Rail({ spaces, current, onSwitch, unread }: {
     <button type="button" onClick={toggle} aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
       className={`${tile} text-white/70 hover:bg-white/10 hover:text-white`}><Icon name={dark ? 'sun' : 'moon'} size={20} /></button>
     {user && <div className="group relative mt-1">
-      <Link href="/me" aria-label="Your profile"><Avatar name={user.username} src={user.avatar_url} size={40} online /></Link>
+      <Link href="/settings" aria-label="Your settings" title={user.status_emoji ? `${user.status_emoji} ${user.status_text ?? ''}`.trim() : 'Your settings'}><Avatar name={user.username} src={user.avatar_url} size={40} online /></Link>
       <button type="button" onClick={() => void logout()} aria-label="Log out" title="Log out"
         className="absolute -right-1 -top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-[var(--surface)] text-[var(--fg)] shadow group-hover:flex group-focus-within:flex">
         <Icon name="logout" size={12} />
