@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app.api import health
 from app.auth.router import router as auth_router
+from app.calls.router import router as calls_router
 from app.channels.router import router as channels_router
 from app.comments.router import router as comments_router
 from app.core.config import settings
@@ -61,6 +62,7 @@ api.include_router(comments_router, prefix="/api")
 api.include_router(reports_router, prefix="/api")
 api.include_router(sidebar_router, prefix="/api")
 api.include_router(directory_router, prefix="/api")
+api.include_router(calls_router, prefix="/api")
 
 # One ASGI app: Socket.IO handles /socket.io, everything else goes to FastAPI.
 app = socketio.ASGIApp(sio, other_asgi_app=api)

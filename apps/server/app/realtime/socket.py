@@ -5,6 +5,7 @@ Rooms: `user:{id}` (all of a user's sockets), `channel:{id}` (live messages of a
 activity and presence go to each participant's `user:{id}` room instead.
 """
 
+import json
 import logging
 import time
 from functools import wraps
@@ -17,6 +18,8 @@ from socketio.exceptions import ConnectionRefusedError
 from sqlalchemy import select
 
 from app.auth.security import decode_access_token
+from app.calls import service as calls
+from app.calls.schemas import CallIn, SignalIn, StateIn
 from app.core.config import settings
 from app.db.models import (
     Channel,
@@ -100,6 +103,8 @@ async def disconnect(sid: str, *args: object) -> None:
             user = await session.get(User, user_id)
         if user is not None and not user.appear_offline:
             await broadcast_presence(user_id, False)
+    await leave_call(sid)
+    signal_counts.pop(sid, None)
     typing_times.pop(sid, None)
     log.info("socket disconnected %s", sid)
 
@@ -109,7 +114,8 @@ async def ping(sid: str, data: object = None) -> dict:
     return {"serverTime": int(time.time() * 1000)}
 
 
-ERROR_CODES = {401: "unauthorized", 403: "forbidden", 404: "not_found", 429: "rate_limited"}
+ERROR_CODES = {401: "unauthorized", 403: "forbidden", 404: "not_found", 409: "full",
+               429: "rate_limited"}
 
 
 def chat_event(name, schema):
@@ -342,11 +348,107 @@ async def evict_from_channel(user_id: str, channel_id: str) -> None:
         await sio.leave_room(sid, f"channel:{channel_id}")
 
 
+# Calls (WebRTC signalling) ----------------------------------------------------------------
+
+signal_counts: dict[str, tuple[float, int]] = {}
+SIGNALS_PER_WINDOW = 200
+SIGNAL_WINDOW = 10.0
+
+
+async def announce_participants(channel_id: str) -> None:
+    """Tell sidebars who is in a call: the space room for voice channels, each participant's
+    user room for DMs."""
+    summary = await calls.summary(channel_id)
+    async with SessionLocal() as session:
+        channel = await session.get(Channel, channel_id)
+        if channel is None:
+            return
+        if channel.type == ChannelType.dm:
+            for participant in await participant_ids(session, channel.id):
+                await sio.emit("call:participants", summary, room=f"user:{participant}")
+        elif channel.space_id is not None:
+            await sio.emit("call:participants", summary, room=f"space:{channel.space_id}")
+
+
+async def leave_call(sid: str) -> None:
+    channel_id = await calls.remove(sid)
+    if channel_id is None:
+        return
+    await sio.leave_room(sid, f"call:{channel_id}")
+    await sio.emit("call:peer-left", {"channelId": channel_id, "sid": sid}, room=f"call:{channel_id}")
+    await announce_participants(channel_id)
+
+
+@chat_event("call:join", CallIn)
+async def call_join(sid, data, session, user):
+    channel = await calls.check_access(session, data.channelId, user)
+    current = await calls.current_call(sid)
+    if current and current != channel.id:
+        await leave_call(sid)  # one call per socket: joining another leaves the first
+    peers = [{"sid": peer_sid, **entry}
+             for peer_sid, entry in (await calls.participants(channel.id)).items() if peer_sid != sid]
+    entry = await calls.add(channel.id, sid, user)
+    await sio.enter_room(sid, f"call:{channel.id}")
+    await sio.emit("call:peer-joined", {"channelId": channel.id, "sid": sid, **entry},
+                   room=f"call:{channel.id}", skip_sid=sid)
+    await announce_participants(channel.id)
+    return {"channelId": channel.id, "iceServers": calls.ice_servers(), "peers": peers}
+
+
+@chat_event("call:leave", CallIn)
+async def call_leave(sid, data, session, user):
+    if await calls.current_call(sid) == data.channelId:
+        await leave_call(sid)
+
+
+@chat_event("call:signal", SignalIn)
+async def call_signal(sid, data, session, user):
+    """Relays an SDP offer/answer or ICE candidate to one peer, only inside the same call."""
+    if len(json.dumps(data.data)) > calls.MAX_SIGNAL_BYTES:
+        raise HTTPException(422, "Signal too large")
+    started, count = signal_counts.get(sid, (time.monotonic(), 0))
+    if time.monotonic() - started > SIGNAL_WINDOW:
+        started, count = time.monotonic(), 0
+    if count >= SIGNALS_PER_WINDOW:
+        raise HTTPException(429, "Too many signalling messages")
+    signal_counts[sid] = (started, count + 1)
+    room = await calls.participants(data.channelId)
+    if sid not in room or data.to not in room:
+        raise HTTPException(403, "Both sides must be in this call")
+    await sio.emit("call:signal", {"channelId": data.channelId, "from": sid, "userId": user.id,
+                                   "data": data.data}, to=data.to)
+
+
+@chat_event("call:state", StateIn)
+async def call_state(sid, data, session, user):
+    changes = data.model_dump(exclude_none=True, exclude={"channelId"})
+    entry = await calls.update_state(data.channelId, sid, changes)
+    if entry is None:
+        raise HTTPException(403, "You are not in this call")
+    await sio.emit("call:state", {"channelId": data.channelId, "sid": sid, **entry},
+                   room=f"call:{data.channelId}")
+
+
+@chat_event("call:ring", CallIn)
+async def call_ring(sid, data, session, user):
+    """Rings the other participants of a DM or group DM (voice channels don't ring)."""
+    channel = await calls.check_access(session, data.channelId, user)
+    if channel.type != ChannelType.dm:
+        raise HTTPException(422, "Only conversations can ring")
+    for participant in await participant_ids(session, channel.id):
+        if participant != user.id:
+            await sio.emit("call:incoming", {"channelId": channel.id,
+                                             "from": {"id": user.id, "username": user.username}},
+                           room=f"user:{participant}")
+
+
 async def evict_from_space(user_id: str, space_id: str) -> None:
     """Stop live updates for a user who lost access to a space (left, kicked)."""
     async with SessionLocal() as session:
         channels = list(await session.scalars(select(Channel.id).where(Channel.space_id == space_id)))
     for sid in await user_sockets(user_id):
+        if await calls.current_call(sid) in channels:
+            await leave_call(sid)
         await sio.leave_room(sid, f"space:{space_id}")
         for channel_id in channels:
             await sio.leave_room(sid, f"channel:{channel_id}")

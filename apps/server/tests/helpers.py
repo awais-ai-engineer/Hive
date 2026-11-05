@@ -27,6 +27,8 @@ async def connected(url, account=None):
         "message:new", "message:updated", "message:deleted", "typing",
         "reaction:updated", "read:updated", "presence", "channel:activity", "dm:activity",
         "thread:activity", "thread:read",
+        "call:peer-joined", "call:peer-left", "call:signal", "call:state", "call:incoming",
+        "call:participants",
     )}
     for name, queue in queues.items():
         client.on(name, queue.put_nowait)
