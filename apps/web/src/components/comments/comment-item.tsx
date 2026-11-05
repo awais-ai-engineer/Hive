@@ -1,5 +1,6 @@
 'use client';
 
+import { Avatar } from '../ui/avatar';
 import { useState } from 'react';
 import type { Comment } from '@hive/shared';
 import { relativeTime, type VoteResult } from '../../lib/posts';
@@ -95,7 +96,7 @@ export function CommentItem({
           [+]
         </button>
         <span className="font-medium text-white/60">
-          {comment.deleted ? '[deleted]' : `u/${comment.author?.username ?? 'deleted'}`}
+          {comment.deleted ? '[deleted]' : comment.author?.username ?? 'deleted'}
         </span>
         <span>·</span>
         <span>
@@ -120,11 +121,12 @@ export function CommentItem({
         >
           [–]
         </button>
-        <span className="font-semibold text-white/80">
+        {!comment.deleted && comment.author && <Avatar name={comment.author.username} src={comment.author.avatar_url} size={24} />}
+        <span className="font-semibold text-white/85">
           {comment.deleted ? (
             <span className="italic text-white/40">[deleted]</span>
           ) : (
-            `u/${comment.author?.username ?? 'deleted'}`
+            comment.author?.username ?? 'deleted'
           )}
         </span>
         <span>·</span>
@@ -230,7 +232,7 @@ export function CommentItem({
       {replying && (
         <div className="mt-3">
           <CommentComposer
-            placeholder={`Reply to u/${comment.author?.username ?? 'author'}…`}
+            placeholder={`Reply to ${comment.author?.username ?? 'author'}…`}
             submitLabel="Reply"
             reason={commentReason}
             autoFocus

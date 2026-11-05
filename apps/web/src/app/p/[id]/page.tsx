@@ -50,7 +50,7 @@ export default function PostPage() {
     {!post && !error && <p>Loading post…</p>}
     {post && <>
       <PostCard post={post} full combined reason={post.deleted ? 'Post deleted' : !user ? 'Log in to vote' : !space?.my_role || space.my_role === 'guest' ? 'Join to vote' : ''} onChange={value => setPost(current => current ? { ...current, ...value } : current)} />
-      {!post.deleted && <div className="mt-4 flex gap-4 text-sm text-amber-400">
+      {!post.deleted && <div className="mt-3 flex gap-2 text-sm [&>button]:rounded-xl [&>button]:border [&>button]:border-white/10 [&>button]:bg-surface [&>button]:px-3 [&>button]:py-1.5 [&>button]:font-medium [&>button:hover]:bg-[var(--surface-2)]">
         {own && <button onClick={() => setEditing(value => !value)}>Edit</button>}
         {(own || moderate) && <button onClick={() => setConfirm(true)}>Delete</button>}
       </div>}

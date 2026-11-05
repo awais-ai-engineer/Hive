@@ -79,6 +79,16 @@ export default function Nav() {
         </div>}
       </nav>
       {error && <p role="alert" className="pb-2 text-center text-sm text-rose-500">{error}</p>}
+      {/* Phones: the main sections move to a bottom tab bar. */}
+      <nav aria-label="Sections" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-white/10 bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
+        {([['/home', 'Home', 'home'], ['/feed', 'Feed', 'layers'], ['/spaces', 'Explore', 'compass'], [user ? '/me' : '/login', user ? 'You' : 'Log in', 'users']] as const).map(([href, label, icon]) => {
+          const active = pathname?.startsWith(href);
+          return <Link key={href} href={href} aria-current={active ? 'page' : undefined}
+            className={`flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${active ? 'text-brand' : 'text-white/55'}`}>
+            <Icon name={icon} size={22} />{label}{href === '/home' && unread > 0 && <span className="sr-only">{unread} unread</span>}
+          </Link>;
+        })}
+      </nav>
     </header>
   );
 }

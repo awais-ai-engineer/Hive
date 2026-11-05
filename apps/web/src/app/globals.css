@@ -77,6 +77,8 @@
 html { background: var(--canvas); }
 
 body {
+  /* Room for the phone bottom tab bar (pages other than Home). */
+  @media (width < 40rem) { padding-bottom: 4.5rem; }
   background: var(--canvas);
   color: var(--fg);
   font-feature-settings: 'cv11', 'ss01';
