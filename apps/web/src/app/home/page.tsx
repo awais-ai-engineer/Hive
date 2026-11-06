@@ -10,6 +10,7 @@ import { Rail } from '../../components/home/rail';
 import { Sidebar } from '../../components/home/sidebar';
 import { ThreadsView } from '../../components/home/threads-view';
 import { UnreadsView } from '../../components/home/unreads-view';
+import { DraftsView } from '../../components/home/drafts-view';
 import { useAuth } from '../../lib/auth';
 import { conversationTitle, DMS_CHANGED, type Conversation } from '../../lib/dms';
 import { loadSetting, placeHref, saveSetting, type Place, type ThreadItem, type UnreadItem } from '../../lib/home';
@@ -216,7 +217,7 @@ function Home() {
   const channel = channels.find(item => item.id === selected) ?? null;
   const myRank = space?.my_role ? rank[space.my_role] : 0;
   const unreadTotal = unreads.reduce((sum, item) => sum + item.unread, 0);
-  const showView = view === 'unreads' || view === 'threads' || (!conversation && !channel);
+  const showView = view === 'unreads' || view === 'threads' || view === 'drafts' || (!conversation && !channel);
   const threadChange = (id: string | null) => go({ c: selected, t: id });
 
   let main;
@@ -224,7 +225,7 @@ function Home() {
     main = <>
       <ChatHeader conversation={conversation} onMenu={() => setDrawer(true)} />
       <ChannelChat key={conversation.id} channel={{ id: conversation.id, name: conversationTitle(conversation) }}
-        placeholder={`Message ${conversationTitle(conversation)}`} reason="" canModerate={false} tracksReads onRead={markRead}
+        placeholder={`Message ${conversationTitle(conversation)}`} reason={conversation.read_only ? 'Hive reminders are read-only' : ''} canModerate={false} tracksReads onRead={markRead}
         threadId={threadParam} onThreadChange={threadChange} />
     </>;
   } else if (channel && space) {
@@ -234,11 +235,16 @@ function Home() {
         onLeft={() => { void loadChannels().catch(() => {}); go({ c: null }); }} />
       {tab === 'posts' ? <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         <Suspense fallback={<p className="text-white/50">Loading posts…</p>}><PostFeed space={space} /></Suspense>
-      </div> : <ChannelChat key={channel.id} channel={channel} space={space} placeholder={`Message #${channel.name}`}
+      </div> : <ChannelChat key={channel.id} channel={channel} channels={channels} space={space} placeholder={`Message #${channel.name}`}
         reason={channel.type === 'voice' ? 'Voice rooms coming soon' : !space.my_role ? 'Join this space to chat'
           : space.my_role === 'guest' ? 'You have read-only access' : ''}
         canModerate={myRank >= rank.moderator} tracksReads={!!space.my_role} onRead={markRead}
         threadId={threadParam} onThreadChange={threadChange} />}
+    </>;
+  } else if (view === 'drafts') {
+    main = <>
+      <ChatHeader title="Drafts & scheduled" onMenu={() => setDrawer(true)} />
+      <DraftsView onOpen={(place, threadId) => openPlace(place, threadId ?? undefined)} />
     </>;
   } else if (view === 'threads') {
     main = <>
@@ -261,7 +267,7 @@ function Home() {
       <aside className="h-full w-[min(80vw,280px)] md:w-[280px]">
         {spacesReady && !spaces.length && <p className="on-dark bg-[var(--sidebar-from)] px-4 pt-4 text-sm text-white/70">You haven&apos;t joined a space yet. <Link href="/spaces" className="underline">Browse spaces</Link> or <Link href="/spaces/new" className="underline">create one</Link>.</p>}
         <Sidebar spaces={spaces} space={space} channels={channels} conversations={conversations}
-          selected={selected} view={showView && view !== 'threads' ? 'unreads' : view}
+          selected={selected} view={showView && view !== 'threads' && view !== 'drafts' ? 'unreads' : view}
           unreadTotal={unreadTotal} threadsUnread={threadsUnread}
           onSwitchSpace={next => go({ s: next })} onOpen={id => go({ c: id })} onView={next => go({ view: next })}
           onPerson={username => void openPerson(username)} onChannelCreated={channel => void channelCreated(channel)} />

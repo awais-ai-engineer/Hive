@@ -13,6 +13,7 @@ type Props = {
   channel: { id: string; name: string };
   /** Set for space channels, so non-members of a community can be asked to join. */
   space?: { name: string; slug: string };
+  channels?: { id: string; name: string }[];
   placeholder: string;
   /** Why the viewer can't post here ('' when they can). */
   reason: string;
@@ -25,7 +26,7 @@ type Props = {
   onThreadChange?: (threadId: string | null) => void;
 };
 
-export function ChannelChat({ channel, space, placeholder, reason, canModerate, tracksReads, onRead, ...thread }: Props) {
+export function ChannelChat({ channel, space, channels, placeholder, reason, canModerate, tracksReads, onRead, ...thread }: Props) {
   const { user } = useAuth();
   const chat = useChannelMessages(channel.id);
   const [error, setError] = useState('');
@@ -96,7 +97,7 @@ export function ChannelChat({ channel, space, placeholder, reason, canModerate, 
     // A failed request does not produce a list update.
     requestAnimationFrame(() => { anchor.current = null; });
   }
-  const retry = (message: ChatMessage) => void chat.send(message.body ?? '', message.client_msg_id!, message.attachments);
+  const retry = (message: ChatMessage) => void chat.send(message.body ?? '', message.client_msg_id!, message.attachments, { kind: message.kind ?? 'text', ...(message.poll ? { poll: { question: message.poll.question, options: message.poll.options.map(option => option.label) } } : {}) });
   const closeThread = useCallback(() => setThreadId(null), [setThreadId]);
   const names = Object.values(typers).map(value => value.name);
   const typingText = names.length > 2 ? 'Several people are typing…'
@@ -133,10 +134,10 @@ export function ChannelChat({ channel, space, placeholder, reason, canModerate, 
       nearBottom.current = true; setNewMessages(false);
     }}>New messages ↓</button>}
     <p role="status" className="min-h-7 py-1 text-xs text-white/50">{typingText}</p>
-    <Composer channelId={channel.id} placeholder={placeholder} reason={reason} sendTyping
-      onSend={(body, files) => { nearBottom.current = true; void chat.send(body, undefined, files); }} />
+    <Composer channelId={channel.id} channels={channels} placeholder={placeholder} reason={reason} sendTyping onEditLast={() => { const last=chat.messages.filter(item=>item.author.id===user?.id&&!item.deleted&&!item.status&&(!item.kind||item.kind==='text')).at(-1);if(last)window.dispatchEvent(new CustomEvent('hive:edit-message',{detail:{id:last.id}})); }}
+      onSend={(body, files, options) => { nearBottom.current = true; return chat.send(body, undefined, files, options); }} />
    </div>
-    {threadId && <ThreadPanel key={threadId} channelId={channel.id} parentId={threadId} userId={user?.id}
+    {threadId && <ThreadPanel key={threadId} channelId={channel.id} channels={channels} parentId={threadId} userId={user?.id}
       reason={reason} canWrite={canWrite} canModerate={canModerate} onClose={closeThread} />}
   </div>;
 }

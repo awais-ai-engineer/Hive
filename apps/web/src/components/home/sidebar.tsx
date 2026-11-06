@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
 import { conversationTitle, type Conversation } from '../../lib/dms';
 import { badge, loadSetting, saveSetting } from '../../lib/home';
+import { useDraftChannels } from '../../lib/composer-drafts';
 import type { Channel, Space } from '../../lib/spaces';
 import { Avatar } from '../ui/avatar';
 import { Icon, type IconName } from '../ui/icons';
@@ -25,7 +26,7 @@ type Props = {
   threadsUnread: number;
   onSwitchSpace: (slug: string) => void;
   onOpen: (id: string) => void;
-  onView: (view: 'unreads' | 'threads') => void;
+  onView: (view: 'unreads' | 'threads' | 'drafts') => void;
   onPerson: (username: string) => void;
   onChannelCreated: (channel: Channel) => void;
 };
@@ -35,12 +36,13 @@ function Count({ value }: { value: number }) {
   return <span aria-label={`${value} unread`} className="ml-auto shrink-0 rounded-full bg-[var(--brand)] px-1.5 text-[11px] font-semibold leading-5" style={{ color: '#fff' }}>{badge(value)}</span>;
 }
 
-function Row({ active, unread, onClick, children }: { active: boolean; unread: number; onClick: () => void; children: ReactNode }) {
+function Row({ active, unread, draft, onClick, children }: { active: boolean; unread: number; draft?: boolean; onClick: () => void; children: ReactNode }) {
   return <li>
     <button type="button" onClick={onClick} aria-current={active ? 'page' : undefined}
       className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[14px] transition ${active
         ? 'bg-[var(--brand)] font-semibold shadow-sm' : unread ? 'font-semibold text-white hover:bg-white/10' : 'text-white/75 hover:bg-white/10 hover:text-white'}`}>
       {children}
+      {draft && !active && <Icon name="edit" size={13} aria-label="Unsent draft" className="ml-auto shrink-0 opacity-70" />}
       <Count value={active ? 0 : unread} />
     </button>
   </li>;
@@ -64,6 +66,7 @@ export function Sidebar(props: Props) {
   function toggle(section: Section) {
     setCollapsed(current => { const next = { ...current, [section]: !current[section] }; saveSetting('hive:sidebar', next); return next; });
   }
+  const drafts = useDraftChannels();
   const groups = conversations.filter(item => item.is_group);
   const direct = conversations.filter(item => !item.is_group);
   const canAddChannel = space?.my_role === 'owner' || space?.my_role === 'admin';
@@ -87,6 +90,7 @@ export function Sidebar(props: Props) {
       <ul className="space-y-0.5">
         <NavItem icon="threads" label="Threads" active={view === 'threads'} count={props.threadsUnread} onClick={() => props.onView('threads')} />
         <NavItem icon="inbox" label="Unreads" active={view === 'unreads'} count={props.unreadTotal} onClick={() => props.onView('unreads')} />
+        <NavItem icon="send" label="Drafts & scheduled" active={view === 'drafts'} onClick={() => props.onView('drafts')} />
         <NavItem icon="layers" label="Feed" href="/feed" />
         {space && <NavItem icon="users" label="Members" href={`/s/${space.slug}/members`} />}
       </ul>
@@ -94,7 +98,7 @@ export function Sidebar(props: Props) {
       {heading('channels', 'Channels', canAddChannel ? () => setCreatingChannel(true) : undefined, 'Add channel')}
       {!collapsed.channels && <ul className="space-y-0.5">
         {!space && <li className="px-2.5 text-xs text-white/50">Join or create a space to see its channels.</li>}
-        {channels.map(channel => <Row key={channel.id} active={channel.id === selected} unread={channel.unread} onClick={() => props.onOpen(channel.id)}>
+        {channels.map(channel => <Row key={channel.id} active={channel.id === selected} unread={channel.unread} draft={drafts.has(channel.id)} onClick={() => props.onOpen(channel.id)}>
           <Icon name={channel.type === 'voice' ? 'volume' : channel.is_private ? 'lock' : 'hash'} size={16} className="shrink-0 opacity-70" />
           <span className="truncate">{channel.name}</span>
         </Row>)}
@@ -102,7 +106,7 @@ export function Sidebar(props: Props) {
 
       {heading('conversations', 'Conversations', () => setComposing(composing === 'group' ? null : 'group'), 'New group conversation')}
       {!collapsed.conversations && <ul className="space-y-0.5">
-        {groups.map(item => <Row key={item.id} active={item.id === selected} unread={item.unread} onClick={() => props.onOpen(item.id)}>
+        {groups.map(item => <Row key={item.id} active={item.id === selected} unread={item.unread} draft={drafts.has(item.id)} onClick={() => props.onOpen(item.id)}>
           <span aria-hidden className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white/15 text-[11px] font-semibold">{item.participants.length + 1}</span>
           <span className="truncate">{conversationTitle(item)}</span>
         </Row>)}
@@ -114,7 +118,7 @@ export function Sidebar(props: Props) {
       {!collapsed.direct && <ul className="space-y-0.5">
         {direct.map(item => {
           const person = item.participants[0];
-          return <Row key={item.id} active={item.id === selected} unread={item.unread} onClick={() => props.onOpen(item.id)}>
+          return <Row key={item.id} active={item.id === selected} unread={item.unread} draft={drafts.has(item.id)} onClick={() => props.onOpen(item.id)}>
             <Avatar name={person?.username ?? '?'} src={person?.avatar_url} size={22} online={!!person?.online} />
             <span className="truncate">{person?.username ?? 'Unknown'}</span>
           </Row>;

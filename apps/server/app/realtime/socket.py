@@ -36,6 +36,7 @@ from app.messages.schemas import (
     ChannelIn,
     EditIn,
     MessageIn,
+    PollVoteIn,
     ReactionIn,
     ReadIn,
     SendIn,
@@ -156,29 +157,39 @@ async def leave(sid, data, session, user):
 async def send(sid, data, session, user):
     message, inserted, parent = await service.send(session, user, data)
     if inserted:
-        room = f"channel:{message['channel_id']}"
-        await sio.emit("message:new", message, room=room)
-        if parent is not None:
-            await sio.emit("message:updated", parent, room=room)
-            # Everyone in the thread hears about it, even without the channel open.
-            activity = {"parentId": parent["id"], "channelId": message["channel_id"],
-                        "messageId": message["id"], "authorId": user.id}
-            parent_row = await session.get(Message, parent["id"])
-            for participant in await thread_participants(session, parent_row):
-                await sio.emit("thread:activity", activity, room=f"user:{participant}")
-            channel = await session.get(Channel, message["channel_id"])
-            if channel.type != ChannelType.dm:
-                await emit_space_activity(session, channel)
-        else:
-            channel = await session.get(Channel, message["channel_id"])
-            activity = {"channelId": channel.id, "messageId": message["id"], "authorId": user.id}
-            if channel.type == ChannelType.dm:
-                for participant in await participant_ids(session, channel.id):
-                    await sio.emit("dm:activity", activity, room=f"user:{participant}")
-            else:
-                await emit_channel_activity(session, channel, activity)
+        await broadcast_message(session, user, message, parent)
     return {"message": message}
 
+
+def public_message(message):
+    """Viewer-specific channel names and votes never travel in a shared room payload."""
+    return {**message, "channelLinks": [], "poll": {**message["poll"], "myVote": None} if message.get("poll") else None}
+
+
+async def broadcast_message(session, user, message, parent=None):
+    from app.messages.composer import notify_mentions
+    await notify_mentions(session, message)
+    room = f"channel:{message['channel_id']}"
+    await sio.emit("message:new", public_message(message), room=room)
+    if parent is not None:
+        await sio.emit("message:updated", public_message(parent), room=room)
+        # Everyone in the thread hears about it, even without the channel open.
+        activity = {"parentId": parent["id"], "channelId": message["channel_id"],
+                    "messageId": message["id"], "authorId": user.id}
+        parent_row = await session.get(Message, parent["id"])
+        for participant in await thread_participants(session, parent_row):
+            await sio.emit("thread:activity", activity, room=f"user:{participant}")
+        channel = await session.get(Channel, message["channel_id"])
+        if channel.type != ChannelType.dm:
+            await emit_space_activity(session, channel)
+    else:
+        channel = await session.get(Channel, message["channel_id"])
+        activity = {"channelId": channel.id, "messageId": message["id"], "authorId": user.id}
+        if channel.type == ChannelType.dm:
+            for participant in await participant_ids(session, channel.id):
+                await sio.emit("dm:activity", activity, room=f"user:{participant}")
+        else:
+            await emit_channel_activity(session, channel, activity)
 
 async def emit_space_activity(session, channel: Channel) -> None:
     """Refresh personal totals without requiring an open space or thread."""
@@ -211,7 +222,9 @@ async def emit_channel_activity(session, channel: Channel, activity: dict) -> No
 @chat_event("message:edit", EditIn)
 async def edit(sid, data, session, user):
     message = await service.change(session, user, data.messageId, data.body)
-    await sio.emit("message:updated", message, room=f"channel:{message['channel_id']}")
+    await sio.emit("message:updated", public_message(message), room=f"channel:{message['channel_id']}")
+    from app.messages.composer import notify_mentions
+    await notify_mentions(session, message)
     return {"message": message}
 
 
@@ -350,3 +363,20 @@ async def evict_from_space(user_id: str, space_id: str) -> None:
         await sio.leave_room(sid, f"space:{space_id}")
         for channel_id in channels:
             await sio.leave_room(sid, f"channel:{channel_id}")
+
+
+@chat_event("poll:vote", PollVoteIn)
+async def poll_vote(sid, data, session, user):
+    return await update_poll(session, user, data.messageId, data.optionId)
+
+
+@chat_event("poll:close", MessageIn)
+async def poll_close(sid, data, session, user):
+    return await update_poll(session, user, data.messageId, close=True)
+
+
+async def update_poll(session, user, message_id, option_id=None, close=False):
+    from app.messages.composer import vote
+    channel_id, poll = await vote(session, user, message_id, option_id, close)
+    await sio.emit("poll:updated", {"messageId": message_id, "counts": poll["counts"], "total": poll["total"], "closedAt": poll["closedAt"]}, room=f"channel:{channel_id}")
+    return {"messageId": message_id, "poll": poll}

@@ -169,6 +169,7 @@ async def list_conversations(
         message = last.get(channel.id)
         result.append(DirectOut(
             id=channel.id,
+            read_only=any(person.is_system for person in others),
             participants=[
                 Participant(id=user.id, username=user.username, avatar_url=user.avatar_url,
                             online=user.id in online)

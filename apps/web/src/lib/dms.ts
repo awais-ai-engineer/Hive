@@ -4,6 +4,7 @@ export type Conversation = {
   id: string;
   participants: Participant[];
   is_group: boolean;
+  read_only?: boolean;
   last_message: {
     id: string; author_id: string; body: string | null; has_attachments: boolean; created_at: string;
   } | null;

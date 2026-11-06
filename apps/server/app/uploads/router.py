@@ -1,9 +1,11 @@
+import json
 import re
 from pathlib import PurePath
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +21,7 @@ from app.storage import get_storage
 from app.storage.base import SignRequest
 from app.storage.local import path_for, verify
 from app.storage.media import detect_kind, limit_mb
+from app.uploads.schemas import AudioMetadata
 
 router = APIRouter(tags=["uploads"])
 CHUNK = 1024 * 1024
@@ -35,11 +38,24 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
-async def store_upload(file, session, user, channel_id=None, space_id=None):
+async def store_upload(file, session, user, channel_id=None, space_id=None,
+                       requested_kind=None, duration_ms=None, waveform=None):
     first = await file.read(CHUNK)
     if not first:
         raise HTTPException(422, "File is empty")
-    kind, content_type = detect_kind(first)
+    kind, content_type = detect_kind(first, file.content_type or "")
+    metadata = None
+    if requested_kind == "audio":
+        if kind != "audio":
+            raise HTTPException(422, "This file is not a supported audio recording")
+        try:
+            metadata = AudioMetadata.model_validate({
+                "durationMs": duration_ms, "waveform": json.loads(waveform or "null"),
+            })
+        except (ValidationError, ValueError):
+            raise HTTPException(422, "Audio needs a duration and 64 waveform peaks from 0 to 100")
+    elif requested_kind is not None or duration_ms is not None or waveform is not None:
+        raise HTTPException(422, "Audio metadata requires kind=audio")
     maximum = limit_mb(kind)
     attachment_id = new_id()
     key = f"attachments/{attachment_id}"
@@ -68,6 +84,8 @@ async def store_upload(file, session, user, channel_id=None, space_id=None):
             size=size,
             storage_key=key,
             kind=kind,
+            duration_ms=metadata.durationMs if metadata else None,
+            waveform=metadata.waveform if metadata else None,
         )
         session.add(attachment)
         await session.commit()
@@ -82,13 +100,19 @@ async def store_upload(file, session, user, channel_id=None, space_id=None):
         size=size,
         kind=kind,
         url=urls[key],
+        durationMs=metadata.durationMs if metadata else None,
+        waveform=metadata.waveform if metadata else None,
     )
 
 
 @router.post("/channels/{channel_id}/uploads", response_model=AttachmentOut, status_code=201)
-async def upload(channel_id: str, file: UploadFile, session: Session, user: CurrentUser):
+async def upload(channel_id: str, file: UploadFile, session: Session, user: CurrentUser,
+                 kind: Annotated[str | None, Form()] = None,
+                 durationMs: Annotated[int | None, Form()] = None,
+                 waveform: Annotated[str | None, Form()] = None):
     await writable(session, channel_id, user.id)
-    return await store_upload(file, session, user, channel_id=channel_id)
+    return await store_upload(file, session, user, channel_id=channel_id,
+                              requested_kind=kind, duration_ms=durationMs, waveform=waveform)
 
 
 @router.post("/spaces/{slug}/uploads", response_model=AttachmentOut, status_code=201)
@@ -108,7 +132,7 @@ async def download(attachment_id: str, exp: int, sig: str, session: Session):
     target = path_for(attachment.storage_key)
     if not target.exists():
         raise HTTPException(404, "File not found")
-    inline = attachment.kind in ("image", "video")
+    inline = attachment.kind in ("image", "video", "audio")
     return FileResponse(
         target,
         media_type=attachment.content_type if inline else "application/octet-stream",

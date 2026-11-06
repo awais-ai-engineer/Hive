@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Attachment } from '@hive/shared';
 import { API_URL } from '../lib/api';
 import { ReportDialog } from './report-dialog';
@@ -9,6 +9,11 @@ import { Avatar } from './ui/avatar';
 import { chatRequest } from '../lib/socket';
 import { requestError } from '../lib/spaces';
 import type { ChatMessage } from '../lib/use-channel-messages';
+import { RichText } from './rich-text';
+import { EmojiPicker } from './emoji-picker';
+import { PollCard } from './poll-card';
+import { VoicePlayer } from './voice-player';
+import { LinkPreview } from './link-preview';
 
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '🙏'];
 
@@ -21,6 +26,7 @@ type Props = {
   onRetry: (message: ChatMessage) => void;
   onReply?: (message: ChatMessage) => void;
   onError: (message: string) => void;
+  channels?: {id:string;name:string;href:string}[];
 };
 
 export function formatSize(bytes: number) {
@@ -28,6 +34,7 @@ export function formatSize(bytes: number) {
 }
 
 function AttachmentView({ file }: { file: Attachment }) {
+  if (file.kind === 'audio') return <VoicePlayer attachment={file} />;
   const href = /^https?:\/\//.test(file.url) ? file.url : `${API_URL}${file.url}`;
   if (file.kind === 'video') return <video src={href} controls preload="metadata" playsInline className="max-h-80 max-w-full rounded" />;
   if (file.kind === 'image' && file.url) {
@@ -41,7 +48,7 @@ function AttachmentView({ file }: { file: Attachment }) {
   </a>;
 }
 
-export function MessageItem({ message, grouped, userId, canWrite, canModerate, onRetry, onReply, onError }: Props) {
+export function MessageItem({ message, grouped, userId, canWrite, canModerate, onRetry, onReply, onError, channels = [] }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [picker, setPicker] = useState(false);
@@ -49,6 +56,8 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
   const statusEmoji = (message.author as { status_emoji?: string | null }).status_emoji;
   const own = userId === message.author.id;
   const live = !message.deleted && !message.status;
+  const mentioned = !!userId && !!message.mentions?.some(mention=>mention.userId===userId);
+  useEffect(()=>{const edit=(event:Event)=>{if(own&&message.kind!=='poll'&&message.kind!=='voice'&&(event as CustomEvent<{id:string}>).detail.id===message.id){setDraft(message.body??'');setEditing(true);}};window.addEventListener('hive:edit-message',edit);return()=>window.removeEventListener('hive:edit-message',edit);},[own,message.id,message.body,message.kind]);
 
   async function run(event: string, payload: object) {
     try { await chatRequest(event, payload); return true; }
@@ -63,7 +72,7 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
   }
 
   const time = new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  return <article data-message-id={message.id} className={`group relative flex gap-3 rounded-xl px-2 py-1 transition hover:bg-[var(--surface-2)] ${grouped ? '' : 'mt-3 pt-2'}`}>
+  return <article data-message-id={message.id} className={`group relative flex gap-3 rounded-xl px-2 py-1 transition hover:bg-[var(--surface-2)] ${mentioned?'border-s-2 border-brand bg-brand-soft':''} ${grouped ? '' : 'mt-3 pt-2'}`}>
     <div className="w-10 shrink-0">
       {grouped ? <time dateTime={message.created_at} className="hidden pt-1 text-right text-[10px] text-white/35 group-hover:block">{time}</time>
         : <Link href={`/u/${message.author.username}`} aria-label={`${message.author.username}'s profile`}><Avatar name={message.author.username} src={message.author.avatar_url} size={40} /></Link>}
@@ -76,15 +85,20 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
         {time}
       </time>
     </div>}
+    {mentioned&&<span className="my-1 inline-block rounded-full bg-brand px-2 py-0.5 text-xs text-white">Mentions you</span>}
     {editing ? <textarea autoFocus aria-label="Edit message" value={draft} maxLength={4000}
       className="w-full rounded-xl border border-brand/50 bg-surface p-2" onChange={event => setDraft(event.target.value)}
       onKeyDown={event => {
         if (event.key === 'Escape') setEditing(false);
         if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void saveEdit(); }
-      }} /> : (message.body || message.deleted) && <p className={`whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${message.deleted ? 'italic text-white/40' : 'text-white/90'} leading-relaxed`}>
-      {message.deleted ? 'Message deleted' : message.body}
-      {message.edited_at && !message.deleted && <span className="ml-2 text-xs text-white/40">(edited)</span>}
-    </p>}
+      }} /> : message.deleted ? <p className="italic leading-relaxed text-white/40">Message deleted</p>
+      : message.kind === 'poll' && message.poll ? <PollCard message={message} userId={userId} />
+      : message.body ? <div className="break-words leading-relaxed text-white/90 [overflow-wrap:anywhere]">
+        <RichText source={message.body} mentions={message.mentions ?? []} channels={message.channelLinks ?? channels} />
+        {message.edited_at && <span className="text-xs text-white/40">(edited)</span>}
+      </div> : null}
+    {!editing && !message.deleted && message.kind !== 'poll' && !!message.body && !message.post_previews?.length
+      && <LinkPreview source={message.body} messageId={message.id} userId={userId} />}
     {message.attachments.length > 0 && <div className="mt-1 flex flex-wrap gap-2">
       {message.attachments.map(file => <AttachmentView key={file.id} file={file} />)}
     </div>}
