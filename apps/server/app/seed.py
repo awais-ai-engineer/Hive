@@ -57,7 +57,7 @@ async def seed() -> None:
             ("carol", "carol@hive.test"),
             ("dave", "dave@acme.test"),
         ]:
-            user = await session.scalar(select(User).where(User.username == username))
+            user = await session.scalar(select(User).where(User.email == email))
             if user is None:
                 user = User(
                     username=username, email=email, password_hash=hash_password("password123")
@@ -121,6 +121,11 @@ async def seed() -> None:
                 space.name = name
                 space.type = space_type
                 space.allowed_email_domain = domain
+            if space_type == SpaceType.community:
+                space.category, space.tags = {
+                    "hive-devs": ("technology", ["webdev", "opensource"]),
+                    "python-pk": ("technology", ["python", "pakistan", "jobs"]),
+                }[slug]
             seeded_spaces[slug] = space
             roles = {owner_name: MemberRole.owner, **memberships}
             for username, role in roles.items():
