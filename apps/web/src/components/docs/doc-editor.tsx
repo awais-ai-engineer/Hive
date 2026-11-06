@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { docHref, docsApi, makeBlock, timeAgo, type Block, type Doc, type DocUpdate } from '../../lib/docs';
+import { SaveRejected, docHref, docsApi, makeBlock, timeAgo, type Block, type Doc, type DocUpdate } from '../../lib/docs';
 import { socket, chatRequest } from '../../lib/socket';
 import { requestError } from '../../lib/spaces';
 import { Icon } from '../ui/icons';
@@ -68,7 +68,7 @@ export function DocEditor({ docId, channelId, slug, userId, canWrite, onBack, on
       if (edits.current === mark) { dirty.current = false; setState('saved'); } else again = true;
     } catch (cause) {
       setError(requestError(cause)); setState('error');
-      timer.current = setTimeout(() => void save(), 5000);
+      if (!(cause instanceof SaveRejected)) timer.current = setTimeout(() => void save(), 5000);
     } finally { saving.current = false; }
     if (again) void save();
   }, [docId]);

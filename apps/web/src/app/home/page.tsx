@@ -288,7 +288,7 @@ function Home() {
   const myRank = space?.my_role ? rank[space.my_role] : 0;
   const unreadTotal = unreads.reduce((sum, item) => sum + item.unread, 0);
   const showView = view === 'unreads' || view === 'threads' || view === 'directory' || view === 'todos' || (!conversation && !channel);
-  const activeView = view === 'directory' ? 'directory' : showView && view !== 'threads' ? 'unreads' : view;
+  const activeView = view === 'directory' || view === 'todos' ? view : showView && view !== 'threads' ? 'unreads' : view;
   const threadChange = (id: string | null) => go({ c: selected, t: id });
 
   let main;

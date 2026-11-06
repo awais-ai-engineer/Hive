@@ -145,7 +145,7 @@ async def test_outsiders_and_guests(client, setup_chat):
     _, bob, _carol, ah, bh, ch, _, channel = setup_chat
     doc = await new_doc(client, ah, channel)
     url = f"/api/docs/{doc['id']}"
-    # Carol has not joined this members-only community chat.
+    # Carol has not joined this members-only community chat: a plain 404, not a hint that it exists.
     for response in (
         await client.get(url, headers=ch),
         await client.get(f"/api/channels/{channel}/docs", headers=ch),
@@ -153,8 +153,8 @@ async def test_outsiders_and_guests(client, setup_chat):
         await client.delete(url, headers=ch),
         await client.get(f"{url}/versions", headers=ch),
     ):
-        assert response.status_code in (403, 404)
-    assert (await client.post(f"/api/channels/{channel}/docs", headers=ch, json={})).status_code in (403, 404)
+        assert response.status_code == 404
+    assert (await client.post(f"/api/channels/{channel}/docs", headers=ch, json={})).status_code == 404
     assert (await client.get(url)).status_code == 401
     # Guests may read but not write.
     await client.patch(f"/api/spaces/chat/members/{bob['user']['id']}", headers=ah, json={"role": "guest"})
@@ -229,3 +229,19 @@ async def test_doc_events_reach_only_people_who_can_read(client, setup_chat, liv
         assert (await event(aq["doc:updated"]))["action"] == "deleted"
         await quiet(cq["doc:updated"])
         await quiet(bq["doc:updated"])
+
+
+async def test_history_entries_do_not_slide_forever(client, setup_chat, monkeypatch):
+    from sqlalchemy import text
+
+    from app.db.session import engine
+    _, _, _, ah, _, _, _, channel = setup_chat
+    monkeypatch.setattr(docs_service, "COALESCE_WINDOW", docs_service.timedelta(minutes=5))
+    doc = await new_doc(client, ah, channel, title="a")
+    url = f"/api/docs/{doc['id']}"
+    await client.put(url, headers=ah, json={"base_version": 1, "title": "b"})
+    assert len((await client.get(f"{url}/versions", headers=ah)).json()) == 1
+    async with engine.begin() as connection:
+        await connection.execute(text("UPDATE doc_versions SET created_at = now() - interval '10 minutes'"))
+    await client.put(url, headers=ah, json={"base_version": 2, "title": "c"})
+    assert [v["version"] for v in (await client.get(f"{url}/versions", headers=ah)).json()] == [3, 2]

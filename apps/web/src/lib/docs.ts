@@ -75,6 +75,9 @@ export function convertBlock(block: Block, type: BlockType, level?: number): Blo
   return { ...next, id: block.id, checked: type === 'checklist' ? block.checked ?? false : undefined, emoji: type === 'callout' ? block.emoji ?? '💡' : undefined };
 }
 
+/** The server refused the save for good (access or size), so retrying would not help. */
+export class SaveRejected extends Error {}
+
 export const docsApi = {
   list: (channelId: string) => apiData<DocSummary[]>(`/api/channels/${channelId}/docs`),
   create: (channelId: string, body: { title?: string; emoji?: string | null; body?: Block[] }) =>
@@ -89,6 +92,8 @@ export const docsApi = {
   async save(id: string, body: object): Promise<{ doc: Doc } | { conflict: Doc }> {
     const response = await apiFetch(`/api/docs/${id}`, { method: 'PUT', body: JSON.stringify(body) });
     if (response.status === 409) return { conflict: (await response.json()).doc as Doc };
+    if (response.status === 422) throw new SaveRejected('This doc is too large or has content that cannot be saved. Shorten it and try again.');
+    if (response.status >= 400 && response.status < 500) throw new SaveRejected(response.status === 404 ? 'You no longer have access to this doc.' : 'You cannot edit this doc.');
     return { doc: await responseData<Doc>(response) };
   },
 };

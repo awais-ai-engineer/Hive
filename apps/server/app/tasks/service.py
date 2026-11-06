@@ -17,7 +17,7 @@ from app.db.models import (
     new_id,
 )
 from app.docs.schemas import PersonOut
-from app.docs.service import check_write, people
+from app.docs.service import check_write, people, read_channel
 from app.messages.service import readable
 from app.messages.threads import my_channel_ids, places
 from app.spaces.permissions import require_role
@@ -127,7 +127,7 @@ async def delete_task(session: AsyncSession, task_id: str, user: User) -> Task:
     if task.created_by != user.id:
         if task.channel_id is None:
             raise HTTPException(403, "Only the person who made this to-do can delete it")
-        channel, member = await readable(session, task.channel_id, user.id)
+        channel, member = await read_channel(session, task.channel_id, user.id)
         if channel.type == ChannelType.dm:
             raise HTTPException(403, "Only the person who made this to-do can delete it")
         require_role(member.role if member else None, MemberRole.admin)
@@ -153,7 +153,7 @@ async def list_tasks(
     if scope == "channel":
         if channel_id is None:
             raise HTTPException(422, "channel_id is required for this scope")
-        await readable(session, channel_id, user.id)
+        await read_channel(session, channel_id, user.id)
         query = query.where(Task.channel_id == channel_id)
     elif scope == "mine":
         query = query.where(Task.status == "open", _yours(user), _in_reach(user))
@@ -186,7 +186,7 @@ async def assignable(session: AsyncSession, channel_id: str | None, user: User) 
     """People who can read the conversation (just you for personal to-dos)."""
     if channel_id is None:
         return [PersonOut.model_validate(user)]
-    channel, _ = await readable(session, channel_id, user.id)
+    channel, _ = await read_channel(session, channel_id, user.id)
     return await _readers(session, channel)
 
 

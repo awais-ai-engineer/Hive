@@ -18,7 +18,8 @@ from app.messages.service import check_not_blocked, readable
 from app.spaces.permissions import require_role
 
 KEEP_VERSIONS = 20
-# Autosaves by the same person within this window update one history entry instead of adding many.
+# Autosaves by the same person within this window of an entry's first save update that entry
+# instead of adding a new one, so history holds meaningful steps rather than keystrokes.
 COALESCE_WINDOW = timedelta(minutes=5)
 
 
@@ -27,9 +28,20 @@ class VersionConflict(Exception):
         self.doc = doc
 
 
+async def read_channel(session: AsyncSession, channel_id: str, user_id: str):
+    """`readable`, except that people who may not read the channel get a plain 404 (docs and
+    to-dos never reveal that a members-only chat exists)."""
+    try:
+        return await readable(session, channel_id, user_id)
+    except HTTPException as error:
+        if error.status_code == 403:
+            raise HTTPException(404, "Channel not found") from None
+        raise
+
+
 async def check_write(session: AsyncSession, channel_id: str, user: User):
     """Whoever can post in the channel may edit its docs; guests and blocked people read only."""
-    channel, member = await readable(session, channel_id, user.id)
+    channel, member = await read_channel(session, channel_id, user.id)
     if channel.type == ChannelType.dm:
         await check_not_blocked(session, channel.id, user.id)
     else:
@@ -69,12 +81,12 @@ async def load(
     if write:
         await check_write(session, doc.channel_id, user)
     else:
-        await readable(session, doc.channel_id, user.id)
+        await read_channel(session, doc.channel_id, user.id)
     return doc
 
 
 async def list_docs(session: AsyncSession, channel_id: str, user: User) -> list[DocSummary]:
-    await readable(session, channel_id, user.id)
+    await read_channel(session, channel_id, user.id)
     docs = list(await session.scalars(
         select(Doc).where(Doc.channel_id == channel_id).order_by(Doc.updated_at.desc(), Doc.id.desc())
     ))
@@ -91,7 +103,6 @@ async def _snapshot(session: AsyncSession, doc: Doc, user_id: str, coalesce: boo
     if coalesce and recent:
         latest.version = doc.version
         latest.title, latest.emoji, latest.body = doc.title, doc.emoji, doc.body
-        latest.created_at = datetime.now(UTC)
     else:
         session.add(DocVersion(
             id=new_id(), doc_id=doc.id, version=doc.version, title=doc.title,
@@ -146,7 +157,7 @@ async def save_doc(session: AsyncSession, doc_id: str, data: DocSave, user: User
 async def delete_doc(session: AsyncSession, doc_id: str, user: User) -> Doc:
     doc = await load(session, doc_id, user)
     if doc.created_by != user.id:
-        channel, member = await readable(session, doc.channel_id, user.id)
+        channel, member = await read_channel(session, doc.channel_id, user.id)
         if channel.type == ChannelType.dm:
             raise HTTPException(403, "Only the person who made this doc can delete it")
         require_role(member.role if member else None, MemberRole.admin)

@@ -94,7 +94,7 @@ async def test_message_to_task_and_assignment(client, setup_chat):
     assert await titles(client, bh, "done") == ["Please review"]
     assert await titles(client, ah, "done") == ["Please review"]
     # Carol never joined the community chat.
-    assert (await client.get("/api/tasks", headers=ch, params={"scope": "channel", "channel_id": channel})).status_code == 403
+    assert (await client.get("/api/tasks", headers=ch, params={"scope": "channel", "channel_id": channel})).status_code == 404
     assert (await client.patch(f"/api/tasks/{task['id']}", headers=ch, json={"title": "x"})).status_code == 404
 
 
