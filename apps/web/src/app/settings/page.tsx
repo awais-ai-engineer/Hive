@@ -4,14 +4,14 @@ import Link from 'next/link';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Avatar } from '../../components/ui/avatar';
 import { InterestsSettings } from '../../components/communities/interests-settings';
+import { StatusDialog } from '../../components/status-dialog';
+import { activeStatus, statusTitle } from '../../lib/status';
 import { apiFetch, responseData, uploadFile, type User } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { apiData, requestError } from '../../lib/spaces';
 
 type Section = 'profile' | 'privacy' | 'blocked' | 'interests';
 const sections: [Section, string][] = [['profile', 'Profile'], ['privacy', 'Privacy'], ['blocked', 'Blocked people'], ['interests', 'Interests']];
-const EMOJI = ['😀', '🙂', '😎', '🤔', '🎉', '🔥', '💡', '🎧', '📅', '🚌', '🤒', '🌴', '☕', '🚀'];
-const PRESETS = [['📅', 'In a meeting'], ['🚌', 'Commuting'], ['🤒', 'Out sick'], ['🌴', 'On holiday'], ['🎧', 'Focusing']];
 
 function Saved({ show }: { show: boolean }) {
   return <span role="status" className="text-sm font-medium text-emerald-500">{show ? 'Saved' : ''}</span>;
@@ -25,8 +25,7 @@ function ProfileCard({ user, updateUser }: { user: User; updateUser: (user: User
   const [displayName, setDisplayName] = useState(user.display_name ?? '');
   const [username, setUsername] = useState(user.username);
   const [bio, setBio] = useState(user.bio ?? '');
-  const [emoji, setEmoji] = useState(user.status_emoji ?? '');
-  const [statusText, setStatusText] = useState(user.status_text ?? '');
+  const [editingStatus, setEditingStatus] = useState(false);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -70,7 +69,7 @@ function ProfileCard({ user, updateUser }: { user: User; updateUser: (user: User
     event.preventDefault();
     setBusy(true); setError(''); setSaved(false);
     try {
-      updateUser(await patchMe({ username: username.trim(), display_name: displayName.trim(), bio: bio.trim(), status_text: statusText.trim(), status_emoji: emoji }));
+      updateUser(await patchMe({ username: username.trim(), display_name: displayName.trim(), bio: bio.trim()}));
       setSaved(true);
     } catch (cause) { setError(requestError(cause)); }
     finally { setBusy(false); }
@@ -113,22 +112,17 @@ function ProfileCard({ user, updateUser }: { user: User; updateUser: (user: User
       <span className="mt-1 block text-right text-xs font-normal text-white/50" aria-live="polite">{bio.length}/300</span>
     </label>
 
-    <fieldset>
-      <legend className="text-sm font-medium">Status</legend>
-      <div className="mt-2 flex gap-2">
-        <span aria-hidden className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border border-white/15 bg-surface text-xl">{emoji || '💬'}</span>
-        <input aria-label="Status text" className="auth-input !mt-0" value={statusText} maxLength={80} placeholder="What are you up to?" onChange={event => setStatusText(event.target.value)} />
+    <div>
+      <p className="text-sm font-medium">Status</p>
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <span className="text-sm text-white/70">{(() => { const status = activeStatus(user); return status.emoji || status.text || status.away
+          ? statusTitle(user)
+          : 'No status set'; })()}</span>
+        <button type="button" className="btn-ghost" onClick={() => setEditingStatus(true)}>Set a status</button>
       </div>
-      <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label="Status emoji">
-        {EMOJI.map(item => <button key={item} type="button" aria-pressed={emoji === item} onClick={() => setEmoji(emoji === item ? '' : item)}
-          className={`h-9 w-9 rounded-lg text-lg transition hover:bg-[var(--surface-2)] ${emoji === item ? 'bg-brand-soft ring-2 ring-brand' : ''}`}>{item}</button>)}
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {PRESETS.map(([e, t]) => <button key={t} type="button" onClick={() => { setEmoji(e); setStatusText(t); }}
-          className="rounded-full border border-white/10 bg-[var(--surface-2)] px-3 py-1 text-sm hover:border-brand/50">{e} {t}</button>)}
-        {(emoji || statusText) && <button type="button" onClick={() => { setEmoji(''); setStatusText(''); }} className="text-sm font-medium text-brand hover:underline">Clear</button>}
-      </div>
-    </fieldset>
+      <p className="mt-1 text-xs text-white/50">Let people know what you are up to, when it should clear, and if you are out of office.</p>
+    </div>
+    {editingStatus && <StatusDialog user={user} onSaved={updateUser} onClose={() => setEditingStatus(false)} />}
 
     {error && <p role="alert" className="text-sm text-rose-500">{error}</p>}
     <div className="flex items-center gap-3">

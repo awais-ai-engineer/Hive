@@ -7,6 +7,6 @@ export function StatusMark({ person, className = '' }: { person: StatusFields; c
   const title = statusTitle(person);
   return <span className={`inline-flex shrink-0 items-center gap-0.5 ${className}`} title={title}>
     {(status.emoji || status.text) && <span aria-label={title}>{status.emoji ?? '💬'}</span>}
-    {status.away && <span role="img" aria-label={`Out of office until ${dayText(status.away)}`}>🌴</span>}
+    {status.away && status.emoji !== '🌴' && <span role="img" aria-label={`Out of office until ${dayText(status.away)}`}>🌴</span>}
   </span>;
 }
