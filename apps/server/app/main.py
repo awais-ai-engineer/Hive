@@ -19,6 +19,8 @@ from app.directory.router import router as directory_router
 from app.dms.router import router as dms_router
 from app.docs.router import router as docs_router
 from app.explore.router import router as explore_router
+from app.games.router import hub_router as games_hub_router
+from app.games.router import router as games_router
 from app.invites.router import router as invites_router
 from app.linkpreview.router import router as linkpreview_router
 from app.messages.router import router as messages_router
@@ -76,6 +78,8 @@ api.include_router(docs_router, prefix="/api")
 api.include_router(tasks_router, prefix="/api")
 api.include_router(composer_router, prefix="/api")
 api.include_router(linkpreview_router, prefix="/api")
+api.include_router(games_hub_router, prefix="/api")
+api.include_router(games_router, prefix="/api")
 
 # One ASGI app: Socket.IO handles /socket.io, everything else goes to FastAPI.
 app = socketio.ASGIApp(sio, other_asgi_app=api)
