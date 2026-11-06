@@ -4,11 +4,16 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { conversationTitle, type Conversation } from '../../lib/dms';
 import { apiData, type Channel, type Member, type Space } from '../../lib/spaces';
+import { LEVEL_LABELS, type NotifyLevel } from '../../lib/sidebar';
+import { dayText, activeStatus } from '../../lib/status';
+import { StatusMark } from '../ui/status-mark';
 import { ChannelMembers } from './channel-members';
+import { HuddleButton } from '../call/huddle-button';
+import { PopupMenu } from './popup-menu';
 import { Avatar } from '../ui/avatar';
 import { Icon, type IconName } from '../ui/icons';
 
-export type ChatTab = 'messages' | 'posts';
+export type ChatTab = 'messages' | 'posts' | 'docs' | 'todos';
 
 type Props = {
   title?: string;
@@ -18,6 +23,10 @@ type Props = {
   tab?: ChatTab;
   onTab?: (tab: ChatTab) => void;
   onMenu: () => void;
+  starred?: boolean;
+  onStar?: () => void;
+  level?: NotifyLevel;
+  onLevel?: (level: NotifyLevel) => void;
   /** Called after the viewer leaves the open private channel. */
   onLeft?: () => void;
 };
@@ -31,6 +40,25 @@ function Stack({ people, total, href }: { people: { id: string; username: string
   return href ? <Link href={href} aria-label={`${total} members`}>{body}</Link> : <span aria-label={`${total} people`}>{body}</span>;
 }
 
+/** Star and notification buttons for the open conversation. */
+function Controls({ starred, onStar, level = 'all', onLevel }: Pick<Props, 'starred' | 'onStar' | 'level' | 'onLevel'>) {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  if (!onStar && !onLevel) return null;
+  const button = 'rounded-lg p-1.5 text-white/60 hover:bg-[var(--surface-2)] hover:text-white';
+  return <div className="flex shrink-0 items-center">
+    {onStar && <button type="button" onClick={onStar} aria-pressed={!!starred} title={starred ? 'Remove from starred' : 'Star this conversation to pin it at the top of your sidebar'}
+      aria-label={starred ? 'Remove from starred' : 'Star this conversation'} className={`${button} ${starred ? '!text-amber-500' : ''}`}>
+      <Icon name="star" size={18} fill={starred ? 'currentColor' : 'none'} /></button>}
+    {onLevel && <button type="button" aria-haspopup="menu" aria-expanded={!!menu} title={`Notifications: ${LEVEL_LABELS[level]}`} aria-label={`Notifications: ${LEVEL_LABELS[level]}`}
+      onClick={event => { const box = event.currentTarget.getBoundingClientRect(); setMenu({ x: box.right - 256, y: box.bottom + 4 }); }} className={button}>
+      <Icon name={level === 'all' ? 'bell' : 'bellOff'} size={18} /></button>}
+    {menu && onLevel && <PopupMenu at={menu} label="Notifications" onClose={() => setMenu(null)} items={[
+      { heading: 'Notify me about' },
+      ...(['all', 'mentions', 'nothing'] as NotifyLevel[]).map(value => ({ label: LEVEL_LABELS[value], checked: level === value, onSelect: () => onLevel(value) })),
+    ]} />}
+  </div>;
+}
+
 function Tab({ active, icon, label, onClick }: { active: boolean; icon: IconName; label: string; onClick: () => void }) {
   return <button type="button" role="tab" aria-selected={active} onClick={onClick}
     className={`flex items-center gap-2 border-b-2 px-1 pb-2.5 pt-1 text-sm font-medium transition ${active ? 'border-brand text-brand' : 'border-transparent text-white/55 hover:text-white'}`}>
@@ -39,7 +67,7 @@ function Tab({ active, icon, label, onClick }: { active: boolean; icon: IconName
 }
 
 /** Top of the main area: what is open, who is in it, and the Messages/Posts tabs for space channels. */
-export function ChatHeader({ title, channel, space, conversation, tab = 'messages', onTab, onMenu, onLeft }: Props) {
+export function ChatHeader({ title, channel, space, conversation, tab = 'messages', onTab, onMenu, onLeft, ...controls }: Props) {
   const [members, setMembers] = useState<Member[]>([]);
   const [panel, setPanel] = useState(false);
   useEffect(() => setPanel(false), [channel?.id]);
@@ -56,17 +84,29 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
 
   if (conversation) {
     const online = conversation.participants.filter(person => person.online).length;
-    return <header className={`${shell} flex items-center gap-3 pb-3`}>
+    const partner = conversation.is_group ? null : conversation.participants[0];
+    const away = partner ? activeStatus(partner).away : null;
+    return <><header className={shell}><div className="flex items-center gap-3 pb-3">
       {menu}
       {conversation.is_group ? <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-soft font-semibold text-brand">{conversation.participants.length + 1}</span>
         : <Avatar name={conversation.participants[0]?.username ?? '?'} src={conversation.participants[0]?.avatar_url} size={40} online={!!conversation.participants[0]?.online} />}
       <div className="min-w-0 flex-1">
-        <h1 className="truncate text-lg font-bold">{conversationTitle(conversation)}</h1>
+        <h1 className="flex items-center gap-1.5 truncate text-lg font-bold">{conversationTitle(conversation)}{partner && <StatusMark person={partner} className="text-base font-normal" />}</h1>
         <p className="text-xs text-white/55">{conversation.is_group ? `${conversation.participants.length + 1} members · ${online} online`
           : conversation.participants[0]?.online ? 'Active now' : 'Offline'}</p>
       </div>
+      <HuddleButton channelId={conversation.id} title={conversationTitle(conversation)} ring />
+      <Controls {...controls} />
       <Stack people={conversation.participants} total={conversation.participants.length} />
-    </header>;
+    </div>
+      {onTab && <div role="tablist" aria-label="Conversation views" className="flex gap-6 overflow-x-auto">
+        <Tab active={tab === 'messages'} icon="message" label="Messages" onClick={() => onTab('messages')} />
+        <Tab active={tab === 'docs'} icon="file" label="Docs" onClick={() => onTab('docs')} />
+        <Tab active={tab === 'todos'} icon="checkSquare" label="To-dos" onClick={() => onTab('todos')} />
+      </div>}
+    </header>
+    {away && <p role="status" className="-mt-1 mb-3 rounded-xl bg-brand-soft px-3 py-2 text-sm">
+      🌴 <strong>{partner?.username}</strong> is out of office until {dayText(away)}. They may reply late.</p>}</>;
   }
 
   if (channel && space) {
@@ -78,6 +118,8 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
             <Icon name={channel.type === 'voice' ? 'volume' : channel.is_private ? 'lock' : 'hash'} size={20} className="shrink-0 text-white/45" />{channel.name}</h1>
           <p className="truncate text-sm text-white/55">{channel.is_private && <span className="mr-2 rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand">Private channel</span>}{channel.topic || `${space.name} · ${space.type === 'community' ? 'Community' : 'Workspace'}`}</p>
         </div>
+        {channel.type !== 'voice' && <HuddleButton channelId={channel.id} title={`#${channel.name}`} />}
+        <Controls {...controls} />
         {channel.is_private && <div className="relative">
           <button type="button" onClick={() => setPanel(open => !open)} aria-expanded={panel} className="btn-ghost flex items-center gap-1.5 text-sm">
             <Icon name="users" size={15} />Members</button>
@@ -86,9 +128,11 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
         </div>}
         <Stack people={members.map(member => member.user)} total={space.member_count} href={`/s/${space.slug}/members`} />
       </div>
-      {onTab && channel.type !== 'voice' && <div role="tablist" aria-label="Channel views" className="mt-3 flex gap-6">
+      {onTab && channel.type !== 'voice' && <div role="tablist" aria-label="Channel views" className="mt-3 flex gap-6 overflow-x-auto">
         <Tab active={tab === 'messages'} icon="message" label="Messages" onClick={() => onTab('messages')} />
         <Tab active={tab === 'posts'} icon="layers" label="Posts" onClick={() => onTab('posts')} />
+        <Tab active={tab === 'docs'} icon="file" label="Docs" onClick={() => onTab('docs')} />
+        <Tab active={tab === 'todos'} icon="checkSquare" label="To-dos" onClick={() => onTab('todos')} />
       </div>}
     </header>;
   }

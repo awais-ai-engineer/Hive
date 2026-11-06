@@ -8,6 +8,8 @@ export type User = {
   bio?: string | null;
   status_text?: string | null;
   status_emoji?: string | null;
+  status_expires_at?: string | null;
+  out_of_office_until?: string | null;
   dm_policy?: 'everyone' | 'workspaces' | 'nobody';
   appear_offline?: boolean;
 };
@@ -18,6 +20,7 @@ let session: AuthSession | null = null;
 let revision = 0;
 let refreshPromise: Promise<AuthSession | null> | null = null;
 const listeners = new Set<(value: AuthSession | null) => void>();
+export const currentUserId = () => session?.user.id;
 
 export function setSession(value: AuthSession | null) {
   session = value;

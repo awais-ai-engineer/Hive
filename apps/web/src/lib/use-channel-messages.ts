@@ -5,6 +5,7 @@ import type { Attachment, Message, MessageDeleted, MessagePage, ReactionUpdate, 
 import { useAuth } from './auth';
 import { apiData, requestError } from './spaces';
 import { chatRequest, socket } from './socket';
+import type { ComposerSendOptions } from './composer-actions';
 
 export type ChatMessage = Message & { status?: 'sending' | 'failed'; error?: string };
 
@@ -69,6 +70,11 @@ export function useMessageList(channelId: string, parentId: string | null = null
       if (parentId && data.messageId === parentId) setParent(current => current && { ...current, reactions: data.reactions });
       else patch(data.messageId, item => ({ ...item, reactions: data.reactions }));
     };
+    const onPoll = (data: { messageId: string; counts: Record<string, number>; total: number; closedAt?: string | null }) => {
+      const update = (item: ChatMessage) => item.poll ? { ...item, poll: { ...item.poll, counts: data.counts, total: data.total, closedAt: data.closedAt ?? item.poll.closedAt, options: item.poll.options.map(option => ({ ...option, count: data.counts[option.id] ?? 0 })) } } : item;
+      if (parentId === data.messageId) setParent(item => item && update(item));
+      else patch(data.messageId, update);
+    };
     async function catchUp() {
       if (!active || !initialized || !user || !socket.connected || synchronizing) return;
       synchronizing = true;
@@ -98,6 +104,7 @@ export function useMessageList(channelId: string, parentId: string | null = null
     const onConnect = () => { setConnected(true); void catchUp(); };
     const onDisconnect = () => setConnected(false);
     socket.on('message:new', onMessage).on('message:updated', onMessage).on('message:deleted', onDelete)
+      .on('poll:updated', onPoll)
       .on('reaction:updated', onReaction).on('connect', onConnect).on('disconnect', onDisconnect);
     setConnected(socket.connected);
     const initial = parentId
@@ -112,29 +119,34 @@ export function useMessageList(channelId: string, parentId: string | null = null
       active = false;
       if (generation.current === version) generation.current++;
       socket.off('message:new', onMessage).off('message:updated', onMessage).off('message:deleted', onDelete)
+        .off('poll:updated', onPoll)
         .off('reaction:updated', onReaction).off('connect', onConnect).off('disconnect', onDisconnect);
       // The thread panel shares the channel room with the channel view, so only the channel leaves it.
       if (!parentId && socket.connected) socket.emit('channel:leave', { channelId }, () => {});
     };
   }, [channelId, parentId, user?.id, merge, patch, commit]);
 
-  async function send(body: string, clientMsgId = crypto.randomUUID(), attachments: Attachment[] = []) {
-    if (!user) return;
+  async function send(body: string, clientMsgId = crypto.randomUUID(), attachments: Attachment[] = [], options: ComposerSendOptions = {}) {
+    if (!user) return false;
     const version = generation.current;
     const pending: ChatMessage = {
       id: `pending:${clientMsgId}`, channel_id: channelId, parent_id: parentId, author: user,
       body: body.trim(), client_msg_id: clientMsgId, created_at: new Date().toISOString(),
       edited_at: null, deleted: false, reply_count: 0, reactions: [], attachments, status: 'sending',
+      kind: options.kind ?? 'text', mentions: [], channelLinks: [], poll: null,
     };
     merge([pending]);
     try {
       const result = await chatRequest<{ message: Message }>('message:send', {
         channelId, body, clientMsgId, parentId, attachmentIds: attachments.map(file => file.id),
+        ...options,
       });
       if (generation.current === version) merge([result.message]);
+      return true;
     } catch (cause) {
-      if (generation.current !== version) return;
+      if (generation.current !== version) return false;
       patch(pending.id, item => ({ ...item, status: 'failed', error: requestError(cause) }));
+      return false;
     }
   }
 

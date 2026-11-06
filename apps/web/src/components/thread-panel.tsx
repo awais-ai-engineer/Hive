@@ -8,6 +8,7 @@ import { MessageItem } from './message-item';
 
 type Props = {
   channelId: string;
+  channels?: { id: string; name: string }[];
   parentId: string;
   userId?: string;
   reason: string;
@@ -17,7 +18,7 @@ type Props = {
 };
 
 /** Side panel with one thread: the parent message, its replies and a reply composer. */
-export function ThreadPanel({ channelId, parentId, userId, reason, canWrite, canModerate, onClose }: Props) {
+export function ThreadPanel({ channelId, channels, parentId, userId, reason, canWrite, canModerate, onClose }: Props) {
   const thread = useMessageList(channelId, parentId);
   const [error, setError] = useState('');
   const list = useRef<HTMLDivElement>(null);
@@ -35,7 +36,7 @@ export function ThreadPanel({ channelId, parentId, userId, reason, canWrite, can
     socket.emit('thread:read', { parentId, messageId: newest }, () => {});
   }, [thread.messages, userId, parentId]);
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.defaultPrevented) onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
@@ -65,8 +66,8 @@ export function ThreadPanel({ channelId, parentId, userId, reason, canWrite, can
       })}
     </div>
     <div className="pt-3">
-      <Composer channelId={channelId} placeholder="Reply…" reason={blocked}
-        onSend={(body, files) => void thread.send(body, undefined, files)} />
+      <Composer channelId={channelId} channels={channels} parentId={parentId} placeholder="Reply…" reason={blocked} onEditLast={()=>{const last=thread.messages.filter(item=>item.author.id===userId&&!item.deleted&&!item.status&&(!item.kind||item.kind==='text')).at(-1);if(last)window.dispatchEvent(new CustomEvent('hive:edit-message',{detail:{id:last.id}}));}}
+        onSend={(body, files, options) => thread.send(body, undefined, files, options)} />
     </div>
   </aside>;
 }

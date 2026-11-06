@@ -1,11 +1,13 @@
 import os
 import tempfile
 
-os.environ["DATABASE_URL"] = "postgresql+asyncpg://hive:hive@localhost:5434/hive_test"
-os.environ["REDIS_URL"] = "redis://localhost:6380"
+# HIVE_TEST_DB / HIVE_TEST_REDIS let two checkouts run their suites side by side.
+TEST_DB = os.environ.get("HIVE_TEST_DB", "hive_test")
+os.environ["DATABASE_URL"] = f"postgresql+asyncpg://hive:hive@localhost:5434/{TEST_DB}"
+os.environ["REDIS_URL"] = os.environ.get("HIVE_TEST_REDIS", "redis://localhost:6380")
 os.environ["JWT_SECRET"] = "test-secret-long-enough-for-hs256-signing"
 os.environ["COOKIE_SECURE"] = "false"
-os.environ["SOCKETIO_CHANNEL"] = "hive-socketio-tests"
+os.environ["SOCKETIO_CHANNEL"] = f"hive-socketio-{TEST_DB}"
 os.environ["UPLOAD_DIR"] = tempfile.mkdtemp(prefix="hive-uploads-")
 os.environ["MAX_IMAGE_MB"] = "1"
 os.environ["MAX_FILE_MB"] = "1"
@@ -31,11 +33,11 @@ from tests.helpers import create_account
 async def database():
     connection = await asyncpg.connect("postgresql://hive:hive@localhost:5434/hive")
     try:
-        if not await connection.fetchval("SELECT 1 FROM pg_database WHERE datname='hive_test'"):
-            await connection.execute("CREATE DATABASE hive_test")
+        if not await connection.fetchval("SELECT 1 FROM pg_database WHERE datname=$1", TEST_DB):
+            await connection.execute(f'CREATE DATABASE "{TEST_DB}"')
     finally:
         await connection.close()
-    assert engine.url.database == "hive_test"
+    assert engine.url.database == TEST_DB
     async with engine.begin() as connection:
         await connection.execute(text("CREATE EXTENSION IF NOT EXISTS ltree"))
         await connection.run_sync(Base.metadata.drop_all)

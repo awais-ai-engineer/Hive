@@ -1,11 +1,15 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { sortSpaces, spaceKindLabel, type Space } from '../../lib/spaces';
 import { Avatar, colourFor } from '../ui/avatar';
 import { Icon, Logo } from '../ui/icons';
+import { statusTitle } from '../../lib/status';
+import { StatusDialog } from '../status-dialog';
+import { PopupMenu } from './popup-menu';
 
 function useTheme() {
   const [dark, setDark] = useState(false);
@@ -20,10 +24,13 @@ function useTheme() {
 }
 
 /** The far-left strip: brand, one tile per space, and the user's own controls at the bottom. */
-export function Rail({ spaces, current, onSwitch, unread }: {
-  spaces: Space[]; current: string | null; onSwitch: (slug: string) => void; unread: number;
+export function Rail({ spaces, current, onSwitch, unread, todos = 0 }: {
+  spaces: Space[]; current: string | null; onSwitch: (slug: string) => void; unread: number; todos?: number;
 }) {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
+  const router = useRouter();
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [settingStatus, setSettingStatus] = useState(false);
   const { dark, toggle } = useTheme();
   const ordered = sortSpaces(spaces);
   const favorites = ordered.filter(space => space.favorite);
@@ -61,14 +68,25 @@ export function Rail({ spaces, current, onSwitch, unread }: {
       <Icon name="bell" size={20} />
       {unread > 0 && <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-rose-500" />}
     </Link>
+    <Link href="/home?view=todos" title="To-dos" aria-label={todos ? `To-dos, ${todos} due` : 'To-dos'} className={`${tile} relative text-white/70 hover:bg-white/10 hover:text-white`}>
+      <Icon name="checkSquare" size={20} />
+      {todos > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full bg-brand px-1 text-center text-[10px] font-semibold" style={{ color: '#fff' }}>{todos > 99 ? '99+' : todos}</span>}
+    </Link>
     <button type="button" onClick={toggle} aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
       className={`${tile} text-white/70 hover:bg-white/10 hover:text-white`}><Icon name={dark ? 'sun' : 'moon'} size={20} /></button>
-    {user && <div className="group relative mt-1">
-      <Link href="/settings" aria-label="Your settings" title={user.status_emoji ? `${user.status_emoji} ${user.status_text ?? ''}`.trim() : 'Your settings'}><Avatar name={user.username} src={user.avatar_url} size={40} online /></Link>
-      <button type="button" onClick={() => void logout()} aria-label="Log out" title="Log out"
-        className="absolute -right-1 -top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-[var(--surface)] text-[var(--fg)] shadow group-hover:flex group-focus-within:flex">
-        <Icon name="logout" size={12} />
+    {user && <div className="relative mt-1">
+      <button type="button" aria-label="Your account menu" aria-haspopup="menu" aria-expanded={!!menu} title={statusTitle(user) ?? 'Your account'}
+        onClick={event => { const box = event.currentTarget.getBoundingClientRect(); setMenu({ x: box.right + 8, y: box.top - 120 }); }}>
+        <Avatar name={user.username} src={user.avatar_url} size={40} online />
+        {user.status_emoji && <span aria-hidden className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--surface)] text-[11px] shadow">{user.status_emoji}</span>}
       </button>
     </div>}
+    {menu && <PopupMenu at={menu} label="Account" onClose={() => setMenu(null)} items={[
+      { label: 'Set a status', icon: 'smile', onSelect: () => setSettingStatus(true) },
+      { label: 'Settings and profile', icon: 'settings', onSelect: () => router.push('/settings') },
+      { separator: true },
+      { label: 'Log out', icon: 'logout', onSelect: () => void logout() },
+    ]} />}
+    {settingStatus && user && <StatusDialog user={user} onSaved={updateUser} onClose={() => setSettingStatus(false)} />}
   </nav>;
 }

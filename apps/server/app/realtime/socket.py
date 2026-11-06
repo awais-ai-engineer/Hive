@@ -5,6 +5,7 @@ Rooms: `user:{id}` (all of a user's sockets), `channel:{id}` (live messages of a
 activity and presence go to each participant's `user:{id}` room instead.
 """
 
+import json
 import logging
 import time
 from functools import wraps
@@ -17,6 +18,8 @@ from socketio.exceptions import ConnectionRefusedError
 from sqlalchemy import select
 
 from app.auth.security import decode_access_token
+from app.calls import service as calls
+from app.calls.schemas import CallIn, SignalIn, StateIn
 from app.core.config import settings
 from app.db.models import (
     Channel,
@@ -29,13 +32,14 @@ from app.db.models import (
     SpaceType,
     User,
 )
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, redis
 from app.dms.service import participant_ids, partner_ids
 from app.messages import service
 from app.messages.schemas import (
     ChannelIn,
     EditIn,
     MessageIn,
+    PollVoteIn,
     ReactionIn,
     ReadIn,
     SendIn,
@@ -46,6 +50,7 @@ from app.messages.schemas import (
 from app.messages.threads import mark_thread_read, thread_participants
 from app.realtime import presence
 from app.spaces.service import member_for
+from app.users.blocks import blocked_among
 
 log = logging.getLogger("hive.realtime")
 
@@ -100,6 +105,8 @@ async def disconnect(sid: str, *args: object) -> None:
             user = await session.get(User, user_id)
         if user is not None and not user.appear_offline:
             await broadcast_presence(user_id, False)
+    await leave_call(sid)
+    signal_counts.pop(sid, None)
     typing_times.pop(sid, None)
     log.info("socket disconnected %s", sid)
 
@@ -109,7 +116,8 @@ async def ping(sid: str, data: object = None) -> dict:
     return {"serverTime": int(time.time() * 1000)}
 
 
-ERROR_CODES = {401: "unauthorized", 403: "forbidden", 404: "not_found", 429: "rate_limited"}
+ERROR_CODES = {401: "unauthorized", 403: "forbidden", 404: "not_found", 409: "full",
+               429: "rate_limited"}
 
 
 def chat_event(name, schema):
@@ -156,29 +164,39 @@ async def leave(sid, data, session, user):
 async def send(sid, data, session, user):
     message, inserted, parent = await service.send(session, user, data)
     if inserted:
-        room = f"channel:{message['channel_id']}"
-        await sio.emit("message:new", message, room=room)
-        if parent is not None:
-            await sio.emit("message:updated", parent, room=room)
-            # Everyone in the thread hears about it, even without the channel open.
-            activity = {"parentId": parent["id"], "channelId": message["channel_id"],
-                        "messageId": message["id"], "authorId": user.id}
-            parent_row = await session.get(Message, parent["id"])
-            for participant in await thread_participants(session, parent_row):
-                await sio.emit("thread:activity", activity, room=f"user:{participant}")
-            channel = await session.get(Channel, message["channel_id"])
-            if channel.type != ChannelType.dm:
-                await emit_space_activity(session, channel)
-        else:
-            channel = await session.get(Channel, message["channel_id"])
-            activity = {"channelId": channel.id, "messageId": message["id"], "authorId": user.id}
-            if channel.type == ChannelType.dm:
-                for participant in await participant_ids(session, channel.id):
-                    await sio.emit("dm:activity", activity, room=f"user:{participant}")
-            else:
-                await emit_channel_activity(session, channel, activity)
+        await broadcast_message(session, user, message, parent)
     return {"message": message}
 
+
+def public_message(message):
+    """Viewer-specific channel names and votes never travel in a shared room payload."""
+    return {**message, "channelLinks": [], "poll": {**message["poll"], "myVote": None} if message.get("poll") else None}
+
+
+async def broadcast_message(session, user, message, parent=None):
+    from app.messages.composer import notify_mentions
+    await notify_mentions(session, message)
+    room = f"channel:{message['channel_id']}"
+    await sio.emit("message:new", public_message(message), room=room)
+    if parent is not None:
+        await sio.emit("message:updated", public_message(parent), room=room)
+        # Everyone in the thread hears about it, even without the channel open.
+        activity = {"parentId": parent["id"], "channelId": message["channel_id"],
+                    "messageId": message["id"], "authorId": user.id}
+        parent_row = await session.get(Message, parent["id"])
+        for participant in await thread_participants(session, parent_row):
+            await sio.emit("thread:activity", activity, room=f"user:{participant}")
+        channel = await session.get(Channel, message["channel_id"])
+        if channel.type != ChannelType.dm:
+            await emit_space_activity(session, channel)
+    else:
+        channel = await session.get(Channel, message["channel_id"])
+        activity = {"channelId": channel.id, "messageId": message["id"], "authorId": user.id}
+        if channel.type == ChannelType.dm:
+            for participant in await participant_ids(session, channel.id):
+                await sio.emit("dm:activity", activity, room=f"user:{participant}")
+        else:
+            await emit_channel_activity(session, channel, activity)
 
 async def emit_space_activity(session, channel: Channel) -> None:
     """Refresh personal totals without requiring an open space or thread."""
@@ -211,7 +229,9 @@ async def emit_channel_activity(session, channel: Channel, activity: dict) -> No
 @chat_event("message:edit", EditIn)
 async def edit(sid, data, session, user):
     message = await service.change(session, user, data.messageId, data.body)
-    await sio.emit("message:updated", message, room=f"channel:{message['channel_id']}")
+    await sio.emit("message:updated", public_message(message), room=f"channel:{message['channel_id']}")
+    from app.messages.composer import notify_mentions
+    await notify_mentions(session, message)
     return {"message": message}
 
 
@@ -338,15 +358,182 @@ async def user_sockets(user_id: str) -> set[str]:
 
 async def evict_from_channel(user_id: str, channel_id: str) -> None:
     """Stop live messages of one channel for a user who lost access to it."""
+    await leave_calls_in(user_id, [channel_id])
     for sid in await user_sockets(user_id):
         await sio.leave_room(sid, f"channel:{channel_id}")
+
+
+# Calls (WebRTC signalling) ----------------------------------------------------------------
+
+signal_counts: dict[str, tuple[float, int]] = {}
+SIGNALS_PER_WINDOW = 200
+SIGNAL_WINDOW = 10.0
+
+
+async def call_audience(session, channel: Channel) -> list[str]:
+    """Rooms that may see who is in a call: exactly the people who can read the channel."""
+    from datetime import UTC, datetime
+
+    from sqlalchemy import or_
+
+    if channel.type == ChannelType.dm:
+        return [f"user:{person}" for person in await participant_ids(session, channel.id)]
+    space = await session.get(Space, channel.space_id)
+    if space is None:
+        return []
+    if not channel.is_private and (space.type == SpaceType.workspace or space.public_chat):
+        return [f"space:{channel.space_id}"]
+    people = select(SpaceMember.user_id).where(
+        SpaceMember.space_id == channel.space_id,
+        or_(SpaceMember.banned_until.is_(None), SpaceMember.banned_until <= datetime.now(UTC)),
+    )
+    if channel.is_private:
+        people = people.where(
+            SpaceMember.user_id.in_(select(ChannelMember.user_id).where(ChannelMember.channel_id == channel.id))
+        )
+    return [f"user:{person}" for person in await session.scalars(people)]
+
+
+async def announce_participants(channel_id: str) -> None:
+    """Tell sidebars who is in a call, but only people who can read that channel."""
+    summary = await calls.summary(channel_id)
+    async with SessionLocal() as session:
+        channel = await session.get(Channel, channel_id)
+        if channel is None:
+            return
+        for room in await call_audience(session, channel):
+            await sio.emit("call:participants", summary, room=room)
+
+
+MIN_SOLO_HUDDLE_SECONDS = 15
+
+
+async def post_huddle_summary(channel_id: str, author_id: str, huddle: dict) -> None:
+    """Posts "A huddle happened..." into a text channel or conversation once it has ended."""
+    names = huddle["names"]
+    if not names or (len(names) == 1 and huddle["seconds"] < MIN_SOLO_HUDDLE_SECONDS):
+        return  # an accidental click is not worth a message
+    async with SessionLocal() as session:
+        channel = await session.get(Channel, channel_id)
+        if channel is None or channel.type == ChannelType.voice:
+            return
+        message = Message(channel_id=channel_id, author_id=author_id, kind="huddle",
+                          body=calls.huddle_text(names, huddle["seconds"]))
+        session.add(message)
+        await session.commit()
+        out = await service.message_out(session, message, author_id)
+    await sio.emit("message:new", out, room=f"channel:{channel_id}")
+
+
+async def leave_call(sid: str) -> None:
+    left = await calls.remove(sid)
+    if left is None:
+        return
+    channel_id, entry, huddle = left
+    await sio.leave_room(sid, f"call:{channel_id}")
+    await sio.emit("call:peer-left", {"channelId": channel_id, "sid": sid}, room=f"call:{channel_id}")
+    await announce_participants(channel_id)
+    if huddle is not None and entry.get("userId"):
+        await post_huddle_summary(channel_id, entry["userId"], huddle)
+
+
+async def leave_calls_in(user_id: str, channel_ids: list[str]) -> None:
+    """Drops every socket of a user out of the calls of channels they lost access to."""
+    for sid in await user_sockets(user_id):
+        current = await calls.current_call(sid)
+        if current in channel_ids:
+            await leave_call(sid)
+            await sio.emit("call:removed", {"channelId": current}, to=sid)
+
+
+@chat_event("call:join", CallIn)
+async def call_join(sid, data, session, user):
+    channel = await calls.check_access(session, data.channelId, user)
+    current = await calls.current_call(sid)
+    if current and current != channel.id:
+        await leave_call(sid)  # one call per socket: joining another leaves the first
+    peers = [{"sid": peer_sid, **entry}
+             for peer_sid, entry in (await calls.participants(channel.id)).items() if peer_sid != sid]
+    entry = await calls.add(channel.id, sid, user)
+    await sio.enter_room(sid, f"call:{channel.id}")
+    await sio.emit("call:peer-joined", {"channelId": channel.id, "sid": sid, **entry},
+                   room=f"call:{channel.id}", skip_sid=sid)
+    await announce_participants(channel.id)
+    return {"channelId": channel.id, "iceServers": calls.ice_servers(), "peers": peers}
+
+
+@chat_event("call:leave", CallIn)
+async def call_leave(sid, data, session, user):
+    if await calls.current_call(sid) == data.channelId:
+        await leave_call(sid)
+
+
+@chat_event("call:signal", SignalIn)
+async def call_signal(sid, data, session, user):
+    """Relays an SDP offer/answer or ICE candidate to one peer, only inside the same call."""
+    if len(json.dumps(data.data)) > calls.MAX_SIGNAL_BYTES:
+        raise HTTPException(422, "Signal too large")
+    started, count = signal_counts.get(sid, (time.monotonic(), 0))
+    if time.monotonic() - started > SIGNAL_WINDOW:
+        started, count = time.monotonic(), 0
+    if count >= SIGNALS_PER_WINDOW:
+        raise HTTPException(429, "Too many signalling messages")
+    signal_counts[sid] = (started, count + 1)
+    room = await calls.participants(data.channelId)
+    if sid not in room or data.to not in room:
+        raise HTTPException(403, "Both sides must be in this call")
+    await sio.emit("call:signal", {"channelId": data.channelId, "from": sid, "userId": user.id,
+                                   "data": data.data}, to=data.to)
+
+
+@chat_event("call:state", StateIn)
+async def call_state(sid, data, session, user):
+    changes = data.model_dump(exclude_none=True, exclude={"channelId"})
+    entry = await calls.update_state(data.channelId, sid, changes)
+    if entry is None:
+        raise HTTPException(403, "You are not in this call")
+    await sio.emit("call:state", {"channelId": data.channelId, "sid": sid, **entry},
+                   room=f"call:{data.channelId}")
+
+
+@chat_event("call:ring", CallIn)
+async def call_ring(sid, data, session, user):
+    """Rings the other participants of a DM or group DM (voice channels don't ring)."""
+    channel = await calls.check_access(session, data.channelId, user)
+    if channel.type != ChannelType.dm:
+        raise HTTPException(422, "Only conversations can ring")
+    if not await redis.set(f"{settings.socketio_channel}:ring:{channel.id}:{user.id}", 1, nx=True, ex=5):
+        raise HTTPException(429, "Hold on a moment before ringing again")
+    for participant in await participant_ids(session, channel.id):
+        if participant != user.id and not await blocked_among(session, user.id, [participant]):
+            await sio.emit("call:incoming", {"channelId": channel.id,
+                                             "from": {"id": user.id, "username": user.username}},
+                           room=f"user:{participant}")
 
 
 async def evict_from_space(user_id: str, space_id: str) -> None:
     """Stop live updates for a user who lost access to a space (left, kicked)."""
     async with SessionLocal() as session:
         channels = list(await session.scalars(select(Channel.id).where(Channel.space_id == space_id)))
+    await leave_calls_in(user_id, channels)
     for sid in await user_sockets(user_id):
         await sio.leave_room(sid, f"space:{space_id}")
         for channel_id in channels:
             await sio.leave_room(sid, f"channel:{channel_id}")
+
+
+@chat_event("poll:vote", PollVoteIn)
+async def poll_vote(sid, data, session, user):
+    return await update_poll(session, user, data.messageId, data.optionId)
+
+
+@chat_event("poll:close", MessageIn)
+async def poll_close(sid, data, session, user):
+    return await update_poll(session, user, data.messageId, close=True)
+
+
+async def update_poll(session, user, message_id, option_id=None, close=False):
+    from app.messages.composer import vote
+    channel_id, poll = await vote(session, user, message_id, option_id, close)
+    await sio.emit("poll:updated", {"messageId": message_id, "counts": poll["counts"], "total": poll["total"], "closedAt": poll["closedAt"]}, room=f"channel:{channel_id}")
+    return {"messageId": message_id, "poll": poll}

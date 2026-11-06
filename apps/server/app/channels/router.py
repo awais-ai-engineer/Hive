@@ -24,7 +24,7 @@ from app.channels.service import (
 )
 from app.db.models import MemberRole, User
 from app.db.session import get_session
-from app.messages.service import in_private_channel, readable, unread_counts
+from app.messages.service import in_private_channel, readable, unread_counts_for
 from app.realtime.socket import evict_from_channel, sio
 from app.spaces.permissions import ROLE_RANK, require_role
 from app.spaces.service import load_space
@@ -40,8 +40,8 @@ async def get_channels(slug: str, session: Session, viewer: OptionalUser):
     space, member = await load_space(session, slug, viewer)
     channels = await list_channels(session, space, viewer.id if viewer else None)
     if member is not None:
-        counts = await unread_counts(
-            session, member.user_id, [channel.id for channel in channels], member.joined_at
+        counts = await unread_counts_for(
+            session, viewer, [channel.id for channel in channels], member.joined_at
         )
         for channel in channels:
             channel.unread = counts.get(channel.id, 0)

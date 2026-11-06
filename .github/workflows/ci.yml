@@ -56,5 +56,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @hive/shared build
+      - run: pnpm --filter @hive/shared test
       - run: pnpm typecheck
       - run: pnpm build

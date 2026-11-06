@@ -27,6 +27,7 @@ from app.db.models import (
 from app.messages.schemas import Participant, Place, PlaceSpace
 from app.messages.service import (
     mention_condition,
+    quiet_channel_ids,
     readable,
     serialize,
     unread_counts,
@@ -83,8 +84,7 @@ async def places(session: AsyncSession, viewer_id: str, channel_ids: list[str]) 
             result[channel.id] = Place(
                 id=channel.id, kind="dm", name=", ".join(user.username for user in others),
                 space=None, participants=[
-                    Participant(id=user.id, username=user.username, avatar_url=user.avatar_url,
-                                online=user.id in online)
+                    Participant.model_validate(user).model_copy(update={"online": user.id in online})
                     for user in others
                 ],
             )
@@ -231,6 +231,7 @@ async def my_unreads(session: AsyncSession, user: User) -> dict:
         select(DirectMember.channel_id).where(DirectMember.user_id == user.id)
     ):
         since[channel_id] = EPOCH
+    muted |= await quiet_channel_ids(session, user.id, list(since))
     counts: dict[str, int] = {}
     by_since: dict[datetime, list[str]] = {}
     for channel_id, moment in since.items():

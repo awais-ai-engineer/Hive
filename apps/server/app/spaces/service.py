@@ -195,7 +195,7 @@ async def list_members(session: AsyncSession, space: Space, cursor: str | None) 
     online = await visible_online(session, [user.id for _, user in rows])
     result = [
         MemberOut(
-            user=MemberUserOut(id=user.id, username=user.username, avatar_url=user.avatar_url),
+            user=MemberUserOut.model_validate(user),
             role=member.role,
             joined_at=member.joined_at,
             online=user.id in online,

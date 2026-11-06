@@ -135,7 +135,7 @@ export default function SpacePage() {
         {space.my_role && rank[space.my_role] >= rank.member && <Link href={`/s/${slug}/submit`} className="auth-button mb-5 inline-block">Create post</Link>}
         <PostFeed space={space} />
       </>}
-      {space && tab === 'chat' && channel && <ChannelChat key={`${channel.id}:${user?.id ?? 'anonymous'}`} channel={channel} space={space} placeholder={`Message #${channel.name}`}
+      {space && tab === 'chat' && channel && <ChannelChat key={`${channel.id}:${user?.id ?? 'anonymous'}`} channel={channel} channels={channels} space={space} placeholder={`Message #${channel.name}`}
         reason={channel.type === 'voice' ? 'Voice rooms coming soon' : !user ? 'Log in to chat'
           : !space.my_role ? 'Join this space to chat' : space.my_role === 'guest' ? 'You have read-only access' : ''}
         canModerate={!!space.my_role && rank[space.my_role] >= rank.moderator} tracksReads={!!space.my_role} onRead={clearUnread} />}

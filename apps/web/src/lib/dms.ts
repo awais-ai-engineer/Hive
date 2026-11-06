@@ -1,9 +1,12 @@
-export type Participant = { id: string; username: string; avatar_url: string | null; online: boolean };
+import type { StatusFields } from './status';
+
+export type Participant = { id: string; username: string; avatar_url: string | null; online: boolean } & StatusFields;
 
 export type Conversation = {
   id: string;
   participants: Participant[];
   is_group: boolean;
+  read_only?: boolean;
   last_message: {
     id: string; author_id: string; body: string | null; has_attachments: boolean; created_at: string;
   } | null;

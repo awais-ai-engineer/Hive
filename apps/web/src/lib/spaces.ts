@@ -1,3 +1,5 @@
+import type { StatusFields } from './status';
+
 export type Space = {
   id: string;
   type: 'community' | 'workspace';
@@ -30,7 +32,7 @@ export type Channel = {
 };
 
 export type Member = {
-  user: { id: string; username: string; avatar_url: string | null };
+  user: { id: string; username: string; avatar_url: string | null } & StatusFields;
   role: Space['my_role'];
   joined_at: string;
   online: boolean;

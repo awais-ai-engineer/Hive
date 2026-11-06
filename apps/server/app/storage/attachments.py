@@ -19,6 +19,8 @@ async def serialize_files(files):
             content_type=file.content_type,
             size=file.size,
             kind=file.kind,
+            durationMs=file.duration_ms,
+            waveform=file.waveform,
             url=urls[file.storage_key],
         )
         for file in files

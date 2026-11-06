@@ -14,10 +14,13 @@ class Settings(BaseSettings):
     access_token_minutes: int = 15
     refresh_token_days: int = 30
     cookie_secure: bool = False
+    # WebRTC ICE servers as JSON. Add a TURN server here when deploying behind strict NATs.
+    ice_servers: str = '[{"urls": "stun:stun.l.google.com:19302"}]'
     upload_dir: str = "uploads"
     storage_driver: str = "local"
     max_image_mb: int = 10
     max_video_mb: int = 100
+    max_audio_mb: int = 10
     max_file_mb: int = 10
     supabase_url: str = ""
     supabase_service_key: str = ""
