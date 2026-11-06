@@ -554,3 +554,69 @@ class ConversationPref(Base):
         ForeignKey("channels.id", ondelete="CASCADE"), primary_key=True
     )
     level: Mapped[str] = mapped_column(String(10))
+
+
+class Doc(Base):
+    """A document attached to a channel or conversation. The body is a list of JSON blocks."""
+
+    __tablename__ = "docs"
+    __table_args__ = (Index("ix_docs_channel_id", "channel_id", "updated_at"),)
+
+    id: Mapped[str] = pk()
+    channel_id: Mapped[str] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    emoji: Mapped[str | None] = mapped_column(String(16))
+    body: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    updated_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = created_at()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class DocVersion(Base):
+    """A saved snapshot of a doc; only the most recent ones are kept."""
+
+    __tablename__ = "doc_versions"
+    __table_args__ = (UniqueConstraint("doc_id", "version", name="uq_doc_versions_doc_version"),)
+
+    id: Mapped[str] = pk()
+    doc_id: Mapped[str] = mapped_column(ForeignKey("docs.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(200))
+    emoji: Mapped[str | None] = mapped_column(String(16))
+    body: Mapped[list] = mapped_column(JSONB)
+    saved_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = created_at()
+
+
+class Task(Base):
+    """A to-do: personal, or tied to a channel/conversation (optionally to one message)."""
+
+    __tablename__ = "tasks"
+    __table_args__ = (
+        CheckConstraint("status IN ('open', 'done')", name="tasks_status_check"),
+        Index("ix_tasks_created_by", "created_by"),
+        Index("ix_tasks_assignee_id", "assignee_id"),
+        Index("ix_tasks_channel_id", "channel_id"),
+    )
+
+    id: Mapped[str] = pk()
+    title: Mapped[str] = mapped_column(String(200))
+    notes: Mapped[str] = mapped_column(String(2000), default="", server_default="")
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    assignee_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    channel_id: Mapped[str | None] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"))
+    source_message_id: Mapped[str | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="SET NULL")
+    )
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(8), default="open", server_default="open")
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created_at: Mapped[datetime] = created_at()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
