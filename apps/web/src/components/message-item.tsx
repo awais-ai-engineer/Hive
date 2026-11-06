@@ -6,6 +6,7 @@ import type { Attachment } from '@hive/shared';
 import { API_URL } from '../lib/api';
 import { ReportDialog } from './report-dialog';
 import { Avatar } from './ui/avatar';
+import { StatusMark } from './ui/status-mark';
 import { chatRequest } from '../lib/socket';
 import { requestError } from '../lib/spaces';
 import type { ChatMessage } from '../lib/use-channel-messages';
@@ -46,7 +47,6 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
   const [draft, setDraft] = useState('');
   const [picker, setPicker] = useState(false);
   const [reporting, setReporting] = useState(false);
-  const statusEmoji = (message.author as { status_emoji?: string | null }).status_emoji;
   const own = userId === message.author.id;
   const live = !message.deleted && !message.status;
 
@@ -71,7 +71,7 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
     <div className="min-w-0 flex-1">
     {!grouped && <div className="flex items-baseline gap-2">
       <Link href={`/u/${message.author.username}`} className="truncate font-semibold hover:underline">{message.author.username}</Link>
-      {statusEmoji && <span aria-hidden>{statusEmoji}</span>}
+      <StatusMark person={message.author} />
       <time dateTime={message.created_at} title={new Date(message.created_at).toLocaleString()} className="shrink-0 text-xs text-white/40">
         {time}
       </time>

@@ -37,6 +37,8 @@ export default function SettingsPage() {
     ]);
     setSpace(spaceData); setChannels(channelData); setInvites(inviteData); setError('');
     setCategory(spaceData.category); setTags(spaceData.tags);
+    // Arriving from "Invite people" in the sidebar: bring the invites into view.
+    if (window.location.hash === '#invites') requestAnimationFrame(() => document.getElementById('invites')?.scrollIntoView());
   }
 
   useEffect(() => {
@@ -183,7 +185,7 @@ export default function SettingsPage() {
         <button className="auth-button">Add channel</button>
       </form>
     </section>
-    <section><h2 className="mb-4 text-xl font-semibold">Invites</h2>
+    <section id="invites" className="scroll-mt-4"><h2 className="mb-4 text-xl font-semibold">Invites</h2>
       <form onSubmit={addInvite} className="flex flex-wrap items-end gap-3">
         <label>Maximum uses<input name="max_uses" type="number" min={1} max={1000} className="auth-input" placeholder="Unlimited" /></label>
         <label>Expires in hours<input name="expires_in_hours" type="number" min={1} max={720} className="auth-input" placeholder="Never" /></label>

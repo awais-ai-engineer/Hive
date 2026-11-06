@@ -8,6 +8,8 @@ export type User = {
   bio?: string | null;
   status_text?: string | null;
   status_emoji?: string | null;
+  status_expires_at?: string | null;
+  out_of_office_until?: string | null;
   dm_policy?: 'everyone' | 'workspaces' | 'nobody';
   appear_offline?: boolean;
 };

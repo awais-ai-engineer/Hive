@@ -13,7 +13,11 @@ export const attachmentSchema = z.object({
 });
 export const messageSchema = z.object({
   id: z.string(), channel_id: z.string(), parent_id: z.string().nullable(),
-  author: z.object({ id: z.string(), username: z.string(), avatar_url: z.string().nullable() }),
+  author: z.object({
+    id: z.string(), username: z.string(), avatar_url: z.string().nullable(),
+    status_emoji: z.string().nullable().optional(), status_text: z.string().nullable().optional(),
+    status_expires_at: z.string().nullable().optional(),
+  }),
   body: z.string().nullable(), client_msg_id: z.string().nullable(),
   created_at: z.string(), edited_at: z.string().nullable(), deleted: z.boolean(),
   reply_count: z.number(), reactions: z.array(reactionSchema), attachments: z.array(attachmentSchema),

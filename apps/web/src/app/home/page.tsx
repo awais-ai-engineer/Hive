@@ -6,12 +6,14 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ChannelChat } from '../../components/channel-chat';
 import { PostFeed } from '../../components/posts/post-feed';
 import { ChatHeader } from '../../components/home/chat-header';
+import { DirectoryView, type DirectoryTab } from '../../components/home/directory-view';
 import { Rail } from '../../components/home/rail';
 import { Sidebar } from '../../components/home/sidebar';
 import { ThreadsView } from '../../components/home/threads-view';
 import { UnreadsView } from '../../components/home/unreads-view';
 import { useAuth } from '../../lib/auth';
 import { conversationTitle, DMS_CHANGED, type Conversation } from '../../lib/dms';
+import { sidebarApi, useSidebarData, type NotifyLevel } from '../../lib/sidebar';
 import { loadSetting, placeHref, saveSetting, type Place, type ThreadItem, type UnreadItem } from '../../lib/home';
 import { socket } from '../../lib/socket';
 import { apiData, requestError, SPACES_CHANGED, type Channel, type Space } from '../../lib/spaces';
@@ -44,6 +46,7 @@ function Home() {
   const view = search.get('view');
   const threadParam = search.get('t');
   const tab = search.get('tab') === 'posts' ? 'posts' : 'messages';
+  const directoryTab: DirectoryTab = search.get('dir') === 'channels' ? 'channels' : 'people';
 
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [spacesReady, setSpacesReady] = useState(false);
@@ -55,6 +58,9 @@ function Home() {
   const [threadsVersion, setThreadsVersion] = useState(0);
   const [error, setError] = useState('');
   const [drawer, setDrawer] = useState(false);
+  const sidebar = useSidebarData(!loading && !!user);
+  const prefs = useRef(sidebar.data.prefs);
+  prefs.current = sidebar.data.prefs;
 
   const slug = slugParam ?? (spacesReady ? loadSetting<string | null>(LAST_SPACE, null) ?? spaces[0]?.slug ?? null : null);
   const space = spaces.find(item => item.slug === slug) ?? null;
@@ -103,6 +109,7 @@ function Home() {
       .then(page => setThreadsUnread(page.items.filter(item => item.unread_replies > 0).length)).catch(() => {});
   }, []);
   const refreshConversations = useDebounced(loadConversations, 300);
+  const refreshChannels = useDebounced(() => { void loadChannels().catch(() => {}); }, 300);
   const refreshUnreads = useDebounced(loadUnreads, 400);
   const refreshThreads = useDebounced(() => { loadThreads(); setThreadsVersion(value => value + 1); }, 400);
 
@@ -127,7 +134,8 @@ function Home() {
     if (!user) return;
     const onChannelActivity = (data: { channelId: string; authorId: string }) => {
       if (data.authorId === user.id) return;
-      if (data.channelId !== selected) {
+      if (data.channelId !== selected && prefs.current[data.channelId]) refreshChannels();
+      else if (data.channelId !== selected) {
         setChannels(list => list.map(item => item.id === data.channelId ? { ...item, unread: item.unread + 1 } : item));
       }
       refreshUnreads();
@@ -141,15 +149,19 @@ function Home() {
       ...item, participants: item.participants.map(person => person.id === data.userId ? { ...person, online: data.online } : person),
     })));
     const onReconnect = () => { refreshConversations(); refreshUnreads(); refreshThreads(); };
+    // Another tab changed a notification level: counts everywhere may change.
+    const onSidebar = () => { refreshConversations(); refreshUnreads(); refreshChannels(); window.dispatchEvent(new Event(SPACES_CHANGED)); };
     socket.on('channel:activity', onChannelActivity).on('dm:activity', onDm).on('read:updated', onRead)
       .on('space:activity', refreshUnreads).on('spaces:updated', refreshUnreads)
-      .on('thread:activity', refreshThreads).on('thread:read', refreshThreads).on('presence', onPresence).on('connect', onReconnect);
+      .on('thread:activity', refreshThreads).on('thread:read', refreshThreads).on('presence', onPresence).on('connect', onReconnect)
+      .on('sidebar:updated', onSidebar);
     return () => {
       socket.off('channel:activity', onChannelActivity).off('dm:activity', onDm).off('read:updated', onRead)
         .off('space:activity', refreshUnreads).off('spaces:updated', refreshUnreads)
-        .off('thread:activity', refreshThreads).off('thread:read', refreshThreads).off('presence', onPresence).off('connect', onReconnect);
+        .off('thread:activity', refreshThreads).off('thread:read', refreshThreads).off('presence', onPresence).off('connect', onReconnect)
+        .off('sidebar:updated', onSidebar);
     };
-  }, [user, selected, refreshConversations, refreshUnreads, refreshThreads]);
+  }, [user, selected, refreshConversations, refreshUnreads, refreshThreads, refreshChannels]);
 
   // Private channels appear or disappear when someone adds or removes the viewer.
   useEffect(() => {
@@ -185,6 +197,26 @@ function Home() {
     return () => window.removeEventListener('keydown', onKey);
   }, [drawer]);
 
+  const toggleStar = (id: string) => {
+    const on = !sidebar.data.stars.includes(id);
+    sidebar.setData(current => ({ ...current, stars: on ? [...current.stars, id] : current.stars.filter(item => item !== id) }));
+    (on ? sidebarApi.star(id) : sidebarApi.unstar(id)).catch(cause => setError(requestError(cause))).finally(sidebar.reload);
+  };
+  const changeLevel = (id: string, level: NotifyLevel) => {
+    sidebar.setData(current => {
+      const next = { ...current.prefs };
+      if (level === 'all') delete next[id]; else next[id] = level;
+      return { ...current, prefs: next };
+    });
+    sidebarApi.setLevel(id, level).catch(cause => setError(requestError(cause))).finally(() => {
+      sidebar.reload(); refreshConversations(); refreshUnreads(); refreshChannels(); window.dispatchEvent(new Event(SPACES_CHANGED));
+    });
+  };
+  const controls = (id: string) => ({
+    starred: sidebar.data.stars.includes(id), onStar: () => toggleStar(id),
+    level: sidebar.data.prefs[id] ?? 'all', onLevel: (level: NotifyLevel) => changeLevel(id, level),
+  });
+
   // Actions ------------------------------------------------------------------------------
   async function openPerson(username: string) {
     try {
@@ -216,13 +248,20 @@ function Home() {
   const channel = channels.find(item => item.id === selected) ?? null;
   const myRank = space?.my_role ? rank[space.my_role] : 0;
   const unreadTotal = unreads.reduce((sum, item) => sum + item.unread, 0);
-  const showView = view === 'unreads' || view === 'threads' || (!conversation && !channel);
+  const showView = view === 'unreads' || view === 'threads' || view === 'directory' || (!conversation && !channel);
+  const activeView = view === 'directory' ? 'directory' : showView && view !== 'threads' ? 'unreads' : view;
   const threadChange = (id: string | null) => go({ c: selected, t: id });
 
   let main;
-  if (conversation) {
+  if (view === 'directory') {
     main = <>
-      <ChatHeader conversation={conversation} onMenu={() => setDrawer(true)} />
+      <ChatHeader title="Directories" onMenu={() => setDrawer(true)} />
+      <DirectoryView space={space} tab={directoryTab} onTab={next => go({ view: 'directory', dir: next === 'channels' ? 'channels' : null })}
+        onMessage={username => void openPerson(username)} onOpenChannel={id => go({ c: id })} />
+    </>;
+  } else if (conversation) {
+    main = <>
+      <ChatHeader conversation={conversation} onMenu={() => setDrawer(true)} {...controls(conversation.id)} />
       <ChannelChat key={conversation.id} channel={{ id: conversation.id, name: conversationTitle(conversation) }}
         placeholder={`Message ${conversationTitle(conversation)}`} reason="" canModerate={false} tracksReads onRead={markRead}
         threadId={threadParam} onThreadChange={threadChange} />
@@ -230,7 +269,7 @@ function Home() {
   } else if (channel && space) {
     main = <>
       <ChatHeader channel={channel} space={space} tab={tab} onTab={next => go({ c: channel.id, tab: next === 'posts' ? 'posts' : null })}
-        onMenu={() => setDrawer(true)}
+        onMenu={() => setDrawer(true)} {...controls(channel.id)}
         onLeft={() => { void loadChannels().catch(() => {}); go({ c: null }); }} />
       {tab === 'posts' ? <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         <Suspense fallback={<p className="text-white/50">Loading posts…</p>}><PostFeed space={space} /></Suspense>
@@ -261,8 +300,10 @@ function Home() {
       <aside className="h-full w-[min(80vw,280px)] md:w-[280px]">
         {spacesReady && !spaces.length && <p className="on-dark bg-[var(--sidebar-from)] px-4 pt-4 text-sm text-white/70">You haven&apos;t joined a space yet. <Link href="/spaces" className="underline">Browse spaces</Link> or <Link href="/spaces/new" className="underline">create one</Link>.</p>}
         <Sidebar spaces={spaces} space={space} channels={channels} conversations={conversations}
-          selected={selected} view={showView && view !== 'threads' ? 'unreads' : view}
+          selected={selected} view={activeView}
           unreadTotal={unreadTotal} threadsUnread={threadsUnread}
+          data={sidebar.data} update={sidebar.setData} onChanged={sidebar.reload}
+          onBrowseChannels={() => go({ view: 'directory', dir: 'channels' })}
           onSwitchSpace={next => go({ s: next })} onOpen={id => go({ c: id })} onView={next => go({ view: next })}
           onPerson={username => void openPerson(username)} onChannelCreated={channel => void channelCreated(channel)} />
       </aside>

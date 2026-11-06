@@ -1,4 +1,6 @@
-export type Participant = { id: string; username: string; avatar_url: string | null; online: boolean };
+import type { StatusFields } from './status';
+
+export type Participant = { id: string; username: string; avatar_url: string | null; online: boolean } & StatusFields;
 
 export type Conversation = {
   id: string;

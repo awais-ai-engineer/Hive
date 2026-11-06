@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../../../lib/auth';
 import { apiData, requestError, type Member, type Space } from '../../../../lib/spaces';
+import { StatusMark } from '../../../../components/ui/status-mark';
 
 const roles = ['owner', 'admin', 'moderator', 'member', 'guest'] as const;
 const rank: Record<string, number> = { owner: 5, admin: 4, moderator: 3, member: 2, guest: 1 };
@@ -78,7 +79,7 @@ export default function MembersPage() {
           && member.user.id !== user?.id;
         const choices = roles.filter(role => rank[role] < rankYou);
         return <li key={member.user.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <div><span aria-label={member.online ? 'Online' : 'Offline'} className={`mr-2 inline-block h-2 w-2 rounded-full ${member.online ? 'bg-emerald-400' : 'bg-white/20'}`} /><Link href={`/u/${member.user.username}`} className="font-medium hover:underline">{member.user.username}</Link>
+          <div><span aria-label={member.online ? 'Online' : 'Offline'} className={`mr-2 inline-block h-2 w-2 rounded-full ${member.online ? 'bg-emerald-400' : 'bg-white/20'}`} /><Link href={`/u/${member.user.username}`} className="font-medium hover:underline">{member.user.username}</Link> <StatusMark person={member.user} />
             <span className="ml-3 rounded bg-white/10 px-2 py-1 text-xs capitalize">{member.role}</span></div>
           {(mayChangeRole || mayKick || (user && space?.my_role && member.user.id !== user.id)) && <div className="flex items-center gap-2">
             {user && space?.my_role && member.user.id !== user.id && <button onClick={() => message(member)} className="text-sm text-amber-400">Message</button>}
