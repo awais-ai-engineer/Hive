@@ -80,6 +80,8 @@ async def test_unread_preview_and_presence(client, setup_chat, live_server):
             assert listed["unread"] == 3 and listed["last_message"]["body"] == "Message 2"
             assert listed["participants"][0] == {
                 "id": alice["user"]["id"], "username": "alice", "avatar_url": None, "online": True,
+                "status_emoji": None, "status_text": None, "status_expires_at": None,
+                "out_of_office_until": None,
             }
             await call(b, "read:update", {"channelId": dm, "messageId": ids[-1]})
             assert (await client.get("/api/dms", headers=bh)).json()[0]["unread"] == 0

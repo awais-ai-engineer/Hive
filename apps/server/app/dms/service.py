@@ -26,7 +26,7 @@ from app.db.models import (
     User,
 )
 from app.dms.schemas import DirectCreate, DirectOut, LastMessage, Participant, UserResult
-from app.messages.service import unread_counts
+from app.messages.service import unread_counts_for
 from app.realtime.presence import visible_online
 from app.users.blocks import blocked_among, not_blocked_with
 
@@ -37,7 +37,7 @@ def _active(member):
     return or_(member.banned_until.is_(None), member.banned_until <= datetime.now(UTC))
 
 
-def _shares_space(me: str):
+def shares_space(me: str):
     """Users who are an active member of at least one space the viewer is also active in."""
     mine, theirs = aliased(SpaceMember), aliased(SpaceMember)
     return exists().where(
@@ -52,7 +52,7 @@ async def search_users(session: AsyncSession, me: User, query: str) -> list[User
         return []
     rows = await session.scalars(
         select(User)
-        .where(User.id != me.id, User.username.ilike(f"{pattern}%", escape="\\"), _shares_space(me.id),
+        .where(User.id != me.id, User.username.ilike(f"{pattern}%", escape="\\"), shares_space(me.id),
                 not_blocked_with(me.id))
         .order_by(func.length(User.username), User.username)
         .limit(10)
@@ -94,7 +94,7 @@ async def open_conversation(session: AsyncSession, me: User, data: DirectCreate)
     if not names:
         raise HTTPException(422, "Choose at least one other person")
     users = list(await session.scalars(
-        select(User).where(User.username.in_(names), _shares_space(me.id))
+        select(User).where(User.username.in_(names), shares_space(me.id))
     ))
     missing = names - {user.username for user in users}
     if missing:
@@ -161,7 +161,7 @@ async def list_conversations(
     with_files = set(await session.scalars(
         select(Attachment.message_id).where(Attachment.message_id.in_([m.id for m in last.values()]))
     )) if last else set()
-    unread = await unread_counts(session, me.id, ids, EPOCH)
+    unread = await unread_counts_for(session, me, ids, EPOCH)
     online = await visible_online(session, list({user.id for users in people.values() for user in users}))
     result = []
     for channel in channels:
@@ -170,8 +170,7 @@ async def list_conversations(
         result.append(DirectOut(
             id=channel.id,
             participants=[
-                Participant(id=user.id, username=user.username, avatar_url=user.avatar_url,
-                            online=user.id in online)
+                Participant.model_validate(user).model_copy(update={"online": user.id in online})
                 for user in others
             ],
             is_group=len(others) > 1,

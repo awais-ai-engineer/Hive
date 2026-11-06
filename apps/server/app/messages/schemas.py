@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -92,6 +92,9 @@ class AuthorOut(BaseModel):
     id: str
     username: str
     avatar_url: str | None
+    status_emoji: str | None = None
+    status_text: str | None = None
+    status_expires_at: datetime | None = None
 
 
 class ReactionOut(BaseModel):
@@ -154,10 +157,15 @@ class ThreadPage(MessagePage):
 
 
 class Participant(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: str
     username: str
     avatar_url: str | None
     online: bool = False
+    status_emoji: str | None = None
+    status_text: str | None = None
+    status_expires_at: datetime | None = None
+    out_of_office_until: date | None = None
 
 
 class PlaceSpace(BaseModel):

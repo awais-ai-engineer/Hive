@@ -18,7 +18,7 @@ from app.users import blocks
 from app.users.avatars import avatar_redirect_url, clear_avatar, set_avatar
 from app.users.profiles import public_profile
 from app.users.schemas import BlockedUser, BlockIn, ProfileIn, PublicProfile
-from app.users.service import update_profile
+from app.users.service import clear_expired, update_profile
 
 router = APIRouter(tags=["users"])
 CurrentUser = Annotated[User, Depends(get_current_user)]
@@ -27,7 +27,8 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 
 @router.get("/me", response_model=UserOut)
-async def me(user: CurrentUser) -> User:
+async def me(user: CurrentUser, session: Session) -> User:
+    await clear_expired(session, user.id)
     return user
 
 

@@ -153,9 +153,13 @@ class JoinIn(BaseModel):
 
 
 class MemberUserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: str
     username: str
     avatar_url: str | None
+    status_emoji: str | None = None
+    status_text: str | None = None
+    status_expires_at: datetime | None = None
 
 
 class MemberOut(BaseModel):

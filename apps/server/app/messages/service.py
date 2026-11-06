@@ -14,6 +14,7 @@ from app.db.models import (
     ChannelMember,
     ChannelRead,
     ChannelType,
+    ConversationPref,
     DirectMember,
     MemberRole,
     Message,
@@ -475,6 +476,27 @@ async def unread_counts(session: AsyncSession, user_id: str, channel_ids: list[s
         .group_by(Message.channel_id)
     )
     return dict(rows.all())
+
+
+async def quiet_channel_ids(session: AsyncSession, user_id: str, channel_ids: list[str]) -> set[str]:
+    """Conversations the user set to "only mentions" or "nothing"."""
+    if not channel_ids:
+        return set()
+    return set(await session.scalars(
+        select(ConversationPref.channel_id)
+        .where(ConversationPref.user_id == user_id, ConversationPref.channel_id.in_(channel_ids))
+    ))
+
+
+async def unread_counts_for(session: AsyncSession, user: User, channel_ids: list[str], since: datetime):
+    """`unread_counts` for a person: quiet conversations only count messages that mention them."""
+    counts = await unread_counts(session, user.id, channel_ids, since)
+    quiet = list(await quiet_channel_ids(session, user.id, channel_ids))
+    if quiet:
+        for channel_id in quiet:
+            counts.pop(channel_id, None)
+        counts.update(await unread_counts(session, user.id, quiet, since, user.username))
+    return counts
 
 
 async def sync(session: AsyncSession, user_id: str, channels: dict):

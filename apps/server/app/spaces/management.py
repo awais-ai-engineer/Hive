@@ -1,10 +1,19 @@
 from datetime import UTC, datetime
 
 from fastapi import HTTPException
-from sqlalchemy import and_, delete, func, or_, select, text
+from sqlalchemy import and_, delete, exists, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert
 
-from app.db.models import Channel, ChannelRead, Message, Space, SpaceMember, SpaceRule, UserInterest
+from app.db.models import (
+    Channel,
+    ChannelRead,
+    ConversationPref,
+    Message,
+    Space,
+    SpaceMember,
+    SpaceRule,
+    UserInterest,
+)
 from app.messages.service import mention_condition, unread_thread_mention
 from app.messages.threads import visible_channel
 from app.spaces.schemas import SpaceOut
@@ -14,13 +23,15 @@ from app.spaces.service import member_for
 async def joined_spaces(session, user):
     active = or_(SpaceMember.banned_until.is_(None), SpaceMember.banned_until <= datetime.now(UTC))
     members = select(SpaceMember.space_id, func.count().label("total")).where(active).group_by(SpaceMember.space_id).subquery()
+    quiet = exists().where(ConversationPref.user_id == user.id, ConversationPref.channel_id == Channel.id)
+    muted = or_(SpaceMember.muted.is_(True), quiet)
     unread = (select(Channel.space_id, func.count().label("total"))
         .join(Message, Message.channel_id == Channel.id)
         .join(SpaceMember, and_(SpaceMember.space_id == Channel.space_id, SpaceMember.user_id == user.id))
         .outerjoin(ChannelRead, and_(ChannelRead.channel_id == Channel.id, ChannelRead.user_id == user.id))
-        .where(active, visible_channel(user.id), or_(Message.parent_id.is_(None), and_(SpaceMember.muted.is_(True), mention_condition(user.username))), Message.deleted_at.is_(None),
-            Message.author_id != user.id, or_(SpaceMember.muted.is_(False), mention_condition(user.username)),
-            or_(SpaceMember.muted.is_(False), unread_thread_mention(user.id)),
+        .where(active, visible_channel(user.id), or_(Message.parent_id.is_(None), and_(muted, mention_condition(user.username))), Message.deleted_at.is_(None),
+            Message.author_id != user.id, or_(~muted, mention_condition(user.username)),
+            or_(~muted, unread_thread_mention(user.id)),
             or_(Message.id > ChannelRead.last_read_id, and_(ChannelRead.last_read_id.is_(None), Message.created_at > SpaceMember.joined_at)))
         .group_by(Channel.space_id).subquery())
     rows = await session.execute(select(Space, SpaceMember, func.coalesce(members.c.total, 0), func.coalesce(unread.c.total, 0))

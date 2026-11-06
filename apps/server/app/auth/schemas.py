@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated
 
 from email_validator import EmailNotValidError, validate_email
@@ -49,6 +49,8 @@ class UserOut(BaseModel):
     bio: str | None
     status_text: str | None
     status_emoji: str | None
+    status_expires_at: datetime | None
+    out_of_office_until: date | None
     dm_policy: DmPolicy
     appear_offline: bool
     created_at: datetime

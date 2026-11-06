@@ -12,6 +12,7 @@ from app.channels.router import router as channels_router
 from app.comments.router import router as comments_router
 from app.core.config import settings
 from app.db.session import engine, redis
+from app.directory.router import router as directory_router
 from app.dms.router import router as dms_router
 from app.explore.router import router as explore_router
 from app.invites.router import router as invites_router
@@ -19,6 +20,7 @@ from app.messages.router import router as messages_router
 from app.posts.router import router as posts_router
 from app.realtime.socket import sio
 from app.reports.router import router as reports_router
+from app.sidebar.router import router as sidebar_router
 from app.spaces.router import router as spaces_router
 from app.storage.base import StorageError
 from app.uploads.router import router as uploads_router
@@ -57,6 +59,8 @@ api.include_router(uploads_router, prefix="/api")
 api.include_router(posts_router, prefix="/api")
 api.include_router(comments_router, prefix="/api")
 api.include_router(reports_router, prefix="/api")
+api.include_router(sidebar_router, prefix="/api")
+api.include_router(directory_router, prefix="/api")
 
 # One ASGI app: Socket.IO handles /socket.io, everything else goes to FastAPI.
 app = socketio.ASGIApp(sio, other_asgi_app=api)

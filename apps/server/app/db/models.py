@@ -4,13 +4,14 @@ IDs are ULIDs: sortable by time, so pagination needs no extra timestamp index.
 """
 
 import enum
-from datetime import datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import (
     ARRAY,
     BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     Enum,
     Float,
@@ -22,9 +23,12 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.types import UserDefinedType
 from ulid import ULID
 
@@ -117,7 +121,27 @@ class User(Base):
         Enum(DmPolicy, name="dm_policy"), default=DmPolicy.everyone, server_default="everyone"
     )
     appear_offline: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # The status disappears by itself after this moment (null: it stays until changed).
+    status_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Last day the person is away; shown as an "Out of office" note.
+    out_of_office_until: Mapped[date | None] = mapped_column(Date)
+    # Personal sidebar settings, e.g. {"collapsed": ["starred", "dms"]}.
+    sidebar_prefs: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
     created_at: Mapped[datetime] = created_at()
+
+
+@event.listens_for(User, "load")
+@event.listens_for(User, "refresh")
+def _hide_expired_status(user: User, *_) -> None:
+    """Expired statuses read as empty everywhere; nothing is written here (see clear_expired)."""
+    values = user.__dict__
+    expires = values.get("status_expires_at")
+    if expires is not None and expires <= datetime.now(UTC):
+        for field in ("status_text", "status_emoji", "status_expires_at"):
+            set_committed_value(user, field, None)
+    away = values.get("out_of_office_until")
+    if away is not None and away < datetime.now(UTC).date():
+        set_committed_value(user, "out_of_office_until", None)
 
 
 class UserBlock(Base):
@@ -468,3 +492,63 @@ class CommentVote(Base):
     )
     value: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     created_at: Mapped[datetime] = created_at()
+
+
+class Star(Base):
+    """A conversation the user pinned to the top of their sidebar."""
+
+    __tablename__ = "stars"
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    channel_id: Mapped[str] = mapped_column(
+        ForeignKey("channels.id", ondelete="CASCADE"), primary_key=True
+    )
+    position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created_at: Mapped[datetime] = created_at()
+
+
+class SidebarSection(Base):
+    """A named group of channels in one user's sidebar (space_id null: shown in every space)."""
+
+    __tablename__ = "sidebar_sections"
+    __table_args__ = (Index("ix_sidebar_sections_user_id", "user_id"),)
+
+    id: Mapped[str] = pk()
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    space_id: Mapped[str | None] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(40))
+    emoji: Mapped[str | None] = mapped_column(String(16))
+    position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    collapsed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
+
+class SidebarSectionItem(Base):
+    __tablename__ = "sidebar_section_items"
+    __table_args__ = (Index("ix_sidebar_section_items_channel_id", "channel_id"),)
+
+    section_id: Mapped[str] = mapped_column(
+        ForeignKey("sidebar_sections.id", ondelete="CASCADE"), primary_key=True
+    )
+    channel_id: Mapped[str] = mapped_column(
+        ForeignKey("channels.id", ondelete="CASCADE"), primary_key=True
+    )
+    position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+
+class ConversationPref(Base):
+    """How loudly a conversation should notify one user; no row means "all messages"."""
+
+    __tablename__ = "conversation_prefs"
+    __table_args__ = (
+        CheckConstraint("level IN ('mentions', 'nothing')", name="conversation_prefs_level_check"),
+    )
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    channel_id: Mapped[str] = mapped_column(
+        ForeignKey("channels.id", ondelete="CASCADE"), primary_key=True
+    )
+    level: Mapped[str] = mapped_column(String(10))

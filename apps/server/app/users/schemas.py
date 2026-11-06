@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, date, datetime
 from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, BeforeValidator, Field, HttpUrl, field_validator
@@ -30,6 +30,8 @@ class ProfileIn(BaseModel):
     bio: optional_text(300) = None
     status_text: optional_text(80) = None
     status_emoji: optional_text(16) = None
+    status_expires_at: datetime | None = None
+    out_of_office_until: date | None = None
     dm_policy: DmPolicy | None = None
     appear_offline: bool | None = None
 
@@ -38,6 +40,17 @@ class ProfileIn(BaseModel):
     def not_null(cls, value):
         if value is None:
             raise ValueError("This field cannot be null")
+        return value
+
+    @field_validator("status_expires_at")
+    @classmethod
+    def in_the_future(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return value
+        if value.tzinfo is None:
+            raise ValueError("Include a time zone")
+        if value <= datetime.now(UTC):
+            raise ValueError("Choose a time in the future")
         return value
 
 
@@ -55,6 +68,8 @@ class PublicProfile(BaseModel):
     bio: str | None
     status_text: str | None
     status_emoji: str | None
+    status_expires_at: datetime | None
+    out_of_office_until: date | None
     created_at: datetime
     online: bool
     shared_spaces: list[SharedSpace]
