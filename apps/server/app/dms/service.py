@@ -169,6 +169,7 @@ async def list_conversations(
         message = last.get(channel.id)
         result.append(DirectOut(
             id=channel.id,
+            read_only=any(person.is_system for person in others),
             participants=[
                 Participant.model_validate(user).model_copy(update={"online": user.id in online})
                 for user in others

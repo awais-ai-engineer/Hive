@@ -16,6 +16,7 @@ import { ThreadsView } from '../../components/home/threads-view';
 import { UnreadsView } from '../../components/home/unreads-view';
 import { TodoList } from '../../components/todos/todo-list';
 import { TodosView } from '../../components/todos/todos-view';
+import { DraftsView } from '../../components/home/drafts-view';
 import { useAuth } from '../../lib/auth';
 import { conversationTitle, DMS_CHANGED, type Conversation } from '../../lib/dms';
 import { sidebarApi, useSidebarData, type NotifyLevel } from '../../lib/sidebar';
@@ -287,8 +288,8 @@ function Home() {
   const channel = channels.find(item => item.id === selected) ?? null;
   const myRank = space?.my_role ? rank[space.my_role] : 0;
   const unreadTotal = unreads.reduce((sum, item) => sum + item.unread, 0);
-  const showView = view === 'unreads' || view === 'threads' || view === 'directory' || view === 'todos' || (!conversation && !channel);
-  const activeView = view === 'directory' || view === 'todos' ? view : showView && view !== 'threads' ? 'unreads' : view;
+  const showView = view === 'unreads' || view === 'threads' || view === 'directory' || view === 'todos' || view === 'drafts' || (!conversation && !channel);
+  const activeView = view === 'directory' || view === 'todos' || view === 'drafts' ? view : showView && view !== 'threads' ? 'unreads' : view;
   const threadChange = (id: string | null) => go({ c: selected, t: id });
 
   let main;
@@ -312,7 +313,7 @@ function Home() {
         : tab === 'todos' && user ? <div className="min-h-0 flex-1 overflow-y-auto"><TodoList key={conversation.id} scope="channel" channelId={conversation.id} userId={user.id}
           emptyTitle="No to-dos here yet" emptyText="Keep track of what needs doing in this conversation. Anyone in it can add and tick off to-dos." /></div>
         : <ChannelChat key={conversation.id} channel={{ id: conversation.id, name: conversationTitle(conversation) }}
-        placeholder={`Message ${conversationTitle(conversation)}`} reason="" canModerate={false} tracksReads onRead={markRead}
+        placeholder={`Message ${conversationTitle(conversation)}`} reason={conversation.read_only ? 'Hive reminders are read-only' : ''} canModerate={false} tracksReads onRead={markRead}
         threadId={threadParam} onThreadChange={threadChange} />}
     </>;
   } else if (channel && space) {
@@ -329,11 +330,16 @@ function Home() {
           emptyText="Keep track of what needs doing in this channel. Anyone who can post here can add and tick off to-dos." /></div>
         : tab === 'posts' ? <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         <Suspense fallback={<p className="text-white/50">Loading posts…</p>}><PostFeed space={space} /></Suspense>
-      </div> : <ChannelChat key={channel.id} channel={channel} space={space} placeholder={`Message #${channel.name}`}
+      </div> : <ChannelChat key={channel.id} channel={channel} channels={channels} space={space} placeholder={`Message #${channel.name}`}
         reason={!space.my_role ? 'Join this space to chat'
           : space.my_role === 'guest' ? 'You have read-only access' : ''}
         canModerate={myRank >= rank.moderator} tracksReads={!!space.my_role} onRead={markRead}
         threadId={threadParam} onThreadChange={threadChange} />}
+    </>;
+  } else if (view === 'drafts') {
+    main = <>
+      <ChatHeader title="Drafts & scheduled" onMenu={() => setDrawer(true)} />
+      <DraftsView onOpen={(place, threadId) => openPlace(place, threadId ?? undefined)} />
     </>;
   } else if (view === 'threads') {
     main = <>

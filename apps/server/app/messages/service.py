@@ -16,8 +16,12 @@ from app.db.models import (
     ChannelType,
     ConversationPref,
     DirectMember,
+    Draft,
     MemberRole,
     Message,
+    MessageMention,
+    Poll,
+    PollOption,
     Post,
     Reaction,
     Space,
@@ -27,6 +31,7 @@ from app.db.models import (
     User,
 )
 from app.db.session import redis
+from app.messages.composer import extras, update_mentions
 from app.messages.schemas import (
     AttachmentOut,
     AuthorOut,
@@ -94,6 +99,11 @@ check_not_blocked = _check_not_blocked
 async def writable(session: AsyncSession, channel_id: str, user_id: str):
     channel, member = await readable(session, channel_id, user_id)
     if channel.type == ChannelType.dm:
+        author = await session.get(User, user_id)
+        if author.is_system:
+            return channel
+        if await session.scalar(select(User.id).join(DirectMember, DirectMember.user_id == User.id).where(DirectMember.channel_id == channel.id, User.is_system.is_(True))):
+            raise HTTPException(403, "Replies to Hive are disabled")
         await _check_not_blocked(session, channel.id, user_id)
         return channel
     require_role(member.role if member else None, MemberRole.member)
@@ -231,6 +241,8 @@ async def serialize(
         ]
         result.append(
             MessageOut(
+                kind=message.kind,
+                **({} if deleted else await extras(session, message, viewer_id)),
                 id=message.id,
                 channel_id=message.channel_id,
                 parent_id=message.parent_id,
@@ -249,7 +261,6 @@ async def serialize(
                 ],
                 attachments=[] if deleted else attachments.get(message.id, []),
                 post_previews=[] if deleted else previews,
-                kind=message.kind,
             ).model_dump(mode="json")
         )
     return result
@@ -315,7 +326,7 @@ async def _check_rate(user_id: str) -> None:
         raise HTTPException(429, "Too many messages; try again shortly")
 
 
-async def send(session: AsyncSession, user: User, data: SendIn):
+async def send(session: AsyncSession, user: User, data: SendIn, *, commit=True):
     """Returns (message, inserted, updated_parent). Retries with the same clientMsgId are no-ops."""
     await writable(session, data.channelId, user.id)
     existing_query = select(Message).where(
@@ -323,29 +334,40 @@ async def send(session: AsyncSession, user: User, data: SendIn):
     )
     existing = await session.scalar(existing_query)
     if existing is None:
-        await _check_rate(user.id)
+        if not user.is_system:
+            await _check_rate(user.id)
         if data.parentId is not None:
             parent = await session.get(Message, data.parentId)
             if parent is None or parent.channel_id != data.channelId:
                 raise HTTPException(404, "Message not found")
-            if parent.parent_id is not None or parent.deleted_at is not None or parent.kind is not None:
+            if parent.parent_id is not None or parent.deleted_at is not None or parent.kind == "huddle":
                 raise HTTPException(422, "Replies can only be added to an existing top-level message")
         existing = await session.scalar(
             insert(Message).values(
                 channel_id=data.channelId, author_id=user.id, parent_id=data.parentId,
-                body=data.body, client_msg_id=data.clientMsgId,
+                body=data.body, kind=data.kind, client_msg_id=data.clientMsgId,
             ).on_conflict_do_nothing(index_elements=["author_id", "client_msg_id"])
             .returning(Message)
         )
         if existing is not None:
-            return await _finish_insert(session, user, data, existing)
+            return await _finish_insert(session, user, data, existing, commit=commit)
         existing = await session.scalar(existing_query)  # lost a race with a concurrent retry
     if existing.channel_id != data.channelId or existing.parent_id != data.parentId:
         raise HTTPException(422, "Client message ID belongs to another message")
     return await message_out(session, existing, user.id), False, None
 
 
-async def _finish_insert(session, user, data: SendIn, message: Message):
+async def _finish_insert(session, user, data: SendIn, message: Message, *, commit=True):
+    if data.kind == "voice":
+        audio = await session.get(Attachment, data.attachmentIds[0])
+        if audio is None or audio.kind != "audio" or audio.duration_ms is None or audio.waveform is None:
+            raise HTTPException(422, "Voice messages require an audio attachment")
+    if data.poll:
+        session.add(Poll(message_id=message.id, question=data.poll.question))
+        await session.flush()
+        session.add_all([PollOption(message_id=message.id, position=i, label=label) for i, label in enumerate(data.poll.options)])
+    await update_mentions(session, message)
+    await session.execute(delete(Draft).where(Draft.user_id == user.id, Draft.channel_id == data.channelId, Draft.parent_id == data.parentId))
     if data.attachmentIds:
         claimed = await session.scalars(
             update(Attachment)
@@ -357,7 +379,6 @@ async def _finish_insert(session, user, data: SendIn, message: Message):
             .returning(Attachment.id)
         )
         if len(list(claimed)) != len(data.attachmentIds):
-            await session.rollback()
             raise HTTPException(422, "Attachment not found or already used")
     parent = None
     if data.parentId is not None:
@@ -365,7 +386,10 @@ async def _finish_insert(session, user, data: SendIn, message: Message):
             update(Message).where(Message.id == data.parentId)
             .values(reply_count=Message.reply_count + 1).returning(Message)
         )
-    await session.commit()
+    if commit:
+        await session.commit()
+    else:
+        await session.flush()
     if parent is not None:
         await session.refresh(parent)
     message_dict = await message_out(session, message, user.id)
@@ -378,7 +402,7 @@ async def change(session: AsyncSession, user: User, message_id: str, body: str |
     if message is None:
         raise HTTPException(404, "Message not found")
     _, member = await readable(session, message.channel_id, user.id)
-    if message.kind is not None:
+    if message.kind == "huddle":
         raise HTTPException(422, "System messages cannot be changed")
     if message.author_id != user.id:
         if body is not None:
@@ -392,6 +416,7 @@ async def change(session: AsyncSession, user: User, message_id: str, body: str |
             raise HTTPException(422, "Deleted messages cannot be edited")
         message.body = body
         message.edited_at = datetime.now(UTC)
+    await update_mentions(session, message)
     await session.commit()
     return await message_out(session, message, user.id)
 
@@ -401,7 +426,7 @@ async def toggle_reaction(session: AsyncSession, user: User, message_id: str, em
     if message is None:
         raise HTTPException(404, "Message not found")
     await writable(session, message.channel_id, user.id)
-    if message.deleted_at is not None or message.kind is not None:
+    if message.deleted_at is not None or message.kind == "huddle":
         raise HTTPException(422, "This message cannot be reacted to")
     removed = await session.scalar(
         delete(Reaction).where(
@@ -447,7 +472,7 @@ async def mark_read(session: AsyncSession, user: User, channel_id: str, message_
 
 def mention_condition(username: str):
     import re
-    return Message.body.op("~*")(rf"(^|[^[:alnum:]_])@{re.escape(username)}([^[:alnum:]_]|$)")
+    return or_(Message.body.op("~*")(rf"(^|[^[:alnum:]_])@{re.escape(username)}([^[:alnum:]_]|$)"), exists().where(MessageMention.message_id == Message.id, MessageMention.user_id.in_(select(User.id).where(User.username == username))))
 
 
 def unread_thread_mention(user_id: str):
@@ -471,7 +496,7 @@ async def unread_counts(session: AsyncSession, user_id: str, channel_ids: list[s
         ))
         .where(
             Message.channel_id.in_(channel_ids), True if mention_username else Message.parent_id.is_(None),
-            Message.deleted_at.is_(None), Message.author_id != user_id, Message.kind.is_(None),
+            Message.deleted_at.is_(None), Message.author_id != user_id, Message.kind != "huddle",
             mention_condition(mention_username) if mention_username else True,
             unread_thread_mention(user_id) if mention_username else True,
             or_(

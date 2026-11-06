@@ -22,7 +22,33 @@ class MessageIn(BaseModel):
     messageId: str
 
 
+class PollIn(BaseModel):
+    question: str = Field(min_length=1, max_length=200)
+    options: list[str] = Field(min_length=2, max_length=10)
+
+    @field_validator("question")
+    @classmethod
+    def question_text(cls, value):
+        if not value.strip():
+            raise ValueError("Question is required")
+        return value.strip()
+
+    @field_validator("options")
+    @classmethod
+    def option_text(cls, value):
+        labels = [label.strip() for label in value]
+        if any(not label or len(label) > 80 for label in labels):
+            raise ValueError("Options must contain 1 to 80 characters")
+        return labels
+
+
+class PollVoteIn(MessageIn):
+    optionId: str | None = None
+
+
 class SendIn(ChannelIn):
+    kind: Literal["text", "poll", "voice"] = "text"
+    poll: PollIn | None = None
     body: str = ""
     clientMsgId: str
     parentId: str | None = None
@@ -40,7 +66,15 @@ class SendIn(ChannelIn):
 
     @model_validator(mode="after")
     def has_content(self) -> "SendIn":
-        if not self.body and not self.attachmentIds:
+        if self.poll is not None:
+            if self.kind == "voice" or self.attachmentIds:
+                raise ValueError("Polls cannot contain attachments")
+            self.kind = "poll"
+        if self.kind == "poll" and self.poll is None:
+            raise ValueError("Poll is required")
+        if self.kind == "voice" and len(self.attachmentIds) != 1:
+            raise ValueError("Voice messages require one audio attachment")
+        if not self.body and not self.attachmentIds and not self.poll:
             raise ValueError("Message must contain text or an attachment")
         self.attachmentIds = list(dict.fromkeys(self.attachmentIds))
         return self
@@ -104,7 +138,9 @@ class ReactionOut(BaseModel):
 
 
 class AttachmentOut(BaseModel):
-    kind: Literal["image", "video", "file"]
+    durationMs: int | None = None
+    waveform: list[int] | None = None
+    kind: Literal["image", "video", "file", "audio"]
     id: str
     filename: str
     content_type: str
@@ -131,7 +167,39 @@ class PostSummary(BaseModel):
     deleted: bool = False
 
 
+class MentionOut(BaseModel):
+    userId: str
+    username: str
+    displayName: str | None
+
+
+class ChannelLinkOut(BaseModel):
+    id: str
+    name: str
+    href: str
+
+
+class PollOptionOut(BaseModel):
+    id: str
+    label: str
+    position: int
+    count: int
+
+
+class PollOut(BaseModel):
+    question: str
+    closedAt: datetime | None
+    options: list[PollOptionOut]
+    counts: dict[str, int]
+    total: int
+    myVote: str | None
+
+
 class MessageOut(BaseModel):
+    kind: Literal["text", "poll", "voice", "huddle"] = "text"
+    channelLinks: list[ChannelLinkOut] = Field(default_factory=list)
+    mentions: list[MentionOut] = Field(default_factory=list)
+    poll: PollOut | None = None
     id: str
     channel_id: str
     parent_id: str | None
@@ -145,7 +213,6 @@ class MessageOut(BaseModel):
     reactions: list[ReactionOut]
     attachments: list[AttachmentOut]
     post_previews: list[PostSummary] = Field(default_factory=list)
-    kind: str | None = None
 
 
 class MessagePage(BaseModel):

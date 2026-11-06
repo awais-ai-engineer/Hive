@@ -1,17 +1,28 @@
 import { z } from 'zod';
 
 export const messageBodySchema = z.string().trim().max(4000);
+export const pollCreateSchema = z.object({ question: z.string().trim().min(1).max(200), options: z.array(z.string().trim().min(1).max(80)).min(2).max(10) });
+export const pollSchema = z.object({ question: z.string(), closedAt: z.string().nullable(), options: z.array(z.object({ id: z.string(), label: z.string(), position: z.number(), count: z.number() })), counts: z.record(z.number()), total: z.number(), myVote: z.string().nullable() });
 export const messageSendSchema = z.object({
-  channelId: z.string(), body: messageBodySchema, clientMsgId: z.string().uuid(),
+  kind: z.enum(['text', 'poll', 'voice']).optional(), poll: pollCreateSchema.optional(),
+  channelId: z.string(), body: messageBodySchema.default(''), clientMsgId: z.string().uuid(),
   parentId: z.string().nullable().optional(), attachmentIds: z.array(z.string()).max(5).optional(),
-}).refine(value => value.body.length > 0 || (value.attachmentIds?.length ?? 0) > 0, 'Message must contain text or an attachment');
+}).refine(value => !!value.poll || value.body.length > 0 || (value.attachmentIds?.length ?? 0) > 0, 'Message must contain text or an attachment')
+  .refine(value => value.kind !== 'poll' || !!value.poll, 'Poll is required')
+  .refine(value => !value.poll || (value.kind !== 'voice' && !value.attachmentIds?.length), 'Polls cannot contain attachments')
+  .refine(value => value.kind !== 'voice' || value.attachmentIds?.length === 1, 'Voice messages require one audio attachment');
 
 export const reactionSchema = z.object({ emoji: z.string(), count: z.number(), user_ids: z.array(z.string()) });
 export const attachmentSchema = z.object({
-  kind: z.enum(['image', 'video', 'file']),
+  kind: z.enum(['image', 'video', 'file', 'audio']),
+  durationMs: z.number().nullable().optional(), waveform: z.array(z.number().int().min(0).max(100)).length(64).nullable().optional(),
   id: z.string(), filename: z.string(), content_type: z.string(), size: z.number(), url: z.string(),
 });
 export const messageSchema = z.object({
+  kind: z.enum(['text', 'poll', 'voice', 'huddle']).optional(),
+  mentions: z.array(z.object({ userId: z.string(), username: z.string(), displayName: z.string().nullable() })).optional(),
+  channelLinks: z.array(z.object({id: z.string(), name: z.string(), href: z.string()})).optional(),
+  poll: pollSchema.nullable().optional(),
   id: z.string(), channel_id: z.string(), parent_id: z.string().nullable(),
   author: z.object({
     id: z.string(), username: z.string(), avatar_url: z.string().nullable(),
@@ -25,8 +36,6 @@ export const messageSchema = z.object({
     id: z.string(), title: z.string(), score: z.number(), comment_count: z.number(), deleted: z.boolean(),
     space: z.object({ slug: z.string(), name: z.string() }),
   })).optional(),
-  /** "huddle" for the line posted when a huddle ends; absent or null for people's messages. */
-  kind: z.string().nullable().optional(),
 });
 export type Reaction = z.infer<typeof reactionSchema>;
 export type Attachment = z.infer<typeof attachmentSchema>;
@@ -35,3 +44,17 @@ export type MessagePage = { items: Message[]; has_more: boolean };
 export type ThreadPage = MessagePage & { parent: Message };
 export type ReactionUpdate = { messageId: string; channelId: string; reactions: Reaction[] };
 export type MessageDeleted = { id: string; channelId: string; parentId: string | null };
+
+export type Poll = z.infer<typeof pollSchema>;
+export type PollUpdate = {messageId: string; counts: Record<string, number>; total: number; closedAt: string | null};
+
+
+export const reminderCreateSchema = z.object({
+  text: z.string().trim().min(1).max(500), remindAt: z.string().datetime({ offset: true }),
+}).refine(value => Date.parse(value.remindAt) > Date.now(), 'Choose a future time');
+export const draftSaveSchema = z.object({ body: messageBodySchema.default(''), parentId: z.string().nullable().optional() });
+export const scheduledCreateSchema = z.object({
+  body: messageBodySchema.default(''), parentId: z.string().nullable().optional(),
+  attachmentIds: z.array(z.string()).max(5).optional(), sendAt: z.string().datetime({ offset: true }),
+}).refine(value => !!value.body || !!value.attachmentIds?.length, 'Message must contain text or an attachment')
+  .refine(value => Date.parse(value.sendAt) > Date.now(), 'Choose a future time');

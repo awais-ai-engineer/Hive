@@ -20,6 +20,7 @@ let session: AuthSession | null = null;
 let revision = 0;
 let refreshPromise: Promise<AuthSession | null> | null = null;
 const listeners = new Set<(value: AuthSession | null) => void>();
+export const currentUserId = () => session?.user.id;
 
 export function setSession(value: AuthSession | null) {
   session = value;

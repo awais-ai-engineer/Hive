@@ -6,6 +6,7 @@ import { conversationTitle, type Conversation } from '../../lib/dms';
 import { badge } from '../../lib/home';
 import { LEVEL_LABELS, sidebarApi, type BuiltInSection, type CustomSection, type NotifyLevel, type SidebarData } from '../../lib/sidebar';
 import { requestError, type Channel, type Space } from '../../lib/spaces';
+import { useDraftChannels } from '../../lib/composer-drafts';
 import { Avatar } from '../ui/avatar';
 import { Icon, type IconName } from '../ui/icons';
 import { StatusMark } from '../ui/status-mark';
@@ -34,7 +35,7 @@ type Props = {
   onChanged: () => void;
   onSwitchSpace: (slug: string) => void;
   onOpen: (id: string) => void;
-  onView: (view: 'unreads' | 'threads' | 'directory') => void;
+  onView: (view: 'unreads' | 'threads' | 'directory' | 'drafts') => void;
   onBrowseChannels: () => void;
   onPerson: (username: string) => void;
   onChannelCreated: (channel: Channel) => void;
@@ -68,6 +69,7 @@ export function Sidebar(props: Props) {
   const [dialog, setDialog] = useState<Dialog>(null);
   const [error, setError] = useState('');
   const huddles = useHuddles();
+  const drafts = useDraftChannels();
 
   const role = space?.my_role;
   const isAdmin = role === 'owner' || role === 'admin';
@@ -185,6 +187,7 @@ export function Sidebar(props: Props) {
         {huddles[entry.id] && <span className="ml-1 flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-300" title={`In the huddle: ${huddles[entry.id].users.map(user => user.username).join(', ')}`}>
           <Icon name="headphones" size={14} /><span aria-label={`${huddles[entry.id].count} in huddle`}>{huddles[entry.id].count}</span></span>}
         {quiet && <Icon name="bellOff" size={13} className="shrink-0 opacity-70" aria-label={LEVEL_LABELS[level]} />}
+        {drafts.has(entry.id) && !active && <Icon name="edit" size={13} aria-label="Unsent draft" className="ml-auto shrink-0 opacity-70" />}
         <Count value={active ? 0 : entry.unread} />
       </button>
       <button type="button" aria-label={`More actions for ${entry.label}`} aria-haspopup="menu" title="Star, move to a section, or change notifications"
@@ -222,6 +225,7 @@ export function Sidebar(props: Props) {
         <NavItem icon="threads" label="Threads" active={view === 'threads'} count={props.threadsUnread} onClick={() => props.onView('threads')} />
         <NavItem icon="inbox" label="Unreads" active={view === 'unreads'} count={props.unreadTotal} onClick={() => props.onView('unreads')} />
         <NavItem icon="directory" label="Directories" active={view === 'directory'} onClick={() => props.onView('directory')} />
+        <NavItem icon="send" label="Drafts & scheduled" active={view === 'drafts'} onClick={() => props.onView('drafts')} />
         <NavItem icon="layers" label="Feed" href="/feed" />
         {space && <NavItem icon="users" label="Members" href={`/s/${space.slug}/members`} />}
       </ul>

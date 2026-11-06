@@ -22,6 +22,7 @@ class LastMessage(BaseModel):
 
 
 class DirectOut(BaseModel):
+    read_only: bool = False
     id: str
     participants: list[Participant]  # everyone except the viewer
     is_group: bool

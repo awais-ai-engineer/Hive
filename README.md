@@ -267,3 +267,26 @@ preferences and rules, defaulting existing spaces to `other`. Inside `apps/serve
 `python -m uv run alembic upgrade head`, then run `python -m uv run alembic check`. Backend
 tests cover discovery, permissions, muted unread counts and an isolated migration backfill and
 downgrade/upgrade round trip.
+
+## Message composer
+
+The message box supports a safe Markdown subset (bold, italic, strike, code, code blocks, lists,
+quotes and links) with a toolbar and keyboard shortcuts (`Ctrl/Cmd+B`, `I`, `E`, `K`, ...), plus:
+
+- **Mentions and channel links**: type `@` or `#` to pick a person or channel. Mentions are stored
+  as ids, so renaming someone never breaks old messages.
+- **Emoji picker** and **slash commands**: `/poll "Question" "A" "B"`, `/remind in 30m text`,
+  `/status :coffee: Focusing`, `/shrug`.
+- **Polls** with live results, anonymous votes and closing by the author.
+- **Reminders** and **scheduled messages**, delivered by a background scheduler
+  (`app/scheduler.py`) that re-checks permissions at send time. Reminders arrive in a private
+  conversation with "Hive".
+- **Drafts** are saved on the server as you type and restored on any device. The
+  **Drafts & scheduled** view lists drafts, scheduled messages and reminders, and channels with an
+  unsent draft show a pencil in the sidebar.
+- **Voice messages** (up to 5 minutes) with a waveform player.
+- **Link previews** fetched server-side with SSRF protection (public addresses only, size and time
+  limits, HTML only).
+
+The Markdown parser lives in `packages/shared/src/markdown.ts` and has its own tests
+(`pnpm --filter @hive/shared test`).

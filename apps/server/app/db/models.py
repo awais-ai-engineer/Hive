@@ -16,6 +16,7 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     PrimaryKeyConstraint,
@@ -120,6 +121,7 @@ class User(Base):
     dm_policy: Mapped[DmPolicy] = mapped_column(
         Enum(DmPolicy, name="dm_policy"), default=DmPolicy.everyone, server_default="everyone"
     )
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     appear_offline: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # The status disappears by itself after this moment (null: it stays until changed).
     status_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -325,6 +327,7 @@ class Invite(Base):
 class Message(Base):
     __tablename__ = "messages"
     __table_args__ = (
+        CheckConstraint("kind IN ('text', 'poll', 'voice', 'huddle')", name="ck_messages_kind"),
         Index("messages_channel_idx", "channel_id", "id"),
         Index("messages_thread_idx", "parent_id", "id"),
         Index("messages_client_msg_uq", "author_id", "client_msg_id", unique=True),
@@ -336,11 +339,11 @@ class Message(Base):
     parent_id: Mapped[str | None] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE"))
     client_msg_id: Mapped[str | None] = mapped_column(String(64))
     body: Mapped[str] = mapped_column(Text)
+    # "huddle" marks the system line posted when a huddle ends.
+    kind: Mapped[str] = mapped_column(String(16), default="text", server_default="text")
     reply_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # Null for people's messages; "huddle" for the line posted when a huddle ends.
-    kind: Mapped[str | None] = mapped_column(String(16))
     created_at: Mapped[datetime] = created_at()
 
 
@@ -374,6 +377,8 @@ class Attachment(Base):
     message_id: Mapped[str | None] = mapped_column(
         ForeignKey("messages.id", ondelete="CASCADE"), index=True
     )
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    waveform: Mapped[list[int] | None] = mapped_column(JSONB)
     filename: Mapped[str] = mapped_column(String(255))
     content_type: Mapped[str] = mapped_column(String(100))
     size: Mapped[int] = mapped_column(BigInteger)
@@ -620,3 +625,75 @@ class Task(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+class MessageMention(Base):
+    __tablename__ = "message_mentions"
+    __table_args__ = (PrimaryKeyConstraint("message_id", "user_id", name="pk_message_mentions"), Index("ix_message_mentions_user_id", "user_id"))
+    message_id: Mapped[str] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE", name="fk_mentions_message"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", name="fk_mentions_user"), primary_key=True)
+
+
+class Poll(Base):
+    __tablename__ = "polls"
+    __table_args__ = (PrimaryKeyConstraint("message_id", name="pk_polls"),)
+    message_id: Mapped[str] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE", name="fk_polls_message"), primary_key=True)
+    question: Mapped[str] = mapped_column(String(200))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PollOption(Base):
+    __tablename__ = "poll_options"
+    __table_args__ = (PrimaryKeyConstraint("id", name="pk_poll_options"), UniqueConstraint("message_id", "position", name="uq_poll_options_position"), UniqueConstraint("message_id", "id", name="uq_poll_options_message_id"))
+    id: Mapped[str] = pk()
+    message_id: Mapped[str] = mapped_column(ForeignKey("polls.message_id", ondelete="CASCADE", name="fk_poll_options_message"))
+    position: Mapped[int] = mapped_column(Integer)
+    label: Mapped[str] = mapped_column(String(80))
+
+
+class PollVote(Base):
+    __tablename__ = "poll_votes"
+    __table_args__ = (PrimaryKeyConstraint("message_id", "user_id", name="pk_poll_votes"), ForeignKeyConstraint(["message_id", "option_id"], ["poll_options.message_id", "poll_options.id"], ondelete="CASCADE", name="fk_poll_votes_option"))
+    message_id: Mapped[str] = mapped_column(ForeignKey("polls.message_id", ondelete="CASCADE", name="fk_poll_votes_message"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", name="fk_poll_votes_user"), primary_key=True)
+    option_id: Mapped[str] = mapped_column(String(26))
+
+
+class Reminder(Base):
+    __tablename__ = "reminders"
+    __table_args__ = (PrimaryKeyConstraint("id", name="pk_reminders"), Index("ix_reminders_due", "delivered_at", "remind_at"))
+    id: Mapped[str] = pk()
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", name="fk_reminders_user"))
+    text: Mapped[str] = mapped_column(String(500))
+    remind_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = created_at()
+
+
+class ScheduledMessage(Base):
+    __tablename__ = "scheduled_messages"
+    __table_args__ = (PrimaryKeyConstraint("id", name="pk_scheduled_messages"), Index("ix_scheduled_messages_due", "sent_at", "send_at"))
+    id: Mapped[str] = pk()
+    author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", name="fk_scheduled_author"))
+    channel_id: Mapped[str] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE", name="fk_scheduled_channel"))
+    parent_id: Mapped[str | None] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE", name="fk_scheduled_parent"))
+    body: Mapped[str] = mapped_column(Text)
+    attachment_ids: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    send_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = created_at()
+
+
+class Draft(Base):
+    __tablename__ = "drafts"
+    __table_args__ = (PrimaryKeyConstraint("id", name="pk_drafts"),)
+    id: Mapped[str] = pk()
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", name="fk_drafts_user"))
+    channel_id: Mapped[str] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE", name="fk_drafts_channel"))
+    parent_id: Mapped[str | None] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE", name="fk_drafts_parent"))
+    body: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+Index("uq_drafts_scope", Draft.user_id, Draft.channel_id, func.coalesce(Draft.parent_id, ""), unique=True)

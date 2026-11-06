@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     storage_driver: str = "local"
     max_image_mb: int = 10
     max_video_mb: int = 100
+    max_audio_mb: int = 10
     max_file_mb: int = 10
     supabase_url: str = ""
     supabase_service_key: str = ""
