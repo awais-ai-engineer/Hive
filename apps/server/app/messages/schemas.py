@@ -145,6 +145,7 @@ class MessageOut(BaseModel):
     reactions: list[ReactionOut]
     attachments: list[AttachmentOut]
     post_previews: list[PostSummary] = Field(default_factory=list)
+    kind: str | None = None
 
 
 class MessagePage(BaseModel):

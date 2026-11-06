@@ -88,6 +88,9 @@ async def _check_not_blocked(session: AsyncSession, channel_id: str, user_id: st
         raise HTTPException(403, "You can't message this person")
 
 
+check_not_blocked = _check_not_blocked
+
+
 async def writable(session: AsyncSession, channel_id: str, user_id: str):
     channel, member = await readable(session, channel_id, user_id)
     if channel.type == ChannelType.dm:
@@ -246,6 +249,7 @@ async def serialize(
                 ],
                 attachments=[] if deleted else attachments.get(message.id, []),
                 post_previews=[] if deleted else previews,
+                kind=message.kind,
             ).model_dump(mode="json")
         )
     return result
@@ -324,7 +328,7 @@ async def send(session: AsyncSession, user: User, data: SendIn):
             parent = await session.get(Message, data.parentId)
             if parent is None or parent.channel_id != data.channelId:
                 raise HTTPException(404, "Message not found")
-            if parent.parent_id is not None or parent.deleted_at is not None:
+            if parent.parent_id is not None or parent.deleted_at is not None or parent.kind is not None:
                 raise HTTPException(422, "Replies can only be added to an existing top-level message")
         existing = await session.scalar(
             insert(Message).values(
@@ -374,6 +378,8 @@ async def change(session: AsyncSession, user: User, message_id: str, body: str |
     if message is None:
         raise HTTPException(404, "Message not found")
     _, member = await readable(session, message.channel_id, user.id)
+    if message.kind is not None:
+        raise HTTPException(422, "System messages cannot be changed")
     if message.author_id != user.id:
         if body is not None:
             raise HTTPException(403, "Only the author can edit a message")
@@ -395,8 +401,8 @@ async def toggle_reaction(session: AsyncSession, user: User, message_id: str, em
     if message is None:
         raise HTTPException(404, "Message not found")
     await writable(session, message.channel_id, user.id)
-    if message.deleted_at is not None:
-        raise HTTPException(422, "Deleted messages cannot be reacted to")
+    if message.deleted_at is not None or message.kind is not None:
+        raise HTTPException(422, "This message cannot be reacted to")
     removed = await session.scalar(
         delete(Reaction).where(
             Reaction.message_id == message_id, Reaction.user_id == user.id, Reaction.emoji == emoji
@@ -465,7 +471,7 @@ async def unread_counts(session: AsyncSession, user_id: str, channel_ids: list[s
         ))
         .where(
             Message.channel_id.in_(channel_ids), True if mention_username else Message.parent_id.is_(None),
-            Message.deleted_at.is_(None), Message.author_id != user_id,
+            Message.deleted_at.is_(None), Message.author_id != user_id, Message.kind.is_(None),
             mention_condition(mention_username) if mention_username else True,
             unread_thread_mention(user_id) if mention_username else True,
             or_(

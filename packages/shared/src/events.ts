@@ -29,6 +29,7 @@ export const SocketEvents = {
   CallPeerJoined: 'call:peer-joined',
   CallPeerLeft: 'call:peer-left',
   CallParticipants: 'call:participants',
+  CallRemoved: 'call:removed',
   DmActivity: 'dm:activity',
   SpaceWatch: 'space:watch',
   SpaceUnwatch: 'space:unwatch',

@@ -25,6 +25,8 @@ export const messageSchema = z.object({
     id: z.string(), title: z.string(), score: z.number(), comment_count: z.number(), deleted: z.boolean(),
     space: z.object({ slug: z.string(), name: z.string() }),
   })).optional(),
+  /** "huddle" for the line posted when a huddle ends; absent or null for people's messages. */
+  kind: z.string().nullable().optional(),
 });
 export type Reaction = z.infer<typeof reactionSchema>;
 export type Attachment = z.infer<typeof attachmentSchema>;

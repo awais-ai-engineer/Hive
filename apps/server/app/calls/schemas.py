@@ -21,6 +21,7 @@ class StateIn(CallIn):
 class CallUser(BaseModel):
     id: str
     username: str
+    avatarUrl: str | None = None
 
 
 class CallSummary(BaseModel):

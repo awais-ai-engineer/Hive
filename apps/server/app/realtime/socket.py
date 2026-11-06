@@ -32,7 +32,7 @@ from app.db.models import (
     SpaceType,
     User,
 )
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, redis
 from app.dms.service import participant_ids, partner_ids
 from app.messages import service
 from app.messages.schemas import (
@@ -49,6 +49,7 @@ from app.messages.schemas import (
 from app.messages.threads import mark_thread_read, thread_participants
 from app.realtime import presence
 from app.spaces.service import member_for
+from app.users.blocks import blocked_among
 
 log = logging.getLogger("hive.realtime")
 
@@ -344,6 +345,7 @@ async def user_sockets(user_id: str) -> set[str]:
 
 async def evict_from_channel(user_id: str, channel_id: str) -> None:
     """Stop live messages of one channel for a user who lost access to it."""
+    await leave_calls_in(user_id, [channel_id])
     for sid in await user_sockets(user_id):
         await sio.leave_room(sid, f"channel:{channel_id}")
 
@@ -355,28 +357,80 @@ SIGNALS_PER_WINDOW = 200
 SIGNAL_WINDOW = 10.0
 
 
+async def call_audience(session, channel: Channel) -> list[str]:
+    """Rooms that may see who is in a call: exactly the people who can read the channel."""
+    from datetime import UTC, datetime
+
+    from sqlalchemy import or_
+
+    if channel.type == ChannelType.dm:
+        return [f"user:{person}" for person in await participant_ids(session, channel.id)]
+    space = await session.get(Space, channel.space_id)
+    if space is None:
+        return []
+    if not channel.is_private and (space.type == SpaceType.workspace or space.public_chat):
+        return [f"space:{channel.space_id}"]
+    people = select(SpaceMember.user_id).where(
+        SpaceMember.space_id == channel.space_id,
+        or_(SpaceMember.banned_until.is_(None), SpaceMember.banned_until <= datetime.now(UTC)),
+    )
+    if channel.is_private:
+        people = people.where(
+            SpaceMember.user_id.in_(select(ChannelMember.user_id).where(ChannelMember.channel_id == channel.id))
+        )
+    return [f"user:{person}" for person in await session.scalars(people)]
+
+
 async def announce_participants(channel_id: str) -> None:
-    """Tell sidebars who is in a call: the space room for voice channels, each participant's
-    user room for DMs."""
+    """Tell sidebars who is in a call, but only people who can read that channel."""
     summary = await calls.summary(channel_id)
     async with SessionLocal() as session:
         channel = await session.get(Channel, channel_id)
         if channel is None:
             return
-        if channel.type == ChannelType.dm:
-            for participant in await participant_ids(session, channel.id):
-                await sio.emit("call:participants", summary, room=f"user:{participant}")
-        elif channel.space_id is not None:
-            await sio.emit("call:participants", summary, room=f"space:{channel.space_id}")
+        for room in await call_audience(session, channel):
+            await sio.emit("call:participants", summary, room=room)
+
+
+MIN_SOLO_HUDDLE_SECONDS = 15
+
+
+async def post_huddle_summary(channel_id: str, author_id: str, huddle: dict) -> None:
+    """Posts "A huddle happened..." into a text channel or conversation once it has ended."""
+    names = huddle["names"]
+    if not names or (len(names) == 1 and huddle["seconds"] < MIN_SOLO_HUDDLE_SECONDS):
+        return  # an accidental click is not worth a message
+    async with SessionLocal() as session:
+        channel = await session.get(Channel, channel_id)
+        if channel is None or channel.type == ChannelType.voice:
+            return
+        message = Message(channel_id=channel_id, author_id=author_id, kind="huddle",
+                          body=calls.huddle_text(names, huddle["seconds"]))
+        session.add(message)
+        await session.commit()
+        out = await service.message_out(session, message, author_id)
+    await sio.emit("message:new", out, room=f"channel:{channel_id}")
 
 
 async def leave_call(sid: str) -> None:
-    channel_id = await calls.remove(sid)
-    if channel_id is None:
+    left = await calls.remove(sid)
+    if left is None:
         return
+    channel_id, entry, huddle = left
     await sio.leave_room(sid, f"call:{channel_id}")
     await sio.emit("call:peer-left", {"channelId": channel_id, "sid": sid}, room=f"call:{channel_id}")
     await announce_participants(channel_id)
+    if huddle is not None and entry.get("userId"):
+        await post_huddle_summary(channel_id, entry["userId"], huddle)
+
+
+async def leave_calls_in(user_id: str, channel_ids: list[str]) -> None:
+    """Drops every socket of a user out of the calls of channels they lost access to."""
+    for sid in await user_sockets(user_id):
+        current = await calls.current_call(sid)
+        if current in channel_ids:
+            await leave_call(sid)
+            await sio.emit("call:removed", {"channelId": current}, to=sid)
 
 
 @chat_event("call:join", CallIn)
@@ -435,8 +489,10 @@ async def call_ring(sid, data, session, user):
     channel = await calls.check_access(session, data.channelId, user)
     if channel.type != ChannelType.dm:
         raise HTTPException(422, "Only conversations can ring")
+    if not await redis.set(f"{settings.socketio_channel}:ring:{channel.id}:{user.id}", 1, nx=True, ex=5):
+        raise HTTPException(429, "Hold on a moment before ringing again")
     for participant in await participant_ids(session, channel.id):
-        if participant != user.id:
+        if participant != user.id and not await blocked_among(session, user.id, [participant]):
             await sio.emit("call:incoming", {"channelId": channel.id,
                                              "from": {"id": user.id, "username": user.username}},
                            room=f"user:{participant}")
@@ -446,9 +502,8 @@ async def evict_from_space(user_id: str, space_id: str) -> None:
     """Stop live updates for a user who lost access to a space (left, kicked)."""
     async with SessionLocal() as session:
         channels = list(await session.scalars(select(Channel.id).where(Channel.space_id == space_id)))
+    await leave_calls_in(user_id, channels)
     for sid in await user_sockets(user_id):
-        if await calls.current_call(sid) in channels:
-            await leave_call(sid)
         await sio.leave_room(sid, f"space:{space_id}")
         for channel_id in channels:
             await sio.leave_room(sid, f"channel:{channel_id}")

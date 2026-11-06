@@ -339,6 +339,8 @@ class Message(Base):
     reply_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Null for people's messages; "huddle" for the line posted when a huddle ends.
+    kind: Mapped[str | None] = mapped_column(String(16))
     created_at: Mapped[datetime] = created_at()
 
 
