@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,9 +10,10 @@ from app.auth.schemas import UserOut
 from app.db.models import User
 from app.db.session import get_session
 from app.realtime import presence
-from app.realtime.socket import broadcast_presence
-from app.spaces.schemas import SpaceOut
-from app.spaces.service import my_spaces
+from app.realtime.socket import broadcast_presence, sio
+from app.spaces import management
+from app.spaces.schemas import InterestsIn, MembershipPatch, SpaceOrderIn, SpaceOut
+from app.spaces.service import load_space, my_spaces, space_out
 from app.users import blocks
 from app.users.avatars import avatar_redirect_url, clear_avatar, set_avatar
 from app.users.profiles import public_profile
@@ -33,6 +34,34 @@ async def me(user: CurrentUser) -> User:
 @router.get("/me/spaces", response_model=list[SpaceOut])
 async def my_spaces_route(user: CurrentUser, session: Session) -> list[SpaceOut]:
     return await my_spaces(session, user)
+
+
+@router.get("/me/interests")
+async def get_interests(user: CurrentUser, session: Session):
+    return await management.interests(session, user.id)
+
+
+@router.put("/me/interests")
+async def put_interests(data: InterestsIn, user: CurrentUser, session: Session):
+    return await management.replace_interests(session, user.id, data.categories)
+
+
+@router.put("/me/spaces/order", status_code=204)
+async def put_space_order(data: SpaceOrderIn, user: CurrentUser, session: Session):
+    await management.order_spaces(session, user, data.slugs)
+    await sio.emit("spaces:updated", {}, room=f"user:{user.id}")
+
+
+@router.patch("/me/spaces/{slug}", response_model=SpaceOut)
+async def patch_membership(slug: str, data: MembershipPatch, user: CurrentUser, session: Session):
+    space, member = await load_space(session, slug, user)
+    if member is None:
+        raise HTTPException(404, "Membership not found")
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(member, key, value)
+    await session.commit()
+    await sio.emit("spaces:updated", {}, room=f"user:{user.id}")
+    return await space_out(session, space, member)
 
 
 @router.patch("/me", response_model=UserOut)

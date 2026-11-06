@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { spaceCreateSchema, type SpaceCreateInput } from '@hive/shared';
 import { Icon } from '../../../components/ui/icons';
+import { CategoryPicker } from '../../../components/interest-picker';
+import { TagsInput } from '../../../components/communities/tags-input';
 import { useAuth } from '../../../lib/auth';
 import { apiData, requestError, type Space } from '../../../lib/spaces';
 
@@ -20,6 +22,8 @@ export default function NewSpacePage() {
   const [type, setType] = useState<'community' | 'workspace'>('workspace');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [category, setCategory] = useState('other');
+  const [tags, setTags] = useState<string[]>([]);
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login?next=%2Fspaces%2Fnew');
@@ -33,6 +37,8 @@ export default function NewSpacePage() {
       name,
       slug,
       type,
+      category: type === 'community' ? category : 'other',
+      tags: type === 'community' ? tags : [],
       description: String(form.get('description') ?? '') || undefined,
       allowed_email_domain: type === 'workspace' ? String(form.get('allowed_email_domain') ?? '') || undefined : undefined,
     };
@@ -71,6 +77,7 @@ export default function NewSpacePage() {
         <span className="text-sm font-normal text-white/55">Used in the web address: /s/{slug || 'your-space'}. Lowercase letters, numbers and dashes.</span></label>
       <label className="block font-medium">Description<textarea className="auth-input" name="description" maxLength={500} rows={3} />
         <span className="text-sm font-normal text-white/55">Optional. A sentence about what this space is for.</span></label>
+      {type === 'community' && <><fieldset><legend className="mb-3 font-medium">Category</legend><CategoryPicker value={[category]} onChange={values => setCategory(values[0] ?? 'other')} /></fieldset><TagsInput value={tags} onChange={setTags} /></>}
       {type === 'workspace' && <label className="block font-medium">Allowed email domain
         <input className="auth-input" name="allowed_email_domain" placeholder="acme.test" />
         <span className="text-sm font-normal text-white/55">Optional. People with an email at this domain can join without an invite.</span></label>}

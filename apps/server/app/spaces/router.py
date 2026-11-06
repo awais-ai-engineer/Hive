@@ -1,17 +1,18 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import get_current_user
 from app.auth.optional import get_optional_user
-from app.db.models import Channel, MemberRole, Space, SpaceMember, SpaceType, User
+from app.db.models import Channel, MemberRole, Space, SpaceMember, SpaceRule, SpaceType, User
 from app.db.session import get_session
 from app.realtime.socket import evict_from_space, sio
+from app.spaces import management
 from app.spaces.permissions import require_below, require_role
-from app.spaces.schemas import MemberRoleIn, SpaceCreate, SpaceOut, SpacePatch
+from app.spaces.schemas import JoinIn, MemberRoleIn, RulesIn, SpaceCreate, SpaceOut, SpacePatch
 from app.spaces.service import (
     create_space,
     discover,
@@ -75,8 +76,8 @@ async def delete_space(slug: str, session: Session, user: CurrentUser):
 
 
 @router.post("/{slug}/join", response_model=SpaceOut)
-async def join_space(slug: str, session: Session, user: CurrentUser):
-    space = await session.scalar(select(Space).where(Space.slug == slug))
+async def join_space(slug: str, session: Session, user: CurrentUser, data: Annotated[JoinIn | None, Body()] = None):
+    space = await session.scalar(select(Space).where(Space.slug == slug).with_for_update())
     if space is None:
         raise HTTPException(404, "Space not found")
     existing = await session.get(SpaceMember, (space.id, user.id))
@@ -88,11 +89,28 @@ async def join_space(slug: str, session: Session, user: CurrentUser):
         email_domain = user.email.rsplit("@", 1)[-1].lower()
         if not space.allowed_email_domain or email_domain != space.allowed_email_domain:
             raise HTTPException(403, "Invite required")
-    member = SpaceMember(space_id=space.id, user_id=user.id, role=MemberRole.member)
+    has_rules = await session.scalar(select(SpaceRule.id).where(SpaceRule.space_id == space.id).limit(1))
+    if space.type == SpaceType.community and has_rules and not (data and data.agreedToRules):
+        raise HTTPException(409, {"code": "rules_not_agreed", "message": "Please agree to the community rules"})
+    member = SpaceMember(space_id=space.id, user_id=user.id, role=MemberRole.member,
+        rules_agreed_at=datetime.now(UTC) if space.type == SpaceType.community and has_rules else None)
     session.add(member)
     await session.commit()
     await session.refresh(member)
     return await space_out(session, space, member)
+
+
+@router.get("/{slug}/rules")
+async def get_rules(slug: str, session: Session, viewer: OptionalUser):
+    space, _ = await load_space(session, slug, viewer)
+    return await management.rules(session, space.id)
+
+
+@router.put("/{slug}/rules")
+async def put_rules(slug: str, data: RulesIn, session: Session, user: CurrentUser):
+    space, member = await load_space(session, slug, user)
+    require_role(member.role if member else None, MemberRole.admin)
+    return await management.replace_rules(session, space, data.rules)
 
 
 @router.delete("/{slug}/members/me", status_code=204)

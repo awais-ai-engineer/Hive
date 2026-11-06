@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { SocketEvents, type HealthResponse, type PingAck } from '@hive/shared';
+import { PolicyLinks } from '../components/policies/policy-layout';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
@@ -109,6 +110,7 @@ export default function Home() {
         </button>
         {latency !== null && <span className="text-white/70">Round trip: {latency} ms</span>}
       </div>
+      <footer className="mt-12 border-t border-white/10 pt-6"><PolicyLinks /></footer>
     </main>
   );
 }

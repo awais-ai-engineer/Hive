@@ -1,0 +1,18 @@
+[
+  {"slug":"music","label":"Music","icon":"music"},
+  {"slug":"gaming","label":"Gaming","icon":"gaming"},
+  {"slug":"technology","label":"Technology","icon":"technology"},
+  {"slug":"nature","label":"Nature","icon":"nature"},
+  {"slug":"sports","label":"Sports","icon":"sports"},
+  {"slug":"art","label":"Art","icon":"art"},
+  {"slug":"education","label":"Education","icon":"book"},
+  {"slug":"news","label":"News","icon":"file"},
+  {"slug":"business","label":"Business","icon":"business"},
+  {"slug":"health","label":"Health","icon":"health"},
+  {"slug":"food","label":"Food","icon":"food"},
+  {"slug":"travel","label":"Travel","icon":"compass"},
+  {"slug":"science","label":"Science","icon":"science"},
+  {"slug":"movies","label":"Movies","icon":"movies"},
+  {"slug":"books","label":"Books","icon":"book"},
+  {"slug":"other","label":"Other","icon":"layers"}
+]

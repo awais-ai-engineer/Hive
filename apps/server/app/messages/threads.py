@@ -25,7 +25,13 @@ from app.db.models import (
     User,
 )
 from app.messages.schemas import Participant, Place, PlaceSpace
-from app.messages.service import readable, serialize, unread_counts
+from app.messages.service import (
+    mention_condition,
+    readable,
+    serialize,
+    unread_counts,
+    unread_thread_mention,
+)
 from app.realtime.presence import visible_online
 
 EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
@@ -214,12 +220,13 @@ async def thread_participants(session: AsyncSession, parent: Message) -> list[st
 async def my_unreads(session: AsyncSession, user: User) -> dict:
     """Every channel and DM of the user with unread top-level messages, DMs first."""
     channel_rows = (await session.execute(
-        select(Channel.id, SpaceMember.joined_at)
+        select(Channel.id, SpaceMember.joined_at, SpaceMember.muted)
         .join(SpaceMember, SpaceMember.space_id == Channel.space_id)
         .where(SpaceMember.user_id == user.id, _active_member(), Channel.type == ChannelType.text,
                visible_channel(user.id))
     )).all()
-    since = {channel_id: joined for channel_id, joined in channel_rows}
+    since = {channel_id: joined for channel_id, joined, _ in channel_rows}
+    muted = {channel_id for channel_id, _, is_muted in channel_rows if is_muted}
     for channel_id in await session.scalars(
         select(DirectMember.channel_id).where(DirectMember.user_id == user.id)
     ):
@@ -230,6 +237,11 @@ async def my_unreads(session: AsyncSession, user: User) -> dict:
         by_since.setdefault(moment, []).append(channel_id)
     for moment, ids in by_since.items():
         counts.update(await unread_counts(session, user.id, ids, moment))
+        muted_ids = [channel_id for channel_id in ids if channel_id in muted]
+        if muted_ids:
+            for channel_id in muted_ids:
+                counts[channel_id] = 0
+            counts.update(await unread_counts(session, user.id, muted_ids, moment, user.username))
     counts = {channel_id: count for channel_id, count in counts.items() if count}
     if not counts:
         return {"items": []}
@@ -244,8 +256,10 @@ async def my_unreads(session: AsyncSession, user: User) -> dict:
         query = (
             select(Message, User).join(User, User.id == Message.author_id)
             .where(
-                Message.channel_id == channel_id, Message.parent_id.is_(None),
+                Message.channel_id == channel_id, True if channel_id in muted else Message.parent_id.is_(None),
                 Message.deleted_at.is_(None), Message.author_id != user.id,
+                mention_condition(user.username) if channel_id in muted else True,
+                unread_thread_mention(user.id) if channel_id in muted else True,
             )
         )
         if channel_id in markers:

@@ -233,3 +233,37 @@ only expiring signed URLs; ordinary files use download disposition. No storage S
 - **Sharing:** copy link, the device's native share sheet, or send to a channel or DM. Hive post
   links in chat show a preview card, but only for viewers who can read that post; nothing from a
   private workspace is revealed to outsiders.
+
+## Discover and manage communities
+
+Explore at `/spaces` offers **For You**, **Following**, **Recent** and **Trending**, with category
+filters and search across names, descriptions and tags. Communities have one of 16 categories
+and up to five tags. Save optional interests in Settings to personalise suggestions; without
+interests, For You shows Trending. Private workspaces never appear in Explore.
+
+Use `/communities/manage` to mute, favourite, reorder or leave your spaces. Favourites appear
+first in the rail and space switcher. Muting removes ordinary channel activity from personal
+unread totals while preserving mentions, direct messages and each channel's own unread marker.
+Owners cannot leave their space.
+
+Owners and administrators can edit up to 15 ordered rules in space settings. New community
+members must agree before joining a community with rules; existing members keep their access.
+`/policies` links to guidelines, content, privacy and terms pages. The policy text is a template
+and requires legal review before launch.
+
+Developer entry points:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/explore/communities`, `GET /api/explore/categories` | Ranked, cursor-paginated discovery and category counts |
+| `GET/PUT /api/me/interests` | Read or replace interests |
+| `PATCH /api/me/spaces/{slug}`, `PUT /api/me/spaces/order` | Membership preferences and ordering |
+| `GET/PUT /api/spaces/{slug}/rules` | Read or replace ordered rules |
+| `POST /api/spaces/{slug}/join` | Join, with `agreedToRules: true` when rules exist |
+
+The category catalogue lives in `packages/shared/src/categories.json`; a backend test checks
+the Python slugs against it. Migration `160fdc63dd30` adds categories, interests, membership
+preferences and rules, defaulting existing spaces to `other`. Inside `apps/server`, apply it with
+`python -m uv run alembic upgrade head`, then run `python -m uv run alembic check`. Backend
+tests cover discovery, permissions, muted unread counts and an isolated migration backfill and
+downgrade/upgrade round trip.

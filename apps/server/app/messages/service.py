@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 from fastapi import HTTPException
-from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy import and_, delete, exists, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +22,7 @@ from app.db.models import (
     Space,
     SpaceMember,
     SpaceType,
+    ThreadRead,
     User,
 )
 from app.db.session import redis
@@ -437,7 +438,21 @@ async def mark_read(session: AsyncSession, user: User, channel_id: str, message_
     return marker
 
 
-async def unread_counts(session: AsyncSession, user_id: str, channel_ids: list[str], since: datetime):
+def mention_condition(username: str):
+    import re
+    return Message.body.op("~*")(rf"(^|[^[:alnum:]_])@{re.escape(username)}([^[:alnum:]_]|$)")
+
+
+def unread_thread_mention(user_id: str):
+    """A reply already seen in its thread is not a new personal mention."""
+    return ~exists().where(
+        ThreadRead.user_id == user_id,
+        ThreadRead.message_id == Message.parent_id,
+        ThreadRead.last_read_id >= Message.id,
+    )
+
+
+async def unread_counts(session: AsyncSession, user_id: str, channel_ids: list[str], since: datetime, mention_username: str | None = None):
     """Unread top-level messages by others per channel. Without a read marker, everything
     posted after `since` (e.g. when the user joined the space) counts as unread."""
     if not channel_ids:
@@ -448,8 +463,10 @@ async def unread_counts(session: AsyncSession, user_id: str, channel_ids: list[s
             ChannelRead.channel_id == Message.channel_id, ChannelRead.user_id == user_id
         ))
         .where(
-            Message.channel_id.in_(channel_ids), Message.parent_id.is_(None),
+            Message.channel_id.in_(channel_ids), True if mention_username else Message.parent_id.is_(None),
             Message.deleted_at.is_(None), Message.author_id != user_id,
+            mention_condition(mention_username) if mention_username else True,
+            unread_thread_mention(user_id) if mention_username else True,
             or_(
                 Message.id > ChannelRead.last_read_id,
                 and_(ChannelRead.last_read_id.is_(None), Message.created_at > since),

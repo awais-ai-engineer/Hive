@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../lib/auth';
 import { Avatar } from './ui/avatar';
 import { Icon, Logo } from './ui/icons';
-import { DMS_CHANGED, type Conversation } from '../lib/dms';
+import { DMS_CHANGED } from '../lib/dms';
 import { socket } from '../lib/socket';
 import { apiData } from '../lib/spaces';
 
@@ -28,17 +28,17 @@ export default function Nav() {
     const refresh = () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
-        apiData<Conversation[]>('/api/dms')
-          .then(list => { if (active) setUnread(list.reduce((sum, item) => sum + item.unread, 0)); })
+        apiData<{ items: { unread: number }[] }>('/api/me/unreads')
+          .then(page => { if (active) setUnread(page.items.reduce((sum, item) => sum + item.unread, 0)); })
           .catch(() => {});
       }, 400);
     };
     refresh();
-    socket.on('dm:activity', refresh).on('read:updated', refresh).on('connect', refresh);
+    socket.on('dm:activity', refresh).on('space:activity', refresh).on('spaces:updated', refresh).on('read:updated', refresh).on('connect', refresh);
     window.addEventListener(DMS_CHANGED, refresh);
     return () => {
       active = false; clearTimeout(timer);
-      socket.off('dm:activity', refresh).off('read:updated', refresh).off('connect', refresh);
+      socket.off('dm:activity', refresh).off('space:activity', refresh).off('spaces:updated', refresh).off('read:updated', refresh).off('connect', refresh);
       window.removeEventListener(DMS_CHANGED, refresh);
     };
   }, [user, pathname]);
@@ -77,6 +77,7 @@ export default function Nav() {
           </Link>}
           {link('/feed', 'Feed')}
           {link('/spaces', 'Explore')}
+          {link('/policies', 'Help & policies')}
         </div>
         {!loading && <div className="ml-auto flex items-center gap-2 text-sm">
           {user ? <>
@@ -85,7 +86,7 @@ export default function Nav() {
               <button type="button" aria-label="Account menu" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(value => !value)} className="rounded-full">
                 <Avatar name={user.username} src={user.avatar_url} size={36} /></button>
               {menu && <div role="menu" className="card animate-in absolute right-0 z-40 mt-2 w-48 p-1 shadow-[var(--shadow-pop)]">
-                {([[`/u/${user.username}`, 'Your profile'], ['/settings', 'Settings']] as const).map(([href, label]) =>
+                {([[`/u/${user.username}`, 'Your profile'], ['/settings', 'Settings'], ['/communities/manage', 'Manage communities'], ['/policies', 'Help & policies']] as const).map(([href, label]) =>
                   <Link key={href} role="menuitem" href={href} className="block rounded-lg px-3 py-2 text-sm hover:bg-[var(--surface-2)]">{label}</Link>)}
                 <button type="button" role="menuitem" onClick={signOut} disabled={busy} className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--surface-2)] disabled:opacity-40">Log out</button>
               </div>}

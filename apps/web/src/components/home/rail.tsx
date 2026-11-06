@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
-import { spaceKindLabel, type Space } from '../../lib/spaces';
+import { sortSpaces, spaceKindLabel, type Space } from '../../lib/spaces';
 import { Avatar, colourFor } from '../ui/avatar';
 import { Icon, Logo } from '../ui/icons';
 
@@ -25,8 +25,10 @@ export function Rail({ spaces, current, onSwitch, unread }: {
 }) {
   const { user, logout } = useAuth();
   const { dark, toggle } = useTheme();
-  const workspaces = spaces.filter(space => space.type === 'workspace');
-  const communities = spaces.filter(space => space.type === 'community');
+  const ordered = sortSpaces(spaces);
+  const favorites = ordered.filter(space => space.favorite);
+  const workspaces = ordered.filter(space => space.type === 'workspace' && !space.favorite);
+  const communities = ordered.filter(space => space.type === 'community' && !space.favorite);
   const tileFor = (space: Space) => {
     const active = space.slug === current;
     const label = `${space.name} (${spaceKindLabel(space)})`;
@@ -35,6 +37,7 @@ export function Rail({ spaces, current, onSwitch, unread }: {
       className={`${tile} relative shrink-0 text-base font-bold ${active ? 'ring-2 ring-white/90 ring-offset-2 ring-offset-[var(--rail)]' : 'opacity-80 hover:opacity-100 hover:rounded-xl'}`}
       style={{ background: colourFor(space.slug) }}>
       <span style={{ color: '#fff' }}>{space.name[0]?.toUpperCase()}</span>
+      {space.unread > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-brand px-1 text-[10px]" aria-label={`${space.unread} unread`}>{space.unread > 99 ? '99+' : space.unread}</span>}
       <span aria-hidden className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--rail)]" style={{ color: '#fff' }}>
         <Icon name={space.type === 'workspace' ? 'lock' : 'globe'} size={10} /></span>
     </button>;
@@ -43,6 +46,8 @@ export function Rail({ spaces, current, onSwitch, unread }: {
   return <nav aria-label="Spaces" className="on-dark flex h-full w-[72px] shrink-0 flex-col items-center gap-2 bg-[var(--rail)] py-3">
     <Link href="/feed" aria-label="Feed" className="mb-2"><Logo size={34} /></Link>
     <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto px-2">
+      {favorites.map(tileFor)}
+      {favorites.length > 0 && <div role="separator" className="my-1 h-px w-8 bg-white/15" />}
       {workspaces.map(tileFor)}
       {workspaces.length > 0 && communities.length > 0 && <div role="separator" className="my-1 h-px w-8 bg-white/15" />}
       {communities.map(tileFor)}
@@ -50,6 +55,8 @@ export function Rail({ spaces, current, onSwitch, unread }: {
         <Icon name="plus" />
       </Link>
     </div>
+    <Link href="/communities/manage" title="Manage communities" aria-label="Manage communities" className={`${tile} text-white/70 hover:bg-white/10`}><Icon name="settings" /></Link>
+    <Link href="/policies" title="Help & policies" aria-label="Help & policies" className={`${tile} text-white/70 hover:bg-white/10`}><Icon name="file" /></Link>
     <Link href="/home?view=unreads" aria-label={unread ? `${unread} unread` : 'Unreads'} className={`${tile} relative text-white/70 hover:bg-white/10 hover:text-white`}>
       <Icon name="bell" size={20} />
       {unread > 0 && <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-rose-500" />}

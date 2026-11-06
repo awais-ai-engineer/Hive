@@ -7,6 +7,7 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
+    ARRAY,
     BigInteger,
     Boolean,
     CheckConstraint,
@@ -16,6 +17,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    PrimaryKeyConstraint,
     SmallInteger,
     String,
     Text,
@@ -25,6 +27,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import UserDefinedType
 from ulid import ULID
+
+from app.spaces.categories import CATEGORY_CHECK
 
 
 class LTree(UserDefinedType):
@@ -164,12 +168,19 @@ class RefreshToken(Base):
 
 class Space(Base):
     __tablename__ = "spaces"
+    __table_args__ = (
+        CheckConstraint(CATEGORY_CHECK, name="ck_spaces_category"),
+        CheckConstraint("cardinality(tags) <= 5", name="ck_spaces_tags_max5"),
+        Index("ix_spaces_category", "category"),
+    )
 
     id: Mapped[str] = pk()
     type: Mapped[SpaceType] = mapped_column(Enum(SpaceType, name="space_type"))
     name: Mapped[str] = mapped_column(String(100))
     slug: Mapped[str] = mapped_column(String(100), unique=True)
     description: Mapped[str | None] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(String(20), default="other", server_default="other")
+    tags: Mapped[list[str]] = mapped_column(ARRAY(String(24)), default=list, server_default="{}")
     allowed_email_domain: Mapped[str | None] = mapped_column(String(255))
     # Communities: posts are public, but chat is members-only unless the admins open it up.
     public_chat: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
@@ -192,6 +203,32 @@ class SpaceMember(Base):
     )
     joined_at: Mapped[datetime] = created_at()
     banned_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    muted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    favorite: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    position: Mapped[int | None] = mapped_column(Integer)
+    rules_agreed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class UserInterest(Base):
+    __tablename__ = "user_interests"
+    __table_args__ = (
+        CheckConstraint(CATEGORY_CHECK, name="ck_user_interests_category"),
+        PrimaryKeyConstraint("user_id", "category", name="pk_user_interests"),
+    )
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", name="fk_user_interests_user"), primary_key=True)
+    category: Mapped[str] = mapped_column(String(20), primary_key=True)
+    created_at: Mapped[datetime] = created_at()
+
+
+class SpaceRule(Base):
+    __tablename__ = "space_rules"
+    __table_args__ = (UniqueConstraint("space_id", "position", name="uq_space_rules_position"), PrimaryKeyConstraint("id", name="pk_space_rules"))
+    id: Mapped[str] = pk()
+    space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE", name="fk_space_rules_space"))
+    position: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(80))
+    description: Mapped[str] = mapped_column(String(500))
+    created_at: Mapped[datetime] = created_at()
 
 
 class Channel(Base):

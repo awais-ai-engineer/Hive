@@ -36,9 +36,10 @@ export function updateSessionUser(user: User) {
 }
 
 export async function responseData<T>(response: Response): Promise<T> {
+  if (response.status === 204) return undefined as T;
   const body = await response.json();
   if (!response.ok) {
-    throw new Error(typeof body.detail === 'string' ? body.detail : 'Please check your input.');
+    throw new Error(typeof body.detail === 'string' ? body.detail : typeof body.detail?.message === 'string' ? body.detail.message : 'Please check your input.');
   }
   return body as T;
 }

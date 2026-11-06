@@ -7,7 +7,7 @@ type Props = {
   items: UnreadItem[];
   ready: boolean;
   userId?: string;
-  onOpen: (place: Place) => void;
+  onOpen: (place: Place, threadId?: string) => void;
   onMarkRead: (item: UnreadItem) => void;
 };
 
@@ -21,7 +21,7 @@ export function UnreadsView({ items, ready, userId, onOpen, onMarkRead }: Props)
         <span className="ml-2 rounded-full bg-amber-400 px-1.5 text-xs font-semibold text-black">{badge(item.unread)} new</span></h2>
       <div className="flex shrink-0 gap-3 text-sm">
         <button type="button" onClick={() => onMarkRead(item)} className="text-white/60 hover:text-white">Mark as read</button>
-        <button type="button" onClick={() => onOpen(item.channel)} className="text-amber-400">Open</button>
+        <button type="button" onClick={() => onOpen(item.channel, item.items[0]?.parent_id ?? undefined)} className="text-amber-400">Open</button>
       </div>
     </div>
     {item.unread > item.items.length && <p className="mb-1 text-xs text-white/40">Showing the latest {item.items.length}</p>}

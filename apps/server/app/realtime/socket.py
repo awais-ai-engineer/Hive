@@ -166,6 +166,9 @@ async def send(sid, data, session, user):
             parent_row = await session.get(Message, parent["id"])
             for participant in await thread_participants(session, parent_row):
                 await sio.emit("thread:activity", activity, room=f"user:{participant}")
+            channel = await session.get(Channel, message["channel_id"])
+            if channel.type != ChannelType.dm:
+                await emit_space_activity(session, channel)
         else:
             channel = await session.get(Channel, message["channel_id"])
             activity = {"channelId": channel.id, "messageId": message["id"], "authorId": user.id}
@@ -177,8 +180,24 @@ async def send(sid, data, session, user):
     return {"message": message}
 
 
+async def emit_space_activity(session, channel: Channel) -> None:
+    """Refresh personal totals without requiring an open space or thread."""
+    from datetime import UTC, datetime
+
+    from sqlalchemy import or_
+
+    recipients = select(SpaceMember.user_id).where(SpaceMember.space_id == channel.space_id,
+        or_(SpaceMember.banned_until.is_(None), SpaceMember.banned_until <= datetime.now(UTC)))
+    if channel.is_private:
+        recipients = recipients.where(SpaceMember.user_id.in_(select(ChannelMember.user_id).where(ChannelMember.channel_id == channel.id)))
+    rooms = [f"user:{user_id}" for user_id in await session.scalars(recipients)]
+    if rooms:
+        await sio.emit("space:activity", {"spaceId": channel.space_id}, room=rooms)
+
+
 async def emit_channel_activity(session, channel: Channel, activity: dict) -> None:
     """Public channels tell the whole space; private ones only tell their own members."""
+    await emit_space_activity(session, channel)
     if not channel.is_private:
         await sio.emit("channel:activity", activity, room=f"space:{channel.space_id}")
         return
@@ -225,6 +244,10 @@ async def thread_read(sid, data, session, user):
     marker = await mark_thread_read(session, user, data.parentId, data.messageId)
     await sio.emit("thread:read", {"parentId": data.parentId, "lastReadId": marker},
                    room=f"user:{user.id}", skip_sid=sid)
+    parent = await session.get(Message, data.parentId)
+    channel = await session.get(Channel, parent.channel_id)
+    if channel.space_id is not None:
+        await sio.emit("space:activity", {"spaceId": channel.space_id}, room=f"user:{user.id}")
     return {"lastReadId": marker}
 
 

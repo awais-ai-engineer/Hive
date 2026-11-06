@@ -8,6 +8,8 @@ import { socket } from '../../../lib/socket';
 import { SpaceKind } from '../../../components/ui/space-kind';
 import { ChannelChat } from '../../../components/channel-chat';
 import { PostFeed } from '../../../components/posts/post-feed';
+import { CategoryChips } from '../../../components/communities/category-chips';
+import { JoinCommunity, RulesCard } from '../../../components/communities/rules';
 import { apiData, requestError, spaceKindLabel, type Channel, type Member, type Space } from '../../../lib/spaces';
 
 const rank: Record<string, number> = { owner: 5, admin: 4, moderator: 3, member: 2, guest: 1 };
@@ -92,6 +94,8 @@ export default function SpacePage() {
       <h1 className="text-xl font-bold">{space?.name ?? (error === 'Space not found' ? 'Space not found' : 'Space')}</h1>
       {space && <>
         <p className="mt-1 flex items-center gap-1.5 text-sm text-white/50"><SpaceKind space={space} />{spaceKindLabel(space)} · {space.member_count} members</p>
+        <CategoryChips space={space} />
+        {space.type === 'community' && <RulesCard slug={slug} />}
         <Link className="mt-3 inline-block text-sm text-amber-400" href={`/s/${slug}/members`}>View members</Link>
         {canAdmin && <Link className="ml-3 inline-block text-sm text-amber-400" href={`/s/${slug}/settings`}>Settings</Link>}
         <h2 className="mb-2 mt-6 text-sm font-semibold uppercase text-white/50">Channels</h2>
@@ -122,7 +126,7 @@ export default function SpacePage() {
           {tab === 'chat' && channel?.topic && <p className="mt-1 text-white/60">{channel.topic}</p>}
         </div>
         <div className="flex gap-2">
-          {!space.my_role && space.type === 'community' && <button disabled={busy} onClick={() => changeMembership('join')} className="auth-button">Join</button>}
+          {!space.my_role && space.type === 'community' && <JoinCommunity space={space} onJoined={() => void load()} />}
           {canLeave && <button disabled={busy} onClick={() => changeMembership('leave')} className="auth-button">Leave</button>}
         </div>
       </div>}
