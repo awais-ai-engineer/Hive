@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Avatar } from '../../components/ui/avatar';
+import { InterestsSettings } from '../../components/communities/interests-settings';
 import { apiFetch, responseData, uploadFile, type User } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { apiData, requestError } from '../../lib/spaces';
 
-type Section = 'profile' | 'privacy' | 'blocked';
-const sections: [Section, string][] = [['profile', 'Profile'], ['privacy', 'Privacy'], ['blocked', 'Blocked people']];
+type Section = 'profile' | 'privacy' | 'blocked' | 'interests';
+const sections: [Section, string][] = [['profile', 'Profile'], ['privacy', 'Privacy'], ['blocked', 'Blocked people'], ['interests', 'Interests']];
 const EMOJI = ['😀', '🙂', '😎', '🤔', '🎉', '🔥', '💡', '🎧', '📅', '🚌', '🤒', '🌴', '☕', '🚀'];
 const PRESETS = [['📅', 'In a meeting'], ['🚌', 'Commuting'], ['🤒', 'Out sick'], ['🌴', 'On holiday'], ['🎧', 'Focusing']];
 
@@ -206,6 +207,7 @@ function BlockedCard() {
 export default function SettingsPage() {
   const { user, loading, updateUser } = useAuth();
   const [section, setSection] = useState<Section>('profile');
+  useEffect(() => { if (new URLSearchParams(window.location.search).get('section') === 'interests') setSection('interests'); }, []);
   if (loading) return <main className="p-16 text-center text-white/60">Loading…</main>;
   if (!user) return <main className="p-16 text-center"><Link className="font-semibold text-brand hover:underline" href="/login?next=/settings">Log in to see your settings</Link></main>;
   return <main className="mx-auto max-w-4xl px-4 py-8">
@@ -214,11 +216,13 @@ export default function SettingsPage() {
       <nav aria-label="Settings sections" className="flex gap-1 overflow-x-auto md:flex-col">
         {sections.map(([id, label]) => <button key={id} type="button" aria-current={section === id ? 'page' : undefined} onClick={() => setSection(id)}
           className={`whitespace-nowrap rounded-xl px-3 py-2 text-left text-sm font-medium transition ${section === id ? 'bg-brand-soft text-brand' : 'text-white/65 hover:bg-[var(--surface-2)] hover:text-white'}`}>{label}</button>)}
+        <Link href="/communities/manage" className="rounded-xl px-3 py-2 text-sm text-brand">Manage communities</Link>
       </nav>
       <div className="min-w-0">
         {section === 'profile' && <ProfileCard user={user} updateUser={updateUser} />}
         {section === 'privacy' && <PrivacyCard user={user} updateUser={updateUser} />}
         {section === 'blocked' && <BlockedCard />}
+        {section === 'interests' && <InterestsSettings />}
       </div>
     </div>
   </main>;

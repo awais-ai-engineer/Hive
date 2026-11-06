@@ -78,6 +78,7 @@ export default function AuthForm({ mode }: { mode: 'signup' | 'login' }) {
             <button className="auth-button h-11 w-full" disabled={submitting || auth.loading}>
               {submitting ? 'Please wait…' : title}
             </button>
+            {signup && <p className="text-xs leading-relaxed text-white/65">By signing up you agree to the <Link href="/policies/terms" target="_blank" rel="noopener" className="text-brand underline">Terms of Service</Link> and <Link href="/policies/privacy" target="_blank" rel="noopener" className="text-brand underline">Privacy Policy</Link>, and confirm you have read the <Link href="/policies/guidelines" target="_blank" rel="noopener" className="text-brand underline">Community Guidelines</Link>.</p>}
           </form>
           <p className="mt-6 text-center text-sm text-white/60">
             {signup ? 'Already have an account? ' : 'New to Hive? '}

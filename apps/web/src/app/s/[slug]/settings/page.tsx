@@ -5,6 +5,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { channelCreateSchema, inviteCreateSchema, spacePatchSchema } from '@hive/shared';
 import { SpaceKind } from '../../../../components/ui/space-kind';
+import { CategoryPicker } from '../../../../components/interest-picker';
+import { TagsInput } from '../../../../components/communities/tags-input';
+import { RulesEditor } from '../../../../components/communities/rules';
 import { useAuth } from '../../../../lib/auth';
 import { apiData, requestError, spaceKindLabel, type Channel, type Space } from '../../../../lib/spaces';
 
@@ -22,6 +25,9 @@ export default function SettingsPage() {
   const [error, setError] = useState('Loading settings…');
   const [busy, setBusy] = useState(false);
   const [newInvite, setNewInvite] = useState('');
+  const [category, setCategory] = useState('other');
+  const [tags, setTags] = useState<string[]>([]);
+  const [saved, setSaved] = useState(false);
 
   async function load() {
     const [spaceData, channelData, inviteData] = await Promise.all([
@@ -30,6 +36,7 @@ export default function SettingsPage() {
       apiData<Invite[]>(`/api/spaces/${encodeURIComponent(slug)}/invites`),
     ]);
     setSpace(spaceData); setChannels(channelData); setInvites(inviteData); setError('');
+    setCategory(spaceData.category); setTags(spaceData.tags);
   }
 
   useEffect(() => {
@@ -38,14 +45,16 @@ export default function SettingsPage() {
   }, [slug, loading, user]);
 
   async function saveSpace(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setError('');
+    event.preventDefault(); setBusy(true); setError(''); setSaved(false);
     const form = new FormData(event.currentTarget);
     const parsed = spacePatchSchema.safeParse({
       name: form.get('name'), description: form.get('description'),
+      category: space?.type === 'community' ? category : undefined,
+      tags: space?.type === 'community' ? tags : undefined,
       allowed_email_domain: space?.type === 'workspace' ? form.get('allowed_email_domain') || null : undefined,
     });
     if (!parsed.success) { setError(parsed.error.issues[0].message); setBusy(false); return; }
-    try { await apiData(`/api/spaces/${encodeURIComponent(slug)}`, { method: 'PATCH', body: JSON.stringify(parsed.data) }); await load(); }
+    try { await apiData(`/api/spaces/${encodeURIComponent(slug)}`, { method: 'PATCH', body: JSON.stringify(parsed.data) }); await load(); setSaved(true); }
     catch (cause) { setError(requestError(cause)); }
     finally { setBusy(false); }
   }
@@ -150,10 +159,13 @@ export default function SettingsPage() {
       <form onSubmit={saveSpace} className="space-y-3">
         <label className="block">Name<input name="name" className="auth-input" required minLength={2} maxLength={60} defaultValue={space.name} /></label>
         <label className="block">Description<textarea name="description" className="auth-input" maxLength={500} defaultValue={space.description ?? ''} /></label>
+        {space.type === 'community' && <><fieldset><legend className="mb-3 font-medium">Category</legend><CategoryPicker value={[category]} onChange={values => { setCategory(values[0] ?? 'other'); setSaved(false); }} /></fieldset><TagsInput value={tags} onChange={setTags} /></>}
         {space.type === 'workspace' && <label className="block">Allowed email domain<input name="allowed_email_domain" className="auth-input" defaultValue={space.allowed_email_domain ?? ''} placeholder="acme.test" /></label>}
         <button disabled={busy} className="auth-button">Save details</button>
+        {saved && <p role="status" className="text-sm text-brand">Details saved</p>}
       </form>
     </section>
+    {space.type === 'community' && <RulesEditor slug={slug} />}
     <section><h2 className="mb-4 text-xl font-semibold">Channels</h2>
       <ul className="space-y-3">{channels.map((channel, index) => <li key={channel.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 p-3">
         <input aria-label={`Channel name ${channel.name}`} className="auth-input my-0 w-44" maxLength={80} defaultValue={channel.name}

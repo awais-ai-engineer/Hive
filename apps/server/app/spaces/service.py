@@ -59,11 +59,17 @@ async def space_out(
         name=space.name,
         slug=space.slug,
         description=space.description,
+        category=space.category,
+        tags=space.tags,
         allowed_email_domain=space.allowed_email_domain,
         public_chat=space.public_chat,
         created_at=space.created_at,
         member_count=count or 0,
         my_role=member.role if member else None,
+        role=member.role if member else None,
+        muted=member.muted if member else False,
+        favorite=member.favorite if member else False,
+        position=member.position if member else None,
     )
 
 
@@ -75,6 +81,8 @@ async def create_space(session: AsyncSession, user: User, data: SpaceCreate) -> 
         name=data.name,
         slug=data.slug,
         description=data.description,
+        category=data.category if data.type == SpaceType.community else "other",
+        tags=data.tags if data.type == SpaceType.community else [],
         allowed_email_domain=data.allowed_email_domain,
         created_by=user.id,
     )
@@ -117,25 +125,17 @@ async def discover(
 
 
 async def my_spaces(session: AsyncSession, user: User) -> list[SpaceOut]:
-    rows = (
-        await session.execute(
-            select(Space, SpaceMember)
-            .join(SpaceMember, Space.id == SpaceMember.space_id)
-            .where(
-                SpaceMember.user_id == user.id,
-                or_(
-                    SpaceMember.banned_until.is_(None),
-                    SpaceMember.banned_until <= datetime.now(UTC),
-                ),
-            )
-            .order_by(Space.name)
-        )
-    ).all()
-    return [await space_out(session, space, member) for space, member in rows]
+    from app.spaces.management import joined_spaces
+    return await joined_spaces(session, user)
 
 
 async def update_space(session: AsyncSession, space: Space, data: SpacePatch) -> SpaceOut:
     changes = data.model_dump(exclude_unset=True)
+    if space.type == SpaceType.workspace:
+        if "category" in changes:
+            changes["category"] = "other"
+        if "tags" in changes:
+            changes["tags"] = []
     if space.type == SpaceType.community and changes.get("allowed_email_domain") is not None:
         raise HTTPException(422, "Email domain is only allowed on workspaces")
     if "public_chat" in changes and space.type != SpaceType.community:

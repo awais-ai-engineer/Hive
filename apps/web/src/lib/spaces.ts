@@ -4,6 +4,13 @@ export type Space = {
   name: string;
   slug: string;
   description: string | null;
+  category: string;
+  tags: string[];
+  role: 'owner' | 'admin' | 'moderator' | 'member' | 'guest' | null;
+  muted: boolean;
+  favorite: boolean;
+  position: number | null;
+  unread: number;
   allowed_email_domain: string | null;
   created_at: string;
   member_count: number;
@@ -39,3 +46,6 @@ export function requestError(error: unknown) {
 }
 
 export const spaceKindLabel = (space: Pick<Space, 'type'>) => space.type === 'workspace' ? 'Private workspace' : 'Public community';
+
+export const SPACES_CHANGED = 'hive:spaces';
+export const sortSpaces = (spaces: Space[]) => [...spaces].sort((a, b) => Number(b.favorite) - Number(a.favorite) || (a.position ?? Infinity) - (b.position ?? Infinity) || a.name.localeCompare(b.name));

@@ -13,6 +13,7 @@ from app.comments.router import router as comments_router
 from app.core.config import settings
 from app.db.session import engine, redis
 from app.dms.router import router as dms_router
+from app.explore.router import router as explore_router
 from app.invites.router import router as invites_router
 from app.messages.router import router as messages_router
 from app.posts.router import router as posts_router
@@ -48,6 +49,7 @@ api.include_router(auth_router, prefix="/api")
 api.include_router(dms_router, prefix="/api")
 api.include_router(users_router, prefix="/api")
 api.include_router(spaces_router, prefix="/api")
+api.include_router(explore_router, prefix="/api")
 api.include_router(channels_router, prefix="/api")
 api.include_router(invites_router, prefix="/api")
 api.include_router(messages_router, prefix="/api")

@@ -1,9 +1,10 @@
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, field_validator
 
 from app.db.models import MemberRole, SpaceType
+from app.spaces.categories import CATEGORIES
 
 Slug = Annotated[
     str, StringConstraints(min_length=3, max_length=50, pattern=r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -14,7 +15,30 @@ DOMAIN_PATTERN = r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
 RESERVED_SLUGS = {"new", "settings", "api", "invite", "admin"}
 
 
-class SpaceCreate(BaseModel):
+class CommunityFields(BaseModel):
+    category: str = "other"
+    tags: list[str] = Field(default_factory=list)
+
+    @field_validator("category")
+    @classmethod
+    def known_category(cls, value):
+        if value not in CATEGORIES:
+            raise ValueError("Unknown category")
+        return value
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def clean_tags(cls, value):
+        import re
+        if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+            raise ValueError("Tags must be a list of words")
+        result = list(dict.fromkeys(item.strip().lower() for item in value))
+        if len(result) > 5 or any(not re.fullmatch(r"[a-z0-9-]{2,24}", item) for item in result):
+            raise ValueError("Use up to 5 tags, each 2–24 letters, digits or hyphens")
+        return result
+
+
+class SpaceCreate(CommunityFields):
     type: SpaceType
     name: SpaceName
     slug: Slug
@@ -38,7 +62,7 @@ class SpaceCreate(BaseModel):
         return value
 
 
-class SpacePatch(BaseModel):
+class SpacePatch(CommunityFields):
     name: SpaceName | None = None
     description: Description | None = None
     allowed_email_domain: Annotated[str, StringConstraints(pattern=DOMAIN_PATTERN)] | None = None
@@ -67,11 +91,65 @@ class SpaceOut(BaseModel):
     name: str
     slug: str
     description: str | None
+    category: str = "other"
+    tags: list[str] = Field(default_factory=list)
     allowed_email_domain: str | None
     public_chat: bool = False
     created_at: datetime
     member_count: int
     my_role: MemberRole | None
+    role: MemberRole | None = None
+    muted: bool = False
+    favorite: bool = False
+    position: int | None = None
+    unread: int = 0
+
+
+class InterestsIn(BaseModel):
+    categories: list[str] = Field(max_length=16)
+
+    @field_validator("categories")
+    @classmethod
+    def known_categories(cls, values):
+        if any(value not in CATEGORIES for value in values):
+            raise ValueError("Unknown category")
+        return list(dict.fromkeys(values))
+
+
+class MembershipPatch(BaseModel):
+    muted: StrictBool | None = None
+    favorite: StrictBool | None = None
+
+    @field_validator("muted", "favorite")
+    @classmethod
+    def not_null(cls, value):
+        if value is None:
+            raise ValueError("Use true or false")
+        return value
+
+
+class SpaceOrderIn(BaseModel):
+    slugs: list[str] = Field(max_length=500)
+
+    @field_validator("slugs")
+    @classmethod
+    def unique_slugs(cls, values):
+        if len(set(values)) != len(values):
+            raise ValueError("Duplicate space")
+        return values
+
+
+class RuleIn(BaseModel):
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+    description: Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)] = ""
+
+
+class RulesIn(BaseModel):
+    rules: list[RuleIn] = Field(max_length=15)
+
+
+class JoinIn(BaseModel):
+    agreedToRules: StrictBool = False
 
 
 class MemberUserOut(BaseModel):

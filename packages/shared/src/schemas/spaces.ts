@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { categorySchema, tagsSchema } from '../categories';
 
 const slug = z.string().min(3).max(50).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
   .refine(value => !['new', 'settings', 'api', 'invite', 'admin'].includes(value));
@@ -10,12 +11,17 @@ export const spaceCreateSchema = z.object({
   name: z.string().trim().min(2).max(60),
   slug,
   description: z.string().max(500).nullable().optional(),
+  category: categorySchema.optional(),
+  tags: tagsSchema.optional(),
   allowed_email_domain: domain.nullable().optional(),
 }).refine(value => value.type === 'workspace' || value.allowed_email_domain == null, {
   path: ['allowed_email_domain'], message: 'Email domain is only allowed on workspaces',
 });
 
 export const spacePatchSchema = z.object({
+  category: categorySchema.optional(),
+  tags: tagsSchema.optional(),
+  public_chat: z.boolean().optional(),
   name: z.string().trim().min(2).max(60).optional(),
   description: z.string().max(500).nullable().optional(),
   allowed_email_domain: domain.nullable().optional(),

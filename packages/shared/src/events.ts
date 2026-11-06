@@ -1,5 +1,7 @@
 /** Socket.IO event names shared by web and server. */
 export const SocketEvents = {
+  SpaceActivity: 'space:activity',
+  SpacesUpdated: 'spaces:updated',
   Ping: 'rtt:ping',
   MessageSend: 'message:send',
   MessageNew: 'message:new',

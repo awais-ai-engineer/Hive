@@ -119,7 +119,7 @@ body {
 }
 
 .btn-ghost {
-  @apply inline-flex items-center gap-2 rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm font-medium transition hover:bg-[var(--surface-2)];
+  @apply inline-flex items-center gap-2 rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm font-medium transition hover:bg-[var(--surface-2)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface;
 }
 
 /* Brand-filled elements keep white text even though "white" means the theme foreground. */

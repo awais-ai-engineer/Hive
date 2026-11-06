@@ -14,7 +14,7 @@ import { useAuth } from '../../lib/auth';
 import { conversationTitle, DMS_CHANGED, type Conversation } from '../../lib/dms';
 import { loadSetting, placeHref, saveSetting, type Place, type ThreadItem, type UnreadItem } from '../../lib/home';
 import { socket } from '../../lib/socket';
-import { apiData, requestError, type Channel, type Space } from '../../lib/spaces';
+import { apiData, requestError, SPACES_CHANGED, type Channel, type Space } from '../../lib/spaces';
 
 const rank: Record<string, number> = { owner: 5, admin: 4, moderator: 3, member: 2, guest: 1 };
 const LAST_SPACE = 'hive:last-space';
@@ -70,8 +70,12 @@ function Home() {
   // Data loading -------------------------------------------------------------------------
   useEffect(() => {
     if (loading || !user) return;
-    apiData<Space[]>('/api/me/spaces').then(list => { setSpaces(list); setSpacesReady(true); })
+    const refresh = () => apiData<Space[]>('/api/me/spaces').then(list => { setSpaces(list); setSpacesReady(true); })
       .catch(cause => { setError(requestError(cause)); setSpacesReady(true); });
+    void refresh();
+    socket.on('spaces:updated', refresh).on('space:activity', refresh).on('read:updated', refresh).on('connect', refresh);
+    window.addEventListener(SPACES_CHANGED, refresh);
+    return () => { socket.off('spaces:updated', refresh).off('space:activity', refresh).off('read:updated', refresh).off('connect', refresh); window.removeEventListener(SPACES_CHANGED, refresh); };
   }, [loading, user]);
 
   const spaceSlug = space?.slug ?? null;
@@ -138,9 +142,11 @@ function Home() {
     })));
     const onReconnect = () => { refreshConversations(); refreshUnreads(); refreshThreads(); };
     socket.on('channel:activity', onChannelActivity).on('dm:activity', onDm).on('read:updated', onRead)
+      .on('space:activity', refreshUnreads).on('spaces:updated', refreshUnreads)
       .on('thread:activity', refreshThreads).on('thread:read', refreshThreads).on('presence', onPresence).on('connect', onReconnect);
     return () => {
       socket.off('channel:activity', onChannelActivity).off('dm:activity', onDm).off('read:updated', onRead)
+        .off('space:activity', refreshUnreads).off('spaces:updated', refreshUnreads)
         .off('thread:activity', refreshThreads).off('thread:read', refreshThreads).off('presence', onPresence).off('connect', onReconnect);
     };
   }, [user, selected, refreshConversations, refreshUnreads, refreshThreads]);
@@ -243,7 +249,7 @@ function Home() {
     main = <>
       <ChatHeader title="Unreads" onMenu={() => setDrawer(true)} />
       {selected && conversations.length + channels.length > 0 && <p className="mb-3 text-sm text-white/50">That conversation isn&apos;t in this space. Showing your unread messages instead.</p>}
-      <UnreadsView items={unreads} ready={unreadsReady} userId={user?.id} onOpen={place => openPlace(place)} onMarkRead={markUnreadItem} />
+      <UnreadsView items={unreads} ready={unreadsReady} userId={user?.id} onOpen={(place, threadId) => openPlace(place, threadId)} onMarkRead={markUnreadItem} />
     </>;
   }
 

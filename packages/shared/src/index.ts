@@ -1,4 +1,5 @@
 export * from './events';
+export * from './categories';
 export * from './health';
 export * from './schemas/auth';
 export * from './schemas/spaces';
