@@ -6,6 +6,7 @@ import type { Attachment } from '@hive/shared';
 import { API_URL } from '../lib/api';
 import { ReportDialog } from './report-dialog';
 import { Avatar } from './ui/avatar';
+import { Icon } from './ui/icons';
 import { StatusMark } from './ui/status-mark';
 import { chatRequest } from '../lib/socket';
 import { requestError } from '../lib/spaces';
@@ -63,6 +64,13 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
   }
 
   const time = new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (message.kind) {
+    // System line, for example the summary of a huddle that just ended.
+    return <div data-message-id={message.id} role="status" className="my-3 flex items-center justify-center gap-2 px-2 text-center text-xs text-white/55">
+      <Icon name="headphones" size={14} className="shrink-0" /><span>{message.body}</span>
+      <time dateTime={message.created_at} title={new Date(message.created_at).toLocaleString()} className="shrink-0 text-white/40">{time}</time>
+    </div>;
+  }
   return <article data-message-id={message.id} className={`group relative flex gap-3 rounded-xl px-2 py-1 transition hover:bg-[var(--surface-2)] ${grouped ? '' : 'mt-3 pt-2'}`}>
     <div className="w-10 shrink-0">
       {grouped ? <time dateTime={message.created_at} className="hidden pt-1 text-right text-[10px] text-white/35 group-hover:block">{time}</time>

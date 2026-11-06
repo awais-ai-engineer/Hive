@@ -4,7 +4,7 @@ import { useSyncExternalStore } from 'react';
 import { calls, type CallState } from './call';
 
 const server: CallState = {
-  channelId: null, status: 'idle', error: '', muted: false, camera: false, screen: false,
+  channelId: null, title: '', stageOpen: false, status: 'idle', error: '', muted: false, camera: false, screen: false,
   localStream: null, speaking: false, peers: [],
 };
 

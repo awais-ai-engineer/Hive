@@ -121,7 +121,7 @@ export function ChannelChat({ channel, space, placeholder, reason, canModerate, 
       {chat.ready && !chat.messages.length && <p className="py-8 text-center text-white/40">No messages yet</p>}
       {chat.messages.map((message, index) => {
         const previous = chat.messages[index - 1];
-        const grouped = previous?.author.id === message.author.id && !previous.reply_count &&
+        const grouped = !message.kind && !previous?.kind && previous?.author.id === message.author.id && !previous.reply_count &&
           Date.parse(message.created_at) - Date.parse(previous.created_at) < 300000;
         return <MessageItem key={message.id} message={message} grouped={grouped} userId={user?.id}
           canWrite={canWrite} canModerate={canModerate} onRetry={retry} onError={setError}

@@ -9,6 +9,9 @@ import { requestError, type Channel, type Space } from '../../lib/spaces';
 import { Avatar } from '../ui/avatar';
 import { Icon, type IconName } from '../ui/icons';
 import { StatusMark } from '../ui/status-mark';
+import { CallBar } from '../call/call-bar';
+import { calls } from '../../lib/call';
+import { useHuddles } from '../../lib/huddles';
 import { CreateChannelDialog } from './create-channel-dialog';
 import { FindConversation } from './find-conversation';
 import { NewConversation } from './new-conversation';
@@ -64,6 +67,7 @@ export function Sidebar(props: Props) {
   const [menu, setMenu] = useState<Menu | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [error, setError] = useState('');
+  const huddles = useHuddles();
 
   const role = space?.my_role;
   const isAdmin = role === 'owner' || role === 'admin';
@@ -170,7 +174,7 @@ export function Sidebar(props: Props) {
     const person = entry.conversation?.participants[0];
     return <li key={entry.id} onContextMenu={event => { event.preventDefault(); openMenu({ x: event.clientX, y: event.clientY }, `Actions for ${entry.label}`, entryMenu(entry)); }}
       className={`group flex items-center rounded-lg transition ${active ? 'bg-[var(--brand)] font-semibold shadow-sm' : 'hover:bg-white/10'} ${quiet && !active ? 'opacity-60' : ''}`}>
-      <button type="button" onClick={() => props.onOpen(entry.id)} aria-current={active ? 'page' : undefined}
+      <button type="button" onClick={() => { props.onOpen(entry.id); if (entry.channel?.type === 'voice') void calls.join(entry.id, entry.label); }} aria-current={active ? 'page' : undefined}
         title={quiet ? `Notifications: ${LEVEL_LABELS[level]}` : undefined}
         className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[14px] ${active ? '' : entry.unread && !quiet ? 'font-semibold text-white' : 'text-white/75 hover:text-white'}`}>
         {entry.kind === 'channel' && <Icon name={entry.channel?.type === 'voice' ? 'volume' : entry.channel?.is_private ? 'lock' : 'hash'} size={16} className="shrink-0 opacity-70" />}
@@ -178,6 +182,8 @@ export function Sidebar(props: Props) {
         {entry.kind === 'dm' && <Avatar name={person?.username ?? '?'} src={person?.avatar_url} size={22} online={!!person?.online} />}
         <span className="truncate">{entry.kind === 'dm' ? person?.username ?? 'Unknown' : entry.label}</span>
         {entry.kind === 'dm' && person && <StatusMark person={person} className="text-[13px]" />}
+        {huddles[entry.id] && <span className="ml-1 flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-300" title={`In the huddle: ${huddles[entry.id].users.map(user => user.username).join(', ')}`}>
+          <Icon name="headphones" size={14} /><span aria-label={`${huddles[entry.id].count} in huddle`}>{huddles[entry.id].count}</span></span>}
         {quiet && <Icon name="bellOff" size={13} className="shrink-0 opacity-70" aria-label={LEVEL_LABELS[level]} />}
         <Count value={active ? 0 : entry.unread} />
       </button>
@@ -269,6 +275,7 @@ export function Sidebar(props: Props) {
       </ul></div>
       {error && <p role="alert" className="mt-3 px-2.5 text-xs text-rose-300">{error}</p>}
     </div>
+    <CallBar />
     {menu && <PopupMenu at={menu} label={menu.label} items={menu.items} onClose={() => setMenu(null)} />}
     {dialog && <SectionDialog key={dialog.mode === 'rename' ? dialog.section.id : 'new'}
       initial={dialog.mode === 'rename' ? { name: dialog.section.name, emoji: dialog.section.emoji } : undefined}

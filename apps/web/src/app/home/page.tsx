@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { CallDock } from '../../components/call/call-dock';
+import { VoiceRoom } from '../../components/call/voice-room';
 import { ChannelChat } from '../../components/channel-chat';
 import { PostFeed } from '../../components/posts/post-feed';
 import { ChatHeader } from '../../components/home/chat-header';
@@ -271,10 +273,12 @@ function Home() {
       <ChatHeader channel={channel} space={space} tab={tab} onTab={next => go({ c: channel.id, tab: next === 'posts' ? 'posts' : null })}
         onMenu={() => setDrawer(true)} {...controls(channel.id)}
         onLeft={() => { void loadChannels().catch(() => {}); go({ c: null }); }} />
-      {tab === 'posts' ? <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+      {channel.type === 'voice' ? <VoiceRoom channelId={channel.id} title={channel.name}
+        reason={!space.my_role ? 'Join this space to use voice' : space.my_role === 'guest' ? 'Guests can listen only in text channels' : ''} />
+        : tab === 'posts' ? <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         <Suspense fallback={<p className="text-white/50">Loading posts…</p>}><PostFeed space={space} /></Suspense>
       </div> : <ChannelChat key={channel.id} channel={channel} space={space} placeholder={`Message #${channel.name}`}
-        reason={channel.type === 'voice' ? 'Voice rooms coming soon' : !space.my_role ? 'Join this space to chat'
+        reason={!space.my_role ? 'Join this space to chat'
           : space.my_role === 'guest' ? 'You have read-only access' : ''}
         canModerate={myRank >= rank.moderator} tracksReads={!!space.my_role} onRead={markRead}
         threadId={threadParam} onThreadChange={threadChange} />}
@@ -312,5 +316,9 @@ function Home() {
       {error && <p role="alert" className="mb-2 text-sm text-rose-500">{error}</p>}
       {main}
     </section>
+    <CallDock onAccept={id => go({ c: id })} titleFor={(id, caller) => {
+      const known = conversations.find(item => item.id === id);
+      return known ? conversationTitle(known) : caller;
+    }} />
   </main>;
 }

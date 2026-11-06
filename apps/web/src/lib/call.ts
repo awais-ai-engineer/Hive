@@ -13,6 +13,7 @@ export type Peer = {
   sid: string;
   userId: string;
   username: string;
+  avatarUrl?: string | null;
   muted: boolean;
   camera: boolean;
   screen: boolean;
@@ -22,6 +23,10 @@ export type Peer = {
 
 export type CallState = {
   channelId: string | null;
+  /** Name of the place the call is in, shown in the call bar while you browse elsewhere. */
+  title: string;
+  /** Whether the floating participant tiles are open. */
+  stageOpen: boolean;
   status: 'idle' | 'joining' | 'connected' | 'error';
   error: string;
   muted: boolean;
@@ -38,8 +43,18 @@ type Link = {
   audioSender: RTCRtpSender | null; videoSender: RTCRtpSender | null;
 };
 
+/** Plain-words explanation for a failed getUserMedia / getDisplayMedia request. */
+export function deviceMessage(device: 'microphone' | 'camera', cause: unknown): string {
+  const name = cause instanceof DOMException ? cause.name : '';
+  if (!navigator.mediaDevices) return `Hive can't use your ${device} on an insecure connection. Open the site over https.`;
+  if (name === 'NotAllowedError' || name === 'SecurityError') return `Hive can't use your ${device}. Allow it in the browser's address bar, then try again.`;
+  if (name === 'NotFoundError' || name === 'OverconstrainedError') return `No ${device} found. Plug one in and try again.`;
+  if (name === 'NotReadableError' || name === 'AbortError') return `Your ${device} is being used by another app. Close it there and try again.`;
+  return `Hive couldn't start your ${device}.`;
+}
+
 const idle: CallState = {
-  channelId: null, status: 'idle', error: '', muted: false, camera: false, screen: false,
+  channelId: null, title: '', stageOpen: false, status: 'idle', error: '', muted: false, camera: false, screen: false,
   localStream: null, speaking: false, peers: [],
 };
 
@@ -54,6 +69,8 @@ class CallManager {
   private cameraTrack: MediaStreamTrack | null = null;
   private meters = new Map<string, () => void>();
   private audioContext: AudioContext | null = null;
+  /** Signals that arrive before the join is acknowledged (we don't have ICE servers yet). */
+  private queued: [string, Signal][] = [];
 
   constructor() {
     if (typeof window === 'undefined') return;
@@ -75,6 +92,11 @@ class CallManager {
     socket.on('call:signal', (data: { channelId: string; from: string; data: Signal }) => {
       if (data.channelId === this.state.channelId) void this.onSignal(data.from, data.data);
     });
+    socket.on('call:removed', (data: { channelId: string }) => {
+      if (data.channelId !== this.state.channelId) return;
+      this.hangUp();
+      this.emit({ ...idle, error: 'You no longer have access to that huddle.' });
+    });
     // After a reconnect the server has forgotten this socket: join again with fresh connections.
     socket.on('connect', () => {
       const channelId = this.state.channelId;
@@ -90,41 +112,51 @@ class CallManager {
     this.listeners.forEach(listener => listener());
   }
 
-  async join(channelId: string) {
+  setStageOpen(stageOpen: boolean) { this.emit({ stageOpen }); }
+
+  async join(channelId: string, title = '') {
+    if (this.state.channelId === channelId && this.state.status !== 'idle' && this.state.status !== 'error') return;
     if (this.state.channelId && this.state.channelId !== channelId) await this.leave();
-    this.emit({ channelId, status: 'joining', error: '' });
+    this.emit({ channelId, title, status: 'joining', error: '' });
+    void this.audioContext?.resume();
     if (!this.audio) {
       try {
         const media = await navigator.mediaDevices.getUserMedia({ audio: true });
         this.audio = media.getAudioTracks()[0];
-      } catch {
+      } catch (cause) {
         // No microphone or permission denied: join muted so the user can still listen and watch.
-        this.emit({ muted: true, error: 'Microphone unavailable: you joined muted.' });
+        this.emit({ muted: true, error: `${deviceMessage('microphone', cause)} You joined muted.` });
       }
     }
     try {
       const result = await chatRequest<{ iceServers: RTCIceServer[]; peers: Omit<Peer, 'stream' | 'speaking'>[] }>(
         'call:join', { channelId });
       this.iceServers = result.iceServers;
-      this.peers.clear();
       for (const peer of result.peers) this.peers.set(peer.sid, { ...peer, stream: null, speaking: false });
       this.updateLocalStream();
       for (const peer of result.peers) this.connect(peer.sid);
       this.emit({ status: 'connected' });
+      for (const [from, signal] of this.queued.splice(0)) void this.onSignal(from, signal);
       void chatRequest('call:state', { channelId, muted: this.state.muted || !this.audio, camera: this.state.camera, screen: this.state.screen }).catch(() => {});
     } catch (cause) {
-      this.stopTracks();
-      this.emit({ ...idle, status: 'error', error: cause instanceof Error ? cause.message : 'Could not join the call.' });
+      this.hangUp();
+      this.emit({ ...idle, status: 'error', error: cause instanceof Error ? cause.message : 'Could not join the huddle.' });
     }
   }
 
   async leave() {
     const channelId = this.state.channelId;
     if (channelId && socket.connected) await chatRequest('call:leave', { channelId }).catch(() => {});
+    this.hangUp();
+    this.emit({ ...idle });
+  }
+
+  /** Closes every connection and releases the microphone, camera and screen. */
+  private hangUp() {
     this.resetLinks();
     this.stopTracks();
     this.peers.clear();
-    this.emit({ ...idle });
+    this.queued = [];
   }
 
   async ring(channelId: string) { await chatRequest('call:ring', { channelId }); }
@@ -149,8 +181,8 @@ class CallManager {
         this.cameraTrack = media.getVideoTracks()[0];
         if (!this.state.screen) this.setVideo(this.cameraTrack);
         this.emit({ camera: true, error: '' });
-      } catch {
-        this.emit({ error: 'Camera unavailable or permission denied.' });
+      } catch (cause) {
+        this.emit({ error: deviceMessage('camera', cause) });
       }
     }
     this.sendState();
@@ -176,8 +208,14 @@ class CallManager {
   }
 
   async useMicrophone(deviceId: string) {
-    const media = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: deviceId } } });
-    const track = media.getAudioTracks()[0];
+    let track: MediaStreamTrack;
+    try {
+      const media = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: deviceId } } });
+      track = media.getAudioTracks()[0];
+    } catch (cause) {
+      this.emit({ error: deviceMessage('microphone', cause) });
+      return;
+    }
     track.enabled = !this.state.muted;
     this.audio?.stop();
     this.audio = track;
@@ -230,6 +268,7 @@ class CallManager {
     pc.onicecandidate = event => { if (event.candidate) this.signal(sid, { candidate: event.candidate.toJSON() }); };
     pc.ontrack = event => {
       link.stream.addTrack(event.track);
+      event.track.onended = () => { link.stream.removeTrack(event.track); this.setPeerStream(sid, link.stream); };
       event.track.onunmute = () => this.setPeerStream(sid, link.stream);
       this.setPeerStream(sid, link.stream);
     };
@@ -246,6 +285,7 @@ class CallManager {
   }
 
   private async onSignal(from: string, { description, candidate }: Signal) {
+    if (this.state.status === 'joining') { this.queued.push([from, { description, candidate }]); return; }
     if (!this.links.has(from)) this.connect(from);
     const link = this.links.get(from)!;
     try {

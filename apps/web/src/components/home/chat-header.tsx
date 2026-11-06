@@ -8,6 +8,7 @@ import { LEVEL_LABELS, type NotifyLevel } from '../../lib/sidebar';
 import { dayText, activeStatus } from '../../lib/status';
 import { StatusMark } from '../ui/status-mark';
 import { ChannelMembers } from './channel-members';
+import { HuddleButton } from '../call/huddle-button';
 import { PopupMenu } from './popup-menu';
 import { Avatar } from '../ui/avatar';
 import { Icon, type IconName } from '../ui/icons';
@@ -94,6 +95,7 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
         <p className="text-xs text-white/55">{conversation.is_group ? `${conversation.participants.length + 1} members · ${online} online`
           : conversation.participants[0]?.online ? 'Active now' : 'Offline'}</p>
       </div>
+      <HuddleButton channelId={conversation.id} title={conversationTitle(conversation)} ring />
       <Controls {...controls} />
       <Stack people={conversation.participants} total={conversation.participants.length} />
     </header>
@@ -110,6 +112,7 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
             <Icon name={channel.type === 'voice' ? 'volume' : channel.is_private ? 'lock' : 'hash'} size={20} className="shrink-0 text-white/45" />{channel.name}</h1>
           <p className="truncate text-sm text-white/55">{channel.is_private && <span className="mr-2 rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand">Private channel</span>}{channel.topic || `${space.name} · ${space.type === 'community' ? 'Community' : 'Workspace'}`}</p>
         </div>
+        {channel.type !== 'voice' && <HuddleButton channelId={channel.id} title={`#${channel.name}`} />}
         <Controls {...controls} />
         {channel.is_private && <div className="relative">
           <button type="button" onClick={() => setPanel(open => !open)} aria-expanded={panel} className="btn-ghost flex items-center gap-1.5 text-sm">
