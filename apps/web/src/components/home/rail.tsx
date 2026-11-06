@@ -24,8 +24,8 @@ function useTheme() {
 }
 
 /** The far-left strip: brand, one tile per space, and the user's own controls at the bottom. */
-export function Rail({ spaces, current, onSwitch, unread }: {
-  spaces: Space[]; current: string | null; onSwitch: (slug: string) => void; unread: number;
+export function Rail({ spaces, current, onSwitch, unread, todos = 0 }: {
+  spaces: Space[]; current: string | null; onSwitch: (slug: string) => void; unread: number; todos?: number;
 }) {
   const { user, logout, updateUser } = useAuth();
   const router = useRouter();
@@ -67,6 +67,10 @@ export function Rail({ spaces, current, onSwitch, unread }: {
     <Link href="/home?view=unreads" aria-label={unread ? `${unread} unread` : 'Unreads'} className={`${tile} relative text-white/70 hover:bg-white/10 hover:text-white`}>
       <Icon name="bell" size={20} />
       {unread > 0 && <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-rose-500" />}
+    </Link>
+    <Link href="/home?view=todos" title="To-dos" aria-label={todos ? `To-dos, ${todos} due` : 'To-dos'} className={`${tile} relative text-white/70 hover:bg-white/10 hover:text-white`}>
+      <Icon name="checkSquare" size={20} />
+      {todos > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full bg-brand px-1 text-center text-[10px] font-semibold" style={{ color: '#fff' }}>{todos > 99 ? '99+' : todos}</span>}
     </Link>
     <button type="button" onClick={toggle} aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
       className={`${tile} text-white/70 hover:bg-white/10 hover:text-white`}><Icon name={dark ? 'sun' : 'moon'} size={20} /></button>

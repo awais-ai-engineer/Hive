@@ -13,7 +13,7 @@ import { PopupMenu } from './popup-menu';
 import { Avatar } from '../ui/avatar';
 import { Icon, type IconName } from '../ui/icons';
 
-export type ChatTab = 'messages' | 'posts';
+export type ChatTab = 'messages' | 'posts' | 'docs' | 'todos';
 
 type Props = {
   title?: string;
@@ -86,7 +86,7 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
     const online = conversation.participants.filter(person => person.online).length;
     const partner = conversation.is_group ? null : conversation.participants[0];
     const away = partner ? activeStatus(partner).away : null;
-    return <><header className={`${shell} flex items-center gap-3 pb-3`}>
+    return <><header className={shell}><div className="flex items-center gap-3 pb-3">
       {menu}
       {conversation.is_group ? <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-soft font-semibold text-brand">{conversation.participants.length + 1}</span>
         : <Avatar name={conversation.participants[0]?.username ?? '?'} src={conversation.participants[0]?.avatar_url} size={40} online={!!conversation.participants[0]?.online} />}
@@ -98,6 +98,12 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
       <HuddleButton channelId={conversation.id} title={conversationTitle(conversation)} ring />
       <Controls {...controls} />
       <Stack people={conversation.participants} total={conversation.participants.length} />
+    </div>
+      {onTab && <div role="tablist" aria-label="Conversation views" className="flex gap-6 overflow-x-auto">
+        <Tab active={tab === 'messages'} icon="message" label="Messages" onClick={() => onTab('messages')} />
+        <Tab active={tab === 'docs'} icon="file" label="Docs" onClick={() => onTab('docs')} />
+        <Tab active={tab === 'todos'} icon="checkSquare" label="To-dos" onClick={() => onTab('todos')} />
+      </div>}
     </header>
     {away && <p role="status" className="-mt-1 mb-3 rounded-xl bg-brand-soft px-3 py-2 text-sm">
       🌴 <strong>{partner?.username}</strong> is out of office until {dayText(away)}. They may reply late.</p>}</>;
@@ -122,9 +128,11 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
         </div>}
         <Stack people={members.map(member => member.user)} total={space.member_count} href={`/s/${space.slug}/members`} />
       </div>
-      {onTab && channel.type !== 'voice' && <div role="tablist" aria-label="Channel views" className="mt-3 flex gap-6">
+      {onTab && channel.type !== 'voice' && <div role="tablist" aria-label="Channel views" className="mt-3 flex gap-6 overflow-x-auto">
         <Tab active={tab === 'messages'} icon="message" label="Messages" onClick={() => onTab('messages')} />
         <Tab active={tab === 'posts'} icon="layers" label="Posts" onClick={() => onTab('posts')} />
+        <Tab active={tab === 'docs'} icon="file" label="Docs" onClick={() => onTab('docs')} />
+        <Tab active={tab === 'todos'} icon="checkSquare" label="To-dos" onClick={() => onTab('todos')} />
       </div>}
     </header>;
   }

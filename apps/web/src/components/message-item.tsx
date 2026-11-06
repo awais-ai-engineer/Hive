@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { Attachment } from '@hive/shared';
 import { API_URL } from '../lib/api';
 import { ReportDialog } from './report-dialog';
+import { AddTodoDialog } from './todos/add-todo-dialog';
 import { Avatar } from './ui/avatar';
 import { Icon } from './ui/icons';
 import { StatusMark } from './ui/status-mark';
@@ -48,6 +49,7 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
   const [draft, setDraft] = useState('');
   const [picker, setPicker] = useState(false);
   const [reporting, setReporting] = useState(false);
+  const [todo, setTodo] = useState(false);
   const own = userId === message.author.id;
   const live = !message.deleted && !message.status;
 
@@ -123,6 +125,7 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
       {canWrite && <button aria-label="Add reaction" aria-expanded={picker} onClick={() => setPicker(value => !value)}>React</button>}
       {canWrite && onReply && <button aria-label="Reply in thread" onClick={() => onReply(message)}>Reply</button>}
       {own && <button aria-label="Edit message" onClick={() => { setEditing(true); setDraft(message.body ?? ''); }}>Edit</button>}
+      {canWrite && !!userId && !message.id.startsWith('pending:') && <button aria-label="Add to to-dos" onClick={() => setTodo(true)}>Add to to-dos</button>}
       {!own && !!userId && !message.id.startsWith('pending:') && <button aria-label="Report message" onClick={() => setReporting(true)}>Report</button>}
       {(own || canModerate) && <button aria-label="Delete message" onClick={() => void run('message:delete', { messageId: message.id })}>Delete</button>}
     </div>}
@@ -130,6 +133,7 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
       {QUICK_REACTIONS.map(emoji => <button key={emoji} role="menuitem" onClick={() => react(emoji)} className="rounded px-1 text-lg hover:bg-white/10">{emoji}</button>)}
     </div>}
     </div>
+    {todo && userId && <AddTodoDialog messageId={message.id} channelId={message.channel_id} text={message.body ?? ''} userId={userId} onClose={() => setTodo(false)} />}
     <ReportDialog target={reporting ? { type: 'message', id: message.id, label: 'message' } : null} onClose={() => setReporting(false)} />
   </article>;
 }
