@@ -26,6 +26,7 @@ from sqlalchemy import (
     UniqueConstraint,
     event,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -129,6 +130,8 @@ class User(Base):
     out_of_office_until: Mapped[date | None] = mapped_column(Date)
     # Personal sidebar settings, e.g. {"collapsed": ["starred", "dms"]}.
     sidebar_prefs: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    # Language code that messages can be translated into (null: no translate links).
+    translate_language: Mapped[str | None] = mapped_column(String(8))
     created_at: Mapped[datetime] = created_at()
 
 
@@ -331,6 +334,7 @@ class Message(Base):
         Index("messages_channel_idx", "channel_id", "id"),
         Index("messages_thread_idx", "parent_id", "id"),
         Index("messages_client_msg_uq", "author_id", "client_msg_id", unique=True),
+        Index("ix_messages_fts", text("to_tsvector('simple', body)"), postgresql_using="gin"),
     )
 
     id: Mapped[str] = pk()
@@ -341,6 +345,8 @@ class Message(Base):
     body: Mapped[str] = mapped_column(Text)
     # "huddle" marks the system line posted when a huddle ends.
     kind: Mapped[str] = mapped_column(String(16), default="text", server_default="text")
+    # Huddle lines only: when the huddle began, so its chat can be looked up afterwards.
+    huddle_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     reply_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -427,6 +433,8 @@ class Post(Base):
         Index("posts_space_top", "space_id", "score", "id"),
         Index("posts_author_idx", "author_id"),
         UniqueConstraint("author_id", "space_id", "repost_of_id", name="posts_repost_once"),
+        Index("ix_posts_title_fts", text("to_tsvector('simple', title)"), postgresql_using="gin"),
+        Index("ix_posts_body_fts", text("to_tsvector('simple', coalesce(body, ''))"), postgresql_using="gin"),
     )
     id: Mapped[str] = pk()
     space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"))
@@ -467,6 +475,7 @@ class Comment(Base):
         Index("comments_path_gist", "path", postgresql_using="gist"),
         Index("comments_post_parent_id", "post_id", "parent_id", "id"),
         Index("comments_author_idx", "author_id"),
+        Index("ix_comments_fts", text("to_tsvector('simple', coalesce(body, ''))"), postgresql_using="gin"),
     )
 
     id: Mapped[str] = pk()
@@ -697,3 +706,161 @@ class Draft(Base):
 
 
 Index("uq_drafts_scope", Draft.user_id, Draft.channel_id, func.coalesce(Draft.parent_id, ""), unique=True)
+
+
+class AiUsage(Base):
+    """One row per call to the language model; feeds the per-user usage totals."""
+
+    __tablename__ = "ai_usage"
+    __table_args__ = (Index("ix_ai_usage_user_created", "user_id", "created_at"),)
+
+    id: Mapped[str] = pk()
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    feature: Mapped[str] = mapped_column(String(16))
+    model: Mapped[str] = mapped_column(String(64))
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    space_id: Mapped[str | None] = mapped_column(ForeignKey("spaces.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = created_at()
+
+
+class AiTranslation(Base):
+    """Cached translations. An empty `translation` means "already in that language"."""
+
+    __tablename__ = "ai_translations"
+    __table_args__ = (
+        CheckConstraint("target_type IN ('message', 'post', 'comment')", name="ck_ai_translations_type"),
+        UniqueConstraint("target_type", "target_id", "language", "text_hash", name="uq_ai_translation"),
+    )
+
+    id: Mapped[str] = pk()
+    target_type: Mapped[str] = mapped_column(String(8))
+    target_id: Mapped[str] = mapped_column(String(26))
+    language: Mapped[str] = mapped_column(String(8))
+    text_hash: Mapped[str] = mapped_column(String(64))
+    translation: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = created_at()
+
+
+class GameScore(Base):
+    """Append-only point awards; leaderboards are sums over these rows."""
+
+    __tablename__ = "game_scores"
+    __table_args__ = (
+        CheckConstraint("game IN ('daily_word', 'trivia', 'prediction')", name="ck_game_scores_game"),
+        Index("ix_game_scores_space_created", "space_id", "created_at"),
+        Index("ix_game_scores_space_user", "space_id", "user_id"),
+    )
+
+    id: Mapped[str] = pk()
+    space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    game: Mapped[str] = mapped_column(String(12))
+    points: Mapped[int] = mapped_column(Integer)
+    ref_id: Mapped[str | None] = mapped_column(String(26))
+    created_at: Mapped[datetime] = created_at()
+
+
+class WordAttempt(Base):
+    __tablename__ = "word_attempts"
+    __table_args__ = (UniqueConstraint("space_id", "user_id", "day", name="uq_word_attempt_day"),)
+
+    id: Mapped[str] = pk()
+    space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    day: Mapped[date] = mapped_column(Date)
+    guesses: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    solved: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Quiz(Base):
+    __tablename__ = "quizzes"
+    __table_args__ = (
+        CheckConstraint("status IN ('draft', 'published', 'archived')", name="ck_quizzes_status"),
+        CheckConstraint("time_limit_s BETWEEN 5 AND 120", name="ck_quizzes_time_limit"),
+        Index("ix_quizzes_space", "space_id"),
+    )
+
+    id: Mapped[str] = pk()
+    space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"))
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    title: Mapped[str] = mapped_column(String(80))
+    time_limit_s: Mapped[int] = mapped_column(Integer, default=20, server_default="20")
+    status: Mapped[str] = mapped_column(String(10), default="draft", server_default="draft")
+    created_at: Mapped[datetime] = created_at()
+
+
+class QuizQuestion(Base):
+    __tablename__ = "quiz_questions"
+    __table_args__ = (
+        CheckConstraint("correct_index BETWEEN 0 AND 3", name="ck_quiz_questions_correct"),
+        UniqueConstraint("quiz_id", "position", name="uq_quiz_questions_position"),
+    )
+
+    id: Mapped[str] = pk()
+    quiz_id: Mapped[str] = mapped_column(ForeignKey("quizzes.id", ondelete="CASCADE"))
+    position: Mapped[int] = mapped_column(Integer)
+    text: Mapped[str] = mapped_column(String(200))
+    options: Mapped[list] = mapped_column(JSONB)
+    correct_index: Mapped[int] = mapped_column(SmallInteger)
+
+
+class QuizAttempt(Base):
+    __tablename__ = "quiz_attempts"
+    __table_args__ = (UniqueConstraint("quiz_id", "user_id", name="uq_quiz_attempt_user"),)
+
+    id: Mapped[str] = pk()
+    quiz_id: Mapped[str] = mapped_column(ForeignKey("quizzes.id", ondelete="CASCADE"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    score: Mapped[int | None] = mapped_column(Integer)
+
+
+class QuizAnswer(Base):
+    __tablename__ = "quiz_answers"
+    __table_args__ = (PrimaryKeyConstraint("attempt_id", "question_id", name="pk_quiz_answers"),)
+
+    attempt_id: Mapped[str] = mapped_column(ForeignKey("quiz_attempts.id", ondelete="CASCADE"))
+    question_id: Mapped[str] = mapped_column(ForeignKey("quiz_questions.id", ondelete="CASCADE"))
+    choice: Mapped[int | None] = mapped_column(SmallInteger)
+    answered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class Prediction(Base):
+    __tablename__ = "predictions"
+    __table_args__ = (
+        CheckConstraint("status IN ('open', 'resolved', 'canceled')", name="ck_predictions_status"),
+        Index("ix_predictions_space", "space_id"),
+    )
+
+    id: Mapped[str] = pk()
+    space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"))
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    question: Mapped[str] = mapped_column(String(200))
+    closes_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(10), default="open", server_default="open")
+    resolved_option_id: Mapped[str | None] = mapped_column(String(26))
+    points: Mapped[int] = mapped_column(Integer, default=10, server_default="10")
+    created_at: Mapped[datetime] = created_at()
+
+
+class PredictionOption(Base):
+    __tablename__ = "prediction_options"
+    __table_args__ = (UniqueConstraint("prediction_id", "position", name="uq_prediction_options_position"),)
+
+    id: Mapped[str] = pk()
+    prediction_id: Mapped[str] = mapped_column(ForeignKey("predictions.id", ondelete="CASCADE"))
+    position: Mapped[int] = mapped_column(Integer)
+    label: Mapped[str] = mapped_column(String(80))
+
+
+class PredictionVote(Base):
+    __tablename__ = "prediction_votes"
+    __table_args__ = (PrimaryKeyConstraint("prediction_id", "user_id", name="pk_prediction_votes"),)
+
+    prediction_id: Mapped[str] = mapped_column(ForeignKey("predictions.id", ondelete="CASCADE"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    option_id: Mapped[str] = mapped_column(ForeignKey("prediction_options.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = created_at()
