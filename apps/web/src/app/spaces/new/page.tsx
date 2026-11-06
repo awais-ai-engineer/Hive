@@ -6,6 +6,7 @@ import { spaceCreateSchema, type SpaceCreateInput } from '@hive/shared';
 import { Icon } from '../../../components/ui/icons';
 import { CategoryPicker } from '../../../components/interest-picker';
 import { TagsInput } from '../../../components/communities/tags-input';
+import { DomainInput } from '../../../components/spaces/domain-input';
 import { useAuth } from '../../../lib/auth';
 import { apiData, requestError, type Space } from '../../../lib/spaces';
 
@@ -40,7 +41,7 @@ export default function NewSpacePage() {
       category: type === 'community' ? category : 'other',
       tags: type === 'community' ? tags : [],
       description: String(form.get('description') ?? '') || undefined,
-      allowed_email_domain: type === 'workspace' ? String(form.get('allowed_email_domain') ?? '') || undefined : undefined,
+      allowed_email_domain: type === 'workspace' ? String(form.get('allowed_email_domain') ?? '').trim() || undefined : undefined,
     };
     const parsed = spaceCreateSchema.safeParse(input);
     if (!parsed.success) { setError(parsed.error.issues[0].message); setBusy(false); return; }
@@ -78,9 +79,7 @@ export default function NewSpacePage() {
       <label className="block font-medium">Description<textarea className="auth-input" name="description" maxLength={500} rows={3} />
         <span className="text-sm font-normal text-white/55">Optional. A sentence about what this space is for.</span></label>
       {type === 'community' && <><fieldset><legend className="mb-3 font-medium">Category</legend><CategoryPicker value={[category]} onChange={values => setCategory(values[0] ?? 'other')} /></fieldset><TagsInput value={tags} onChange={setTags} /></>}
-      {type === 'workspace' && <label className="block font-medium">Allowed email domain
-        <input className="auth-input" name="allowed_email_domain" placeholder="acme.test" />
-        <span className="text-sm font-normal text-white/55">Optional. People with an email at this domain can join without an invite.</span></label>}
+      {type === 'workspace' && <DomainInput />}
       {error && <p role="alert" className="text-rose-400">{error}</p>}
       <button disabled={busy || loading} className="auth-button">{busy ? 'Creating…' : 'Create space'}</button>
     </form>

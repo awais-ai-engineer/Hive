@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from typing import Annotated
 
@@ -12,6 +13,29 @@ Slug = Annotated[
 SpaceName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=60)]
 Description = Annotated[str, StringConstraints(max_length=500)]
 DOMAIN_PATTERN = r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
+PUBLIC_EMAIL_DOMAINS = {
+    "gmail.com", "googlemail.com", "yahoo.com", "hotmail.com", "outlook.com", "live.com", "msn.com",
+    "icloud.com", "me.com", "aol.com", "proton.me", "protonmail.com", "gmx.com", "mail.com", "yandex.com",
+    "zoho.com",
+}
+
+
+def normalize_domain(value):
+    """Accept what people paste ("You@Acme.com", "https://www.acme.com/") and keep "acme.com"."""
+    if not isinstance(value, str):
+        return value
+    domain = value.strip().lower()
+    domain = re.sub(r"^[a-z]+://", "", domain)
+    domain = domain.rsplit("@", 1)[-1]
+    domain = re.split(r"[/?#:\s]", domain)[0]
+    domain = domain.removeprefix("www.").rstrip(".")
+    if not domain:
+        return None
+    if domain in PUBLIC_EMAIL_DOMAINS:
+        raise ValueError("Use your company domain. Public email providers like gmail.com would let anyone join.")
+    if len(domain) > 253 or not re.fullmatch(DOMAIN_PATTERN, domain):
+        raise ValueError("Enter your company domain, like yourcompany.com")
+    return domain
 RESERVED_SLUGS = {"new", "settings", "api", "invite", "admin"}
 
 
@@ -52,11 +76,11 @@ class SpaceCreate(CommunityFields):
             raise ValueError("Reserved slug")
         return value
 
+    clean_domain = field_validator("allowed_email_domain", mode="before")(normalize_domain)
+
     @field_validator("allowed_email_domain")
     @classmethod
     def domain_requires_workspace(cls, value: str | None, info):
-        if value is not None and len(value) > 253:
-            raise ValueError("Domain is too long")
         if value is not None and info.data.get("type") != SpaceType.workspace:
             raise ValueError("Email domain is only allowed on workspaces")
         return value
@@ -68,12 +92,7 @@ class SpacePatch(CommunityFields):
     allowed_email_domain: Annotated[str, StringConstraints(pattern=DOMAIN_PATTERN)] | None = None
     public_chat: bool | None = None
 
-    @field_validator("allowed_email_domain")
-    @classmethod
-    def domain_length(cls, value: str | None):
-        if value is not None and len(value) > 253:
-            raise ValueError("Domain is too long")
-        return value
+    clean_domain = field_validator("allowed_email_domain", mode="before")(normalize_domain)
 
     @field_validator("name", "public_chat")
     @classmethod

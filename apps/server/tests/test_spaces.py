@@ -67,7 +67,7 @@ async def test_create_space_owner_general_and_validation(client):
                 "type": "workspace",
                 "name": "Bad Domain",
                 "slug": "bad-domain",
-                "allowed_email_domain": "ACME.test",
+                "allowed_email_domain": "not a domain",
             },
         )
     ).status_code == 422
@@ -262,3 +262,17 @@ async def test_edit_space_and_delete_permissions(client):
     assert (await client.delete("/api/spaces/edit-space", headers=admin)).status_code == 403
     assert (await client.delete("/api/spaces/edit-space", headers=owner)).status_code == 204
     assert (await client.get("/api/spaces/edit-space")).status_code == 404
+
+
+async def test_company_domain_accepts_what_people_paste(client):
+    _, auth = await account(client)
+    pasted = ["Acme.com", "@acme.com", "you@Acme.com", "https://www.acme.com/about", " acme.com. "]
+    for index, value in enumerate(pasted):
+        response = await workspace(client, auth, f"paste-{index}", value)
+        assert response.status_code == 201, (value, response.text)
+        assert response.json()["allowed_email_domain"] == "acme.com"
+    for index, value in enumerate(["gmail.com", "you@Outlook.com", "acme", "acme..com"]):
+        response = await workspace(client, auth, f"reject-{index}", value)
+        assert response.status_code == 422, value
+    response = await workspace(client, auth, "empty-domain", "  ")
+    assert response.status_code == 201 and response.json()["allowed_email_domain"] is None

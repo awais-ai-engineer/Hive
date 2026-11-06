@@ -10,6 +10,7 @@ import { TagsInput } from '../../../../components/communities/tags-input';
 import { RulesEditor } from '../../../../components/communities/rules';
 import { useAuth } from '../../../../lib/auth';
 import { apiData, requestError, spaceKindLabel, type Channel, type Space } from '../../../../lib/spaces';
+import { DomainInput } from '../../../../components/spaces/domain-input';
 
 type Invite = { id: string; code: string; max_uses: number | null; uses: number;
   expires_at: string | null; revoked_at: string | null; created_at: string };
@@ -162,7 +163,7 @@ export default function SettingsPage() {
         <label className="block">Name<input name="name" className="auth-input" required minLength={2} maxLength={60} defaultValue={space.name} /></label>
         <label className="block">Description<textarea name="description" className="auth-input" maxLength={500} defaultValue={space.description ?? ''} /></label>
         {space.type === 'community' && <><fieldset><legend className="mb-3 font-medium">Category</legend><CategoryPicker value={[category]} onChange={values => { setCategory(values[0] ?? 'other'); setSaved(false); }} /></fieldset><TagsInput value={tags} onChange={setTags} /></>}
-        {space.type === 'workspace' && <label className="block">Allowed email domain<input name="allowed_email_domain" className="auth-input" defaultValue={space.allowed_email_domain ?? ''} placeholder="acme.test" /></label>}
+        {space.type === 'workspace' && <DomainInput defaultValue={space.allowed_email_domain ?? ''} />}
         <button disabled={busy} className="auth-button">Save details</button>
         {saved && <p role="status" className="text-sm text-brand">Details saved</p>}
       </form>
