@@ -9,6 +9,7 @@ import { relativeTime, type VoteResult } from '../../lib/posts';
 import { VoteButtons } from '../posts/vote-buttons';
 import { voteComment, editComment, deleteComment } from '../../lib/comments';
 import { CommentComposer } from './comment-composer';
+import { TranslateLink } from '../ai/translate';
 
 type Props = {
   comment: Comment;
@@ -159,6 +160,8 @@ export function CommentItem({
           {comment.deleted ? '[deleted]' : comment.body}
         </p>
       )}
+
+      {!comment.deleted && !editing && !!comment.body && <TranslateLink targetType="comment" targetId={comment.id} />}
 
       {actionError && (
         <p role="alert" className="mt-1 text-xs text-rose-400">

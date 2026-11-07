@@ -8,3 +8,5 @@ export * from './schemas/spaces';
 export * from './schemas/messages';
 export * from './schemas/posts';
 export * from './schemas/comments';
+export * from './schemas/ai';
+export * from './schemas/games';

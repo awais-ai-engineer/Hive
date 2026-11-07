@@ -12,6 +12,7 @@ export type User = {
   out_of_office_until?: string | null;
   dm_policy?: 'everyone' | 'workspaces' | 'nobody';
   appear_offline?: boolean;
+  translate_language?: string | null;
 };
 
 export type AuthSession = { access_token: string; token_type: string; user: User };

@@ -10,6 +10,7 @@ import { Icon, Logo } from '../ui/icons';
 import { statusTitle } from '../../lib/status';
 import { StatusDialog } from '../status-dialog';
 import { PopupMenu } from './popup-menu';
+import { AskHive } from '../ai/ask-panel';
 
 function useTheme() {
   const [dark, setDark] = useState(false);
@@ -72,6 +73,8 @@ export function Rail({ spaces, current, onSwitch, unread, todos = 0 }: {
       <Icon name="checkSquare" size={20} />
       {todos > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full bg-brand px-1 text-center text-[10px] font-semibold" style={{ color: '#fff' }}>{todos > 99 ? '99+' : todos}</span>}
     </Link>
+    <Link href="/games" title="Games" aria-label="Games" className={`${tile} text-white/70 hover:bg-white/10 hover:text-white`}><Icon name="gaming" size={20} /></Link>
+    <AskHive />
     <button type="button" onClick={toggle} aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
       className={`${tile} text-white/70 hover:bg-white/10 hover:text-white`}><Icon name={dark ? 'sun' : 'moon'} size={20} /></button>
     {user && <div className="relative mt-1">
