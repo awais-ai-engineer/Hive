@@ -18,6 +18,8 @@ class SignRequest:
     key: str
     filename: str
     inline: bool
+    # Seconds the link stays valid; None uses the normal signed-link lifetime.
+    ttl: int | None = None
 
 
 class Storage(Protocol):

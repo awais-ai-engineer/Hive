@@ -1,13 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Attachment, Message, MessageDeleted, MessagePage, ReactionUpdate, ThreadPage } from '@hive/shared';
+import type { Attachment, AttachmentViewed, Message, MessageDeleted, MessageExpired, MessagePage, ReactionUpdate, ThreadPage } from '@hive/shared';
 import { useAuth } from './auth';
 import { apiData, requestError } from './spaces';
 import { chatRequest, socket } from './socket';
 import type { ComposerSendOptions } from './composer-actions';
 
-export type ChatMessage = Message & { status?: 'sending' | 'failed'; error?: string };
+export type ChatMessage = Message & { status?: 'sending' | 'failed'; error?: string; plain?: string };
 
 /**
  * Live message list for a channel (parentId = null) or for one thread (parentId = message id).
@@ -65,6 +65,26 @@ export function useMessageList(channelId: string, parentId: string | null = null
       if (parentId && data.id === parentId) setParent(current => current && gone(current));
       else patch(data.id, gone);
     };
+    const onExpired = (data: MessageExpired) => {
+      if (!active || data.channelId !== channelId) return;
+      const gone = new Set(data.ids);
+      commit(messagesRef.current.filter(item => !gone.has(item.id)).map(item => data.replyCounts[item.id] !== undefined ? { ...item, reply_count: data.replyCounts[item.id] } : item));
+      if (parentId && gone.has(parentId)) setError('This conversation thread has disappeared.');
+    };
+    const onViewed = (data: AttachmentViewed) => {
+      if (!active || data.channelId !== channelId || !user) return;
+      const state = data.viewerId === user.id ? 'opened' : data.uploaderId === user.id ? data.senderState : null;
+      if (!state) return;
+      const update = (item: Message) => ({ ...item, attachments: item.attachments.map(file => file.id === data.attachmentId ? { ...file, viewState: state } : file) });
+      if (parentId && data.messageId === parentId) setParent(current => current && update(current));
+      else patch(data.messageId, update);
+    };
+    // Messages past their deadline disappear from the screen right away; the server erases them shortly after.
+    const sweep = setInterval(() => {
+      const now = Date.now();
+      if (messagesRef.current.some(item => item.expires_at && Date.parse(item.expires_at) <= now))
+        commit(messagesRef.current.filter(item => !item.expires_at || Date.parse(item.expires_at) > now));
+    }, 10000);
     const onReaction = (data: ReactionUpdate) => {
       if (!active || data.channelId !== channelId) return;
       if (parentId && data.messageId === parentId) setParent(current => current && { ...current, reactions: data.reactions });
@@ -104,7 +124,7 @@ export function useMessageList(channelId: string, parentId: string | null = null
     const onConnect = () => { setConnected(true); void catchUp(); };
     const onDisconnect = () => setConnected(false);
     socket.on('message:new', onMessage).on('message:updated', onMessage).on('message:deleted', onDelete)
-      .on('poll:updated', onPoll)
+      .on('message:expired', onExpired).on('attachment:viewed', onViewed).on('poll:updated', onPoll)
       .on('reaction:updated', onReaction).on('connect', onConnect).on('disconnect', onDisconnect);
     setConnected(socket.connected);
     const initial = parentId
@@ -116,10 +136,10 @@ export function useMessageList(channelId: string, parentId: string | null = null
       void catchUp();
     }).catch(cause => { if (active) { setError(requestError(cause)); setReady(true); } });
     return () => {
-      active = false;
+      active = false; clearInterval(sweep);
       if (generation.current === version) generation.current++;
       socket.off('message:new', onMessage).off('message:updated', onMessage).off('message:deleted', onDelete)
-        .off('poll:updated', onPoll)
+        .off('message:expired', onExpired).off('attachment:viewed', onViewed).off('poll:updated', onPoll)
         .off('reaction:updated', onReaction).off('connect', onConnect).off('disconnect', onDisconnect);
       // The thread panel shares the channel room with the channel view, so only the channel leaves it.
       if (!parentId && socket.connected) socket.emit('channel:leave', { channelId }, () => {});
@@ -133,13 +153,14 @@ export function useMessageList(channelId: string, parentId: string | null = null
       id: `pending:${clientMsgId}`, channel_id: channelId, parent_id: parentId, author: user,
       body: body.trim(), client_msg_id: clientMsgId, created_at: new Date().toISOString(),
       edited_at: null, deleted: false, reply_count: 0, reactions: [], attachments, status: 'sending',
-      kind: options.kind ?? 'text', mentions: [], channelLinks: [], poll: null,
+      kind: options.kind ?? 'text', mentions: [], channelLinks: [], poll: null, plain: options.plain,
     };
     merge([pending]);
     try {
+      const wire = { ...options }; delete wire.plain;
       const result = await chatRequest<{ message: Message }>('message:send', {
-        channelId, body, clientMsgId, parentId, attachmentIds: attachments.map(file => file.id),
-        ...options,
+        channelId, body: options.ciphertext ? '' : body, clientMsgId, parentId, attachmentIds: attachments.map(file => file.id),
+        ...wire,
       });
       if (generation.current === version) merge([result.message]);
       return true;

@@ -4,12 +4,16 @@ import './globals.css';
 import { AuthProvider } from '../lib/auth';
 import Nav from '../components/nav';
 import { SearchPalette } from '../components/search/search-palette';
+import { PwaSetup } from '../components/pwa-setup';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
 
 export const metadata: Metadata = {
   title: 'Hive',
   description: 'Chat, communities and calls in one place.',
+  manifest: '/manifest.webmanifest',
+  icons: { icon: [{ url: '/icon.svg', type: 'image/svg+xml' }, { url: '/icon-192.png', sizes: '192x192', type: 'image/png' }], apple: '/apple-touch-icon.png' },
+  appleWebApp: { capable: true, title: 'Hive', statusBarStyle: 'default' },
 };
 
 export const viewport: Viewport = {
@@ -27,7 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body className="min-h-screen font-sans antialiased">
-        <AuthProvider><Nav /><SearchPalette />{children}</AuthProvider>
+        <AuthProvider><PwaSetup /><Nav /><SearchPalette />{children}</AuthProvider>
       </body>
     </html>
   );

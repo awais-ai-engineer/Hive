@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { LoginInput, SignupInput } from '@hive/shared';
+import { unsubscribeThisDevice } from './push';
 import {
   apiFetch, endSession, refreshSession, responseData, setSession, subscribeSession, updateSessionUser,
   type AuthSession, type User,
@@ -44,7 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       signup: input => authenticate('signup', input),
       login: input => authenticate('login', input),
-      logout: endSession,
+      logout: async () => { await unsubscribeThisDevice().catch(() => {}); await endSession(); },
       updateUser: updateSessionUser,
     }}>
       {children}

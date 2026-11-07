@@ -14,6 +14,7 @@ import { Avatar } from '../ui/avatar';
 import { Icon, type IconName } from '../ui/icons';
 import { CatchUp } from '../ai/catch-up';
 import { TranslateAllToggle } from '../ai/translate';
+import { TimerBanner, TimerButton } from './disappearing';
 
 export type ChatTab = 'messages' | 'posts' | 'docs' | 'todos' | 'files';
 
@@ -31,6 +32,9 @@ type Props = {
   onLevel?: (level: NotifyLevel) => void;
   /** Called after the viewer leaves the open private channel. */
   onLeft?: () => void;
+  /** Reload the open conversation after its disappearing-messages timer changed. */
+  onTimerChanged?: () => void;
+  onError?: (message: string) => void;
 };
 
 function Stack({ people, total, href }: { people: { id: string; username: string; avatar_url: string | null }[]; total: number; href?: string }) {
@@ -69,7 +73,7 @@ function Tab({ active, icon, label, onClick }: { active: boolean; icon: IconName
 }
 
 /** Top of the main area: what is open, who is in it, and the Messages/Posts tabs for space channels. */
-export function ChatHeader({ title, channel, space, conversation, tab = 'messages', onTab, onMenu, onLeft, ...controls }: Props) {
+export function ChatHeader({ title, channel, space, conversation, tab = 'messages', onTab, onMenu, onLeft, onTimerChanged, onError, ...controls }: Props) {
   const [members, setMembers] = useState<Member[]>([]);
   const [panel, setPanel] = useState(false);
   useEffect(() => setPanel(false), [channel?.id]);
@@ -93,11 +97,12 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
       {conversation.is_group ? <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-soft font-semibold text-brand">{conversation.participants.length + 1}</span>
         : <Avatar name={conversation.participants[0]?.username ?? '?'} src={conversation.participants[0]?.avatar_url} size={40} online={!!conversation.participants[0]?.online} />}
       <div className="min-w-0 flex-1">
-        <h1 className="flex items-center gap-1.5 truncate text-lg font-bold">{conversationTitle(conversation)}{partner && <StatusMark person={partner} className="text-base font-normal" />}</h1>
+        <h1 className="flex items-center gap-1.5 truncate text-lg font-bold">{conversation.encrypted && <Icon name="lock" size={16} className="shrink-0 text-brand" aria-label="Secret conversation" />}{conversationTitle(conversation)}{partner && <StatusMark person={partner} className="text-base font-normal" />}</h1>
         <p className="text-xs text-white/55">{conversation.is_group ? `${conversation.participants.length + 1} members · ${online} online`
           : conversation.participants[0]?.online ? 'Active now' : 'Offline'}</p>
       </div>
       <HuddleButton channelId={conversation.id} title={conversationTitle(conversation)} ring />
+      {onTimerChanged && !conversation.read_only && <TimerButton channelId={conversation.id} seconds={conversation.disappear_after} onChanged={onTimerChanged} onError={onError ?? (() => {})} />}
       <Controls {...controls} />
       <Stack people={conversation.participants} total={conversation.participants.length} />
     </div>
@@ -108,7 +113,8 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
         <Tab active={tab === 'files'} icon="folder" label="Files" onClick={() => onTab('files')} />
       </div>}
     </header>
-    <div className="mb-3 flex flex-wrap items-start gap-x-4 gap-y-2"><CatchUp channelId={conversation.id} /><TranslateAllToggle channelId={conversation.id} /></div>
+    <TimerBanner seconds={conversation.disappear_after} />
+    {!conversation.encrypted && <div className="mb-3 flex flex-wrap items-start gap-x-4 gap-y-2"><CatchUp channelId={conversation.id} /><TranslateAllToggle channelId={conversation.id} /></div>}
     {away && <p role="status" className="-mt-1 mb-3 rounded-xl bg-brand-soft px-3 py-2 text-sm">
       🌴 <strong>{partner?.username}</strong> is out of office until {dayText(away)}. They may reply late.</p>}</>;
   }
@@ -123,6 +129,7 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
           <p className="truncate text-sm text-white/55">{channel.is_private && <span className="mr-2 rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand">Private channel</span>}{channel.topic || `${space.name} · ${space.type === 'community' ? 'Community' : 'Workspace'}`}</p>
         </div>
         {channel.type !== 'voice' && <HuddleButton channelId={channel.id} title={`#${channel.name}`} />}
+        {channel.type !== 'voice' && onTimerChanged && (space.my_role === 'owner' || space.my_role === 'admin') && <TimerButton channelId={channel.id} seconds={channel.disappear_after} onChanged={onTimerChanged} onError={onError ?? (() => {})} />}
         <Controls {...controls} />
         {channel.is_private && <div className="relative">
           <button type="button" onClick={() => setPanel(open => !open)} aria-expanded={panel} className="btn-ghost flex items-center gap-1.5 text-sm">
@@ -140,6 +147,7 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
         <Tab active={tab === 'files'} icon="folder" label="Files" onClick={() => onTab('files')} />
       </div>}
     </header>
+    {channel.type !== 'voice' && <TimerBanner seconds={channel.disappear_after} />}
     {channel.type !== 'voice' && <div className="mb-3 flex flex-wrap items-start gap-x-4 gap-y-2"><CatchUp channelId={channel.id} /><TranslateAllToggle channelId={channel.id} /></div>}</>;
   }
 

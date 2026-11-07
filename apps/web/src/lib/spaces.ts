@@ -29,6 +29,7 @@ export type Channel = {
   position: number;
   unread: number;
   is_private: boolean;
+  disappear_after?: number | null;
 };
 
 export type Member = {

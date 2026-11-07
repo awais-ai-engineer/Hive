@@ -49,8 +49,10 @@ class LocalStorage:
                 pass
 
     async def signed_urls(self, items: list[SignRequest]):
-        expires = int(time.time()) + settings.signed_url_seconds
-        return {
-            item.key: f"/api/attachments/{item.key.rsplit('/', 1)[-1]}?exp={expires}&sig={signature(item.key.rsplit('/', 1)[-1], expires)}"
-            for item in items
-        }
+        now = int(time.time())
+        result = {}
+        for item in items:
+            name = item.key.rsplit("/", 1)[-1]
+            expires = now + (item.ttl or settings.signed_url_seconds)
+            result[item.key] = f"/api/attachments/{name}?exp={expires}&sig={signature(name, expires)}"
+        return result

@@ -53,19 +53,28 @@ class SupabaseStorage:
         batch request. A missing or broken object is left out instead of failing the whole page."""
         if not items:
             return {}
+        short = [item for item in items if item.ttl]
+        if short:  # short-lived links (view-once media) are signed fresh and never cached
+            result = {}
+            for ttl in {item.ttl for item in short}:
+                group = [item for item in short if item.ttl == ttl]
+                result.update(await self._sign(group, ttl, cache=False))
+            items = [item for item in items if not item.ttl]
+            return {**result, **(await self.signed_urls(items) if items else {})}
         cache_keys = [f"media-url:{item.key}:{item.inline}" for item in items]
         cached = await redis.mget(cache_keys)
         result = {item.key: url for item, url in zip(items, cached, strict=True) if url}
         missing = [item for item in items if item.key not in result]
         if not missing:
             return result
+        return {**result, **(await self._sign(missing, settings.signed_url_seconds))}
+
+    async def _sign(self, missing, ttl, cache=True):
+        result = {}
         response = await self.request(
             "POST",
             f"sign/{settings.supabase_bucket}",
-            json={
-                "expiresIn": settings.signed_url_seconds,
-                "paths": list(dict.fromkeys(item.key for item in missing)),
-            },
+            json={"expiresIn": ttl, "paths": list(dict.fromkeys(item.key for item in missing))},
         )
         try:
             rows = response.json()
@@ -82,7 +91,8 @@ class SupabaseStorage:
                 if not item.inline:
                     url += f"&download={quote(item.filename, safe='')}"
                 result[item.key] = url
-                pipe.set(f"media-url:{item.key}:{item.inline}", url,
-                         ex=max(1, settings.signed_url_seconds - 300))
+                if cache:
+                    pipe.set(f"media-url:{item.key}:{item.inline}", url,
+                             ex=max(1, settings.signed_url_seconds - 300))
             await pipe.execute()
         return result

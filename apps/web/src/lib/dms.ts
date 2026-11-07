@@ -7,6 +7,8 @@ export type Conversation = {
   participants: Participant[];
   is_group: boolean;
   read_only?: boolean;
+  encrypted?: boolean;
+  disappear_after?: number | null;
   last_message: {
     id: string; author_id: string; body: string | null; has_attachments: boolean; created_at: string;
   } | null;
@@ -27,6 +29,7 @@ export function conversationTitle(conversation: Conversation) {
 export function preview(conversation: Conversation, viewerId?: string) {
   const last = conversation.last_message;
   if (!last) return 'No messages yet';
+  if (conversation.encrypted && last.body !== null) return `🔒 ${last.author_id === viewerId ? 'You sent' : 'New'} secret message`;
   const text = last.body === null ? 'Message deleted' : last.body || (last.has_attachments ? '📎 Attachment' : '');
   return last.author_id === viewerId ? `You: ${text}` : text;
 }

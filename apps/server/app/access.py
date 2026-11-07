@@ -10,9 +10,10 @@ It mirrors `messages.service.readable` (channels) and `posts.service.visible_spa
 
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, exists, or_, select
+from sqlalchemy import and_, exists, func, or_, select
 
 from app.db.models import (
+    Attachment,
     Channel,
     ChannelMember,
     ChannelType,
@@ -25,6 +26,21 @@ from app.db.models import (
     User,
     UserBlock,
 )
+
+# Lines the app writes itself (a huddle ended, a setting changed): not content people wrote.
+SYSTEM_KINDS = ("huddle", "system")
+
+
+def message_live():
+    """Condition on `Message`: it has not reached its disappearing-message deadline yet.
+
+    Expired messages are erased by the scheduler; until it runs they are hidden by this rule.
+    """
+    return or_(Message.expires_at.is_(None), Message.expires_at > func.now())
+
+
+def has_view_once_file():
+    return exists().where(Attachment.message_id == Message.id, Attachment.view_once.is_(True)).correlate(Message)
 
 
 def _active(member=SpaceMember):
@@ -81,10 +97,16 @@ def readable_post_condition(user_id: str):
 
 
 def readable_message_condition(user_id: str):
-    """Condition on `Message`: alive, from a readable channel and not written by a blocked person."""
+    """Condition on `Message`: alive, from a readable channel and not written by a blocked person.
+
+    Secret (encrypted) messages and view-once media are never part of search or saved items.
+    """
     return and_(
         Message.deleted_at.is_(None),
-        Message.kind != "huddle",
+        message_live(),
+        Message.kind.notin_(SYSTEM_KINDS),
+        Message.ciphertext.is_(None),
+        ~has_view_once_file(),
         Message.channel_id.in_(readable_channel_ids(user_id)),
         not_blocked_author(user_id, Message.author_id),
     )

@@ -12,6 +12,7 @@ from sqlalchemy import and_, exists, func, or_, select, union
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.access import SYSTEM_KINDS, message_live
 from app.db.models import (
     Channel,
     ChannelMember,
@@ -104,7 +105,7 @@ async def my_threads(session: AsyncSession, user: User, before: str | None, limi
     """
     latest = (
         select(Message.parent_id, func.max(Message.id).label("last_id"), func.count().label("total"))
-        .where(Message.parent_id.is_not(None))
+        .where(Message.parent_id.is_not(None), message_live())
         .group_by(Message.parent_id)
         .subquery()
     )
@@ -117,7 +118,7 @@ async def my_threads(session: AsyncSession, user: User, before: str | None, limi
         select(Message, User, latest.c.last_id)
         .join(latest, latest.c.parent_id == Message.id)
         .join(User, User.id == Message.author_id)
-        .where(Message.id.in_(select(involved)), Message.channel_id.in_(select(mine)))
+        .where(Message.id.in_(select(involved)), Message.channel_id.in_(select(mine)), message_live())
     )
     if before is not None:
         query = query.where(latest.c.last_id < before)
@@ -133,7 +134,7 @@ async def my_threads(session: AsyncSession, user: User, before: str | None, limi
         select(Message.id, func.row_number().over(
             partition_by=Message.parent_id, order_by=Message.id.desc()
         ).label("rank"))
-        .where(Message.parent_id.in_(parent_ids))
+        .where(Message.parent_id.in_(parent_ids), message_live())
         .subquery()
     )
     recent = list((await session.execute(
@@ -180,7 +181,7 @@ async def _unread_replies(session: AsyncSession, user_id: str, parents: list[Mes
     rows = await session.execute(
         select(Message.parent_id, func.count())
         .where(
-            Message.author_id != user_id, Message.deleted_at.is_(None),
+            Message.author_id != user_id, Message.deleted_at.is_(None), message_live(),
             or_(*[and_(Message.parent_id == pid, Message.id > marker) for pid, marker in markers.items()]),
         )
         .group_by(Message.parent_id)
@@ -258,7 +259,8 @@ async def my_unreads(session: AsyncSession, user: User) -> dict:
             select(Message, User).join(User, User.id == Message.author_id)
             .where(
                 Message.channel_id == channel_id, True if channel_id in muted else Message.parent_id.is_(None),
-                Message.deleted_at.is_(None), Message.author_id != user.id,
+                Message.deleted_at.is_(None), Message.author_id != user.id, message_live(),
+                Message.kind.notin_(SYSTEM_KINDS),
                 mention_condition(user.username) if channel_id in muted else True,
                 unread_thread_mention(user.id) if channel_id in muted else True,
             )

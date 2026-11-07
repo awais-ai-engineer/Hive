@@ -18,6 +18,7 @@ from app.composer.router import router as composer_router
 from app.core.config import settings
 from app.db.session import engine, redis
 from app.directory.router import router as directory_router
+from app.disappearing.router import router as disappearing_router
 from app.dms.router import router as dms_router
 from app.docs.router import router as docs_router
 from app.explore.router import router as explore_router
@@ -29,10 +30,14 @@ from app.linkpreview.router import router as linkpreview_router
 from app.messages.router import router as messages_router
 from app.notifications.router import router as notifications_router
 from app.posts.router import router as posts_router
+from app.push import service as push_service
+from app.push import vapid
+from app.push.router import router as push_router
 from app.realtime.socket import sio
 from app.reports.router import router as reports_router
 from app.saved.router import router as saved_router
 from app.search.router import router as search_router
+from app.secret.router import router as secret_router
 from app.sidebar.router import router as sidebar_router
 from app.spaces.router import router as spaces_router
 from app.storage.base import StorageError
@@ -46,11 +51,13 @@ logging.basicConfig(level=logging.INFO)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     settings.validate_storage()
+    vapid.startup_notice()
     scheduler.start()
     try:
         yield
     finally:
         await scheduler.stop()
+        await push_service.drain()
     await engine.dispose()
     await redis.aclose()
 
@@ -92,6 +99,9 @@ api.include_router(files_router, prefix="/api")
 api.include_router(saved_router, prefix="/api")
 api.include_router(notifications_router, prefix="/api")
 api.include_router(search_router, prefix="/api")
+api.include_router(disappearing_router, prefix="/api")
+api.include_router(secret_router, prefix="/api")
+api.include_router(push_router, prefix="/api")
 
 # One ASGI app: Socket.IO handles /socket.io, everything else goes to FastAPI.
 app = socketio.ASGIApp(sio, other_asgi_app=api)

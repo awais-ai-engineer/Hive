@@ -13,6 +13,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from app.access import SYSTEM_KINDS, message_live
 from app.db.models import (
     Attachment,
     Channel,
@@ -88,11 +89,18 @@ async def _check_may_start(session: AsyncSession, me: User, targets: list[User])
             raise HTTPException(403, f"{user.username} isn't accepting new messages")
 
 
-async def open_conversation(session: AsyncSession, me: User, data: DirectCreate) -> DirectOut:
-    """Return the conversation with exactly these people, creating it if needed."""
+async def open_conversation(
+    session: AsyncSession, me: User, data: DirectCreate, secret: bool = False
+) -> DirectOut:
+    """Return the conversation with exactly these people, creating it if needed.
+
+    A secret conversation is a separate, end-to-end encrypted chat between exactly two people.
+    """
     names = {name for name in data.usernames if name != me.username}
     if not names:
         raise HTTPException(422, "Choose at least one other person")
+    if secret and len(names) != 1:
+        raise HTTPException(422, "Secret conversations are between two people")
     users = list(await session.scalars(
         select(User).where(User.username.in_(names), shares_space(me.id))
     ))
@@ -100,7 +108,7 @@ async def open_conversation(session: AsyncSession, me: User, data: DirectCreate)
     if missing:
         raise HTTPException(404, f"User not found: {min(missing)}")
     ids = sorted({me.id, *(user.id for user in users)})
-    key = ":".join(ids)
+    key = ("e2ee:" if secret else "") + ":".join(ids)
     if await session.scalar(select(Channel.id).where(Channel.dm_key == key)) is not None:
         # A 1:1 chat stays closed while either side has a block; groups keep working.
         if len(ids) == 2 and await blocked_among(session, me.id, [u.id for u in users]):
@@ -108,7 +116,7 @@ async def open_conversation(session: AsyncSession, me: User, data: DirectCreate)
     else:
         await _check_may_start(session, me, users)
     await session.execute(
-        insert(Channel).values(type=ChannelType.dm, name="dm", dm_key=key)
+        insert(Channel).values(type=ChannelType.dm, name="dm", dm_key=key, encrypted=secret)
         .on_conflict_do_nothing(index_elements=["dm_key"])
     )
     channel = await session.scalar(select(Channel).where(Channel.dm_key == key))
@@ -154,7 +162,8 @@ async def list_conversations(
         message.channel_id: message
         for message in await session.scalars(select(Message).where(Message.id.in_(
             select(func.max(Message.id))
-            .where(Message.channel_id.in_(ids), Message.parent_id.is_(None))
+            .where(Message.channel_id.in_(ids), Message.parent_id.is_(None), message_live(),
+                   Message.kind.notin_(SYSTEM_KINDS))
             .group_by(Message.channel_id)
         )))
     }
@@ -169,6 +178,8 @@ async def list_conversations(
         message = last.get(channel.id)
         result.append(DirectOut(
             id=channel.id,
+            encrypted=channel.encrypted,
+            disappear_after=channel.disappear_after,
             read_only=any(person.is_system for person in others),
             participants=[
                 Participant.model_validate(user).model_copy(update={"online": user.id in online})

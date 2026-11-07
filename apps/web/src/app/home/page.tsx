@@ -227,6 +227,13 @@ function Home() {
     go({ c: created.id });
   }
 
+  const reloadTimers = useCallback(() => { loadConversations(); void loadChannels().catch(() => {}); }, [loadConversations, loadChannels]);
+  useEffect(() => {
+    if (!user) return;
+    socket.on('channel:disappearing', reloadTimers).on('message:expired', refreshUnreads);
+    return () => { socket.off('channel:disappearing', reloadTimers).off('message:expired', refreshUnreads); };
+  }, [user, reloadTimers, refreshUnreads]);
+
   const markRead = useCallback((channelId: string) => {
     setChannels(list => list.map(item => item.id === channelId && item.unread ? { ...item, unread: 0 } : item));
     setConversations(list => list.map(item => item.id === channelId && item.unread ? { ...item, unread: 0 } : item));
@@ -327,7 +334,7 @@ function Home() {
   } else if (conversation) {
     main = <>
       <ChatHeader conversation={conversation} tab={tab} onTab={next => go({ c: conversation.id, tab: next === 'messages' ? null : next })}
-        onMenu={() => setDrawer(true)} {...controls(conversation.id)} />
+        onMenu={() => setDrawer(true)} onError={setError} onTimerChanged={reloadTimers} {...controls(conversation.id)} />
       {tab === 'files' ? <FilesView key={conversation.id} channelId={conversation.id} />
         : tab === 'docs' && user ? <DocsView key={conversation.id} channelId={conversation.id} userId={user.id} canWrite docId={docParam}
         onOpen={id => go({ c: conversation.id, tab: 'docs', doc: id })} />
@@ -335,12 +342,13 @@ function Home() {
           emptyTitle="No to-dos here yet" emptyText="Keep track of what needs doing in this conversation. Anyone in it can add and tick off to-dos." /></div>
         : <ChannelChat key={conversation.id} channel={{ id: conversation.id, name: conversationTitle(conversation) }}
         placeholder={`Message ${conversationTitle(conversation)}`} reason={conversation.read_only ? 'Hive reminders are read-only' : ''} canModerate={false} tracksReads onRead={markRead}
+        encrypted={!!conversation.encrypted} allowViewOnce={!conversation.encrypted && !conversation.read_only}
         threadId={threadParam} onThreadChange={threadChange} />}
     </>;
   } else if (channel && space) {
     main = <>
       <ChatHeader channel={channel} space={space} tab={tab} onTab={next => go({ c: channel.id, tab: next === 'messages' ? null : next })}
-        onMenu={() => setDrawer(true)} {...controls(channel.id)}
+        onMenu={() => setDrawer(true)} onError={setError} onTimerChanged={reloadTimers} {...controls(channel.id)}
         onLeft={() => { void loadChannels().catch(() => {}); go({ c: null }); }} />
       {channel.type === 'voice' ? <VoiceRoom channelId={channel.id} title={channel.name}
         reason={!space.my_role ? 'Join this space to use voice' : space.my_role === 'guest' ? 'Guests can listen only in text channels' : ''} />

@@ -183,6 +183,7 @@ export function Sidebar(props: Props) {
         {entry.kind === 'dm' && <Avatar name={person?.username ?? '?'} src={person?.avatar_url} size={22} online={!!person?.online} />}
         <span className="truncate">{entry.kind === 'dm' ? person?.username ?? 'Unknown' : entry.label}</span>
         {entry.kind === 'dm' && person && <StatusMark person={person} className="text-[13px]" />}
+        {entry.conversation?.encrypted && <Icon name="lock" size={13} className="shrink-0 opacity-80" aria-label="Secret conversation" />}
         {huddles[entry.id] && <span className="ml-1 flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-300" title={`In the huddle: ${huddles[entry.id].users.map(user => user.username).join(', ')}`}>
           <Icon name="headphones" size={14} /><span aria-label={`${huddles[entry.id].count} in huddle`}>{huddles[entry.id].count}</span></span>}
         {quiet && <Icon name="bellOff" size={13} className="shrink-0 opacity-70" aria-label={LEVEL_LABELS[level]} />}

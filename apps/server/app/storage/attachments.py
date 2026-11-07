@@ -4,11 +4,13 @@ from app.storage.base import SignRequest
 
 
 async def serialize_files(files):
+    # View-once media never gets a link here; the recipient asks for it when opening.
+    signable = [file for file in files if not file.view_once]
     urls = (
         await get_storage().signed_urls(
-            [SignRequest(file.storage_key, file.filename, file.kind != "file") for file in files]
+            [SignRequest(file.storage_key, file.filename, file.kind != "file") for file in signable]
         )
-        if files
+        if signable
         else {}
     )
     # Files whose URL could not be signed (e.g. missing from the bucket) are left out.
@@ -21,8 +23,9 @@ async def serialize_files(files):
             kind=file.kind,
             durationMs=file.duration_ms,
             waveform=file.waveform,
-            url=urls[file.storage_key],
+            url="" if file.view_once else urls[file.storage_key],
+            viewOnce=file.view_once,
         )
         for file in files
-        if file.storage_key in urls
+        if file.view_once or file.storage_key in urls
     }

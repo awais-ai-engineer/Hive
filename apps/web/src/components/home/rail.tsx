@@ -10,6 +10,7 @@ import { Icon, Logo } from '../ui/icons';
 import { statusTitle } from '../../lib/status';
 import { StatusDialog } from '../status-dialog';
 import { PopupMenu } from './popup-menu';
+import { useInstall } from '../../lib/push';
 import { AskHive } from '../ai/ask-panel';
 
 function useTheme() {
@@ -31,6 +32,7 @@ export function Rail({ spaces, current, onSwitch, unread, todos = 0 }: {
   const { user, logout, updateUser } = useAuth();
   const router = useRouter();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const install = useInstall();
   const [settingStatus, setSettingStatus] = useState(false);
   const { dark, toggle } = useTheme();
   const ordered = sortSpaces(spaces);
@@ -87,6 +89,7 @@ export function Rail({ spaces, current, onSwitch, unread, todos = 0 }: {
     {menu && <PopupMenu at={menu} label="Account" onClose={() => setMenu(null)} items={[
       { label: 'Set a status', icon: 'smile', onSelect: () => setSettingStatus(true) },
       { label: 'Settings and profile', icon: 'settings', onSelect: () => router.push('/settings') },
+      ...(install ? [{ label: 'Install Hive', icon: 'download' as const, onSelect: () => void install() }] : []),
       { separator: true },
       { label: 'Log out', icon: 'logout', onSelect: () => void logout() },
     ]} />}

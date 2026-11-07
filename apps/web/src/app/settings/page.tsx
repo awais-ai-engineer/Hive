@@ -13,6 +13,7 @@ import { notificationTypes, type NotificationType } from '@hive/shared';
 import { useAuth } from '../../lib/auth';
 import { apiData, requestError } from '../../lib/spaces';
 import { useAiStatus } from '../../lib/ai';
+import { DevicesCard, PushCard } from '../../components/settings-extras';
 
 type Section = 'profile' | 'notifications' | 'privacy' | 'blocked' | 'interests';
 const sections: [Section, string][] = [['profile', 'Profile'], ['notifications', 'Notifications'], ['privacy', 'Privacy'], ['blocked', 'Blocked people'], ['interests', 'Interests']];
@@ -273,8 +274,8 @@ export default function SettingsPage() {
       </nav>
       <div className="min-w-0">
         {section === 'profile' && <><ProfileCard user={user} updateUser={updateUser} /><TranslateCard user={user} updateUser={updateUser} /></>}
-        {section === 'notifications' && <NotificationsCard />}
-        {section === 'privacy' && <PrivacyCard user={user} updateUser={updateUser} />}
+        {section === 'notifications' && <><NotificationsCard /><PushCard /></>}
+        {section === 'privacy' && <><PrivacyCard user={user} updateUser={updateUser} /><DevicesCard /></>}
         {section === 'blocked' && <BlockedCard />}
         {section === 'interests' && <InterestsSettings />}
       </div>
