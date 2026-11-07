@@ -346,3 +346,26 @@ Privacy and safety:
 - Endpoints: `GET /api/channels/{id}/files`, `GET /api/files`, `PUT/DELETE /api/saved/{messages|posts|comments}/{id}`, `GET /api/saved`, `GET /api/saved/ids`, `GET /api/notifications`, `GET /api/notifications/unread-count`, `POST /api/notifications/{id}/read`, `POST /api/notifications/read-all`, `GET/PUT /api/notifications/preferences`, `GET /api/search`, `POST/DELETE /api/me/cover`, `GET /api/users/{id}/cover`.
 - Socket events: `notification:new` (the full item) and `notification:count` go to the `user:{id}` room.
 - Search uses PostgreSQL full-text search (`simple` configuration) on generated `search_tsv` columns with GIN indexes; people and file names use escaped `ILIKE`. Highlights are returned as `{text, match}` segments, never HTML.
+
+## Apps & workflows
+
+Owners and admins manage everything under **Space settings, Apps & workflows** (`/s/<slug>/settings/apps`).
+Secrets (webhook addresses, bot tokens, signing secrets) are shown once and stored hashed (tokens) or
+readable only to the server (signing secrets); members never see them.
+
+- **Incoming webhooks**: `POST /api/hooks/<token>` with `{"text": "...", "username": "optional"}` (Markdown
+  subset, up to 4000 characters, 30 requests per minute per hook). Messages show an `APP` badge.
+- **Bots**: `POST /api/bot/messages` (`channelId`, `text`, `parentId?`), `GET /api/bot/channels` and
+  `GET /api/bot/channels/<id>/messages` with `Authorization: Bearer <token>`. A bot only reaches the
+  channels an admin added it to, including private ones. Messages show a `BOT` badge.
+- **Outgoing events**: a bot with an address receives signed JSON for `message.created` in its channels
+  and for its slash commands. Headers: `X-Hive-Event`, `X-Hive-Timestamp`, `X-Hive-Signature`
+  (`sha256=` + HMAC-SHA256 of `timestamp + "." + body`). Events are queued and retried with back-off by the
+  scheduler. Only public http/https addresses on ports 80/443 are contacted (checked again on every send).
+- **Custom slash commands**: `/name text` is sent to the bot, whose reply `{"text": "...", "ephemeral": false}`
+  is posted in the channel, or shown only to the caller when `ephemeral` is true (socket event
+  `command:response`). The list is `GET /api/spaces/<slug>/commands`.
+- **Workflows**: triggers are a member joining, a keyword in a channel, an emoji reaction, or a daily or
+  weekly schedule in a time zone. Actions post a message (as Hive or a bot, in a channel or as a direct
+  message), create a to-do, or add the person to a private channel. Each workflow keeps its last 50 runs,
+  never starts from messages that workflows post, and is limited to 20 runs per minute.

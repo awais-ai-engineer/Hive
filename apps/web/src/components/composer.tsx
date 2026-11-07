@@ -17,6 +17,7 @@ import { formats, formatSelection, pollCommand, type ComposerSendOptions, type F
 
 type Props = { channelId: string; parentId?: string | null; channels?: { id: string; name: string }[]; placeholder: string; reason: string; sendTyping?: boolean; onEditLast?: () => void; onSend: (body: string, files: Attachment[], options?: ComposerSendOptions) => Promise<boolean | void> | boolean | void };
 type Candidate = { userId: string; username: string; displayName?: string | null };
+type CustomCommand = { id: string; name: string; description: string; usage: string; botName: string };
 const commands = [
   { name: 'poll', usage: '/poll "Question" "A" "B"', description: 'Ask a question with 2–10 answers' },
   { name: 'remind', usage: '/remind in 30m text', description: 'Set a personal reminder' },
@@ -41,6 +42,7 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selected, setSelected] = useState(0);
   const [dismissed, setDismissed] = useState('');
+  const [custom, setCustom] = useState<CustomCommand[]>([]);
   const uploads = useRef<UploadControls | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   const selection = useRef({ start: 0, end: 0 });
@@ -50,6 +52,12 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
   const lastTyping = useRef(0);
   const idle = useRef<ReturnType<typeof setTimeout> | null>(null);
   const owner = user?.id;
+  useEffect(() => {
+    let active = true; setCustom([]);
+    if (!owner || reason) return;
+    apiData<CustomCommand[]>(`/api/channels/${channelId}/commands`).then(list => { if (active) setCustom(list); }).catch(() => {});
+    return () => { active = false; };
+  }, [owner, channelId, reason]);
   useEffect(() => {
     let active = true; loaded.current = false; setReady(false); setBody(''); saved.current = '';
     if (!owner || reason) { setReady(true); return; }
@@ -83,7 +91,8 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
   const tokenKind = token?.[1], tokenQuery = token?.[2] ?? '';
   const tokenKey = `${body}:${caret}`;
   const slash = /^\/([a-z]*)$/i.exec(body);
-  const commandChoices = slash ? commands.filter(command => command.name.startsWith(slash[1].toLowerCase())) : [];
+  const allCommands = [...commands, ...custom.map(item => ({ name: item.name, usage: item.usage, description: `${item.description || 'Custom command'} · ${item.botName}` }))];
+  const commandChoices = slash ? allCommands.filter(command => command.name.startsWith(slash[1].toLowerCase())) : [];
   const choices = tokenKind === '@' ? candidates.map(person => ({ id:person.userId, label:`@${person.username}`, detail:person.displayName ?? '', value:`@[user:${person.userId}] ` })) : tokenKind === '#' ? channels.filter(channel => channel.name.toLowerCase().startsWith(tokenQuery.toLowerCase())).slice(0,8).map(channel => ({ id:channel.id,label:`#${channel.name}`,detail:'Channel',value:`#[channel:${channel.id}] ` })) : commandChoices.map(command => ({id:command.name,label:`/${command.name}`,detail:command.description,value:`/${command.name} `}));
   const showSuggestions = !menu && dismissed !== tokenKey && choices.length > 0;
   useEffect(() => {
@@ -113,6 +122,11 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
           if (text !== 'clear') { const parts = /^:([\w+-]+):\s*(.+)$/.exec(text); if (!parts) throw new Error('Use /status :emoji: text or /status clear.'); const aliases: Record<string,string> = { smile:'😀',thumbsup:'👍',heart:'❤️',tada:'🎉' }; emoji = aliases[parts[1]] ?? emojiData.find(item => item.name === parts[1].replace(/_/g,' ') || item.keywords.includes(parts[1]))?.emoji ?? ''; status=parts[2]; if (!emoji || status.length>80) throw new Error('Choose a known emoji name and status up to 80 characters.'); }
           updateUser(await apiData('/api/me',{method:'PATCH',body:JSON.stringify({status_emoji:emoji,status_text:status})})); setNotice('Status updated.');
         } else if (await onSend(`${text}${text ? ' ' : ''}¯\\_(ツ)_/¯`,files) === false) throw new Error('Message was not sent. Retry the message.');
+      } else if (custom.some(item => new RegExp('^/' + item.name + '(?:\\s|$)', 'i').test(body))) {
+        const name = /^\/([\w-]+)/.exec(body)![1].toLowerCase(), text = body.slice(name.length + 1).trim();
+        if (files.length) throw new Error('Commands cannot include attachments.');
+        const answer = await apiData<{ ephemeral: boolean; text?: string; botName?: string }>(`/api/channels/${channelId}/commands/run`, { method: 'POST', body: JSON.stringify({ command: name, text, parentId }) });
+        if (answer.ephemeral) { clear(sent); setNotice(`${answer.botName}: ${answer.text} (only visible to you)`); return; }
       } else if (await onSend(body,files) === false) throw new Error('Message was not sent. Retry the message.');
       clear(sent);
     } catch (cause) { setError(requestError(cause)); } finally { setBusy(false); }
@@ -120,7 +134,7 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
   async function schedule(date: Date) {
     if (!Number.isFinite(date.getTime()) || date.getTime()<=Date.now()) { setError('Choose a future date and time.'); return; }
     if (reason || busy || uploading || (!body.trim() && !files.length)) return;
-    if (/^\/(poll|remind|status|shrug)(?:\s|$)/i.test(body)) { setError('Use Send for slash commands. Send later schedules ordinary messages.'); return; }
+    if (/^\/(poll|remind|status|shrug)(?:\s|$)/i.test(body) || custom.some(item => body.toLowerCase().startsWith(`/${item.name}`))) { setError('Use Send for slash commands. Send later schedules ordinary messages.'); return; }
     setBusy(true); setError('');
     try { await apiData(`/api/channels/${channelId}/scheduled`,{method:'POST',body:JSON.stringify({body,parentId,attachmentIds:files.map(file=>file.id),sendAt:date.toISOString()})}); clear(); setNotice('Message scheduled. Find it under Drafts & scheduled.'); setMenu(null); }
     catch (cause) { setError(requestError(cause)); } finally { setBusy(false); }
