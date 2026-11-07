@@ -29,6 +29,7 @@ async def connected(url, account=None):
         "thread:activity", "thread:read",
         "call:peer-joined", "call:peer-left", "call:signal", "call:state", "call:incoming",
         "call:participants", "call:removed", "doc:updated", "task:updated",
+        "notification:new", "notification:count",
     )}
     for name, queue in queues.items():
         client.on(name, queue.put_nowait)
@@ -57,3 +58,53 @@ async def send(client, channel, body="Hello", client_id=None):
     return await call(client, "message:send", {
         "channelId": channel, "body": body, "clientMsgId": client_id or str(uuid4())
     })
+
+
+async def add_message(channel_id, author_id, body="hello", parent_id=None):
+    """Insert a message directly (no rate limit, no sockets)."""
+    from app.db.models import Message
+    from app.db.session import SessionLocal
+
+    async with SessionLocal() as session:
+        message = Message(channel_id=channel_id, author_id=author_id, body=body, parent_id=parent_id)
+        session.add(message)
+        await session.commit()
+        return message.id
+
+
+async def add_file(uploader_id, channel_id=None, message_id=None, post_id=None, space_id=None,
+                   filename="notes.pdf", kind="file", size=100):
+    """Insert an attachment row; a message or post claims it when given."""
+    from app.db.models import Attachment
+    from app.db.session import SessionLocal
+
+    async with SessionLocal() as session:
+        attachment = Attachment(
+            storage_key=f"attachments/test-{uuid4()}", kind=kind, filename=filename, size=size,
+            content_type="application/octet-stream", uploader_id=uploader_id,
+            channel_id=channel_id, space_id=space_id, message_id=message_id, post_id=post_id,
+        )
+        session.add(attachment)
+        await session.commit()
+        return attachment.id
+
+
+async def create_post(client, headers, slug, title="A post", body="Post body"):
+    response = await client.post(f"/api/spaces/{slug}/posts", headers=headers,
+                                 json={"title": title, "body": body})
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
+
+
+async def make_workspace(client, headers, slug="work"):
+    response = await client.post("/api/spaces", headers=headers, json={
+        "type": "workspace", "name": slug.title(), "slug": slug})
+    assert response.status_code == 201, response.text
+    channels = (await client.get(f"/api/spaces/{slug}/channels", headers=headers)).json()
+    return response.json(), channels[0]["id"]
+
+
+async def open_dm(client, headers, username):
+    response = await client.post("/api/dms", headers=headers, json={"usernames": [username]})
+    assert response.status_code == 200, response.text
+    return response.json()["id"]

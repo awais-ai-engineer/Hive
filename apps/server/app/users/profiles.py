@@ -55,7 +55,7 @@ async def public_profile(
     online = not blocked_me and user.id in await visible_online(session, [user.id])
     return PublicProfile(
         id=user.id, username=user.username, display_name=user.display_name,
-        avatar_url=user.avatar_url, bio=user.bio, status_text=user.status_text,
+        avatar_url=user.avatar_url, cover_url=user.cover_url, bio=user.bio, status_text=user.status_text,
         status_emoji=user.status_emoji, status_expires_at=user.status_expires_at,
         out_of_office_until=user.out_of_office_until, created_at=user.created_at, online=online,
         shared_spaces=spaces, blocked_by_me=blocked_by_me,

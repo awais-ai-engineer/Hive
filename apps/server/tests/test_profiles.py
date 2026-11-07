@@ -113,7 +113,7 @@ async def test_public_profile(client, setup_chat):
 
     profile = (await client.get("/api/users/bob", headers=ah)).json()
     assert set(profile) == {
-        "id", "username", "display_name", "avatar_url", "bio", "status_text", "status_emoji",
+        "id", "username", "display_name", "avatar_url", "cover_url", "bio", "status_text", "status_emoji",
         "status_expires_at", "out_of_office_until",
         "created_at", "online", "shared_spaces", "blocked_by_me",
     }
