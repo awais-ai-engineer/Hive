@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { calls } from '../../lib/call';
 import { socket } from '../../lib/socket';
+import { startRing, stopRing } from '../../lib/sounds';
 import { Icon } from '../ui/icons';
 
 type Ring = { channelId: string; from: { id: string; username: string } };
@@ -16,11 +17,12 @@ export function IncomingCall({ titleFor, onAccept }: { titleFor: (channelId: str
     return () => { socket.off('call:incoming', onIncoming); };
   }, []);
   useEffect(() => {
-    if (!ring) return;
+    if (!ring) { stopRing(); return; }
+    startRing();
     const timer = setTimeout(() => setRing(null), 30000); // stop ringing after 30 seconds
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setRing(null); };
     window.addEventListener('keydown', onKey);
-    return () => { clearTimeout(timer); window.removeEventListener('keydown', onKey); };
+    return () => { clearTimeout(timer); stopRing(); window.removeEventListener('keydown', onKey); };
   }, [ring]);
   if (!ring) return null;
   return <div role="alertdialog" aria-label="Incoming huddle" className="card on-surface animate-in fixed bottom-4 right-4 z-50 w-[min(92vw,320px)] p-4">
