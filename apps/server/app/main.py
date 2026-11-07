@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app import scheduler
+from app.ai.router import me_router as ai_me_router
+from app.ai.router import router as ai_router
 from app.api import health
 from app.auth.router import router as auth_router
 from app.calls.router import router as calls_router
@@ -80,6 +82,8 @@ api.include_router(composer_router, prefix="/api")
 api.include_router(linkpreview_router, prefix="/api")
 api.include_router(games_hub_router, prefix="/api")
 api.include_router(games_router, prefix="/api")
+api.include_router(ai_router, prefix="/api")
+api.include_router(ai_me_router, prefix="/api")
 
 # One ASGI app: Socket.IO handles /socket.io, everything else goes to FastAPI.
 app = socketio.ASGIApp(sio, other_asgi_app=api)

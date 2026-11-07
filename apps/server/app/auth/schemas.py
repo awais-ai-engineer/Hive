@@ -53,6 +53,7 @@ class UserOut(BaseModel):
     out_of_office_until: date | None
     dm_policy: DmPolicy
     appear_offline: bool
+    translate_language: str | None = None
     created_at: datetime
 
 
