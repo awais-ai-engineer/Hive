@@ -129,6 +129,10 @@ class AuthorOut(BaseModel):
     status_emoji: str | None = None
     status_text: str | None = None
     status_expires_at: datetime | None = None
+    display_name: str | None = None
+    is_bot: bool = False
+    bot_kind: str | None = None
+    bot_emoji: str | None = None
 
 
 class ReactionOut(BaseModel):
@@ -213,6 +217,7 @@ class MessageOut(BaseModel):
     reactions: list[ReactionOut]
     attachments: list[AttachmentOut]
     post_previews: list[PostSummary] = Field(default_factory=list)
+    bot_name: str | None = None
 
 
 class MessagePage(BaseModel):

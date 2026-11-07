@@ -136,6 +136,11 @@ async def run_due(now=None):
                         },
                         room=f"user:{row.author_id}",
                     )
+    from app.apps.delivery import deliver_due
+    from app.workflows.engine import run_scheduled
+
+    result["workflows"] = await run_scheduled(now)
+    result["deliveries"] = (await deliver_due(now))["delivered"]
     return result
 
 

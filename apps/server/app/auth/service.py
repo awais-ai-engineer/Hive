@@ -40,7 +40,7 @@ async def authenticate(session: AsyncSession, email: str, password: str) -> User
     valid = await run_in_threadpool(
         verify_password, password, user.password_hash if user else dummy_hash
     )
-    if not user or not valid or user.is_system:
+    if not user or not valid or user.is_system or user.is_bot:
         raise HTTPException(401, "Invalid email or password")
     return user
 

@@ -116,4 +116,7 @@ async def accept_invite(session: AsyncSession, code: str, user: User) -> SpaceOu
     session.add(SpaceMember(space_id=accepted_space_id, user_id=user.id, role=MemberRole.member))
     await session.commit()
     await notify_invite_accepted(session, inviter_id, user, space)
+    from app.workflows import engine
+
+    await engine.on_member_joined(space.id, user.id)
     return await space_out(session, space, await member_for(session, space.id, user.id))
