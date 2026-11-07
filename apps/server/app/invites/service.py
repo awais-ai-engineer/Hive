@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Invite, MemberRole, Space, SpaceMember, User
 from app.invites.schemas import InviteCreate, InviteOut, InvitePreview, InviteSpacePreview
+from app.notifications.service import notify_invite_accepted
 from app.spaces.schemas import SpaceOut
 from app.spaces.service import member_for, space_out
 
@@ -111,6 +112,8 @@ async def accept_invite(session: AsyncSession, code: str, user: User) -> SpaceOu
     if accepted_space_id is None:
         await session.rollback()
         raise HTTPException(410, "Invite expired or used up")
+    inviter_id = invite.created_by
     session.add(SpaceMember(space_id=accepted_space_id, user_id=user.id, role=MemberRole.member))
     await session.commit()
+    await notify_invite_accepted(session, inviter_id, user, space)
     return await space_out(session, space, await member_for(session, space.id, user.id))

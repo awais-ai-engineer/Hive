@@ -45,6 +45,7 @@ class UserOut(BaseModel):
     username: str
     email: str
     avatar_url: str | None
+    cover_url: str | None
     display_name: str | None
     bio: str | None
     status_text: str | None

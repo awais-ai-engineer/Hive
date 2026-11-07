@@ -8,6 +8,7 @@ import type { Comment } from '@hive/shared';
 import { relativeTime, type VoteResult } from '../../lib/posts';
 import { VoteButtons } from '../posts/vote-buttons';
 import { voteComment, editComment, deleteComment } from '../../lib/comments';
+import { useSaved } from '../../lib/saved';
 import { CommentComposer } from './comment-composer';
 
 type Props = {
@@ -38,6 +39,8 @@ export function CommentItem({
   onDelete,
 }: Props) {
   const [replying, setReplying] = useState(false);
+  const saved = useSaved();
+  const isSaved = saved.isSaved('comment', comment.id);
   const [editing, setEditing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -198,6 +201,7 @@ export function CommentItem({
               Delete
             </button>
           )}
+          {!!userId && <button onClick={() => void saved.toggle('comment', comment.id).catch(() => {})} aria-pressed={isSaved} className={`hover:text-amber-400 font-medium ${isSaved ? 'text-brand' : ''}`}>{isSaved ? 'Saved' : 'Save'}</button>}
           {!isAuthor && !!userId && <button onClick={() => setReporting(true)} className="hover:text-amber-400 font-medium">Report</button>}
           <button onClick={handleShare} className="hover:text-amber-400 font-medium">
             {copied ? 'Copied link!' : 'Share'}

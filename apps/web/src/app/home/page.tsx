@@ -14,6 +14,10 @@ import { Rail } from '../../components/home/rail';
 import { Sidebar } from '../../components/home/sidebar';
 import { ThreadsView } from '../../components/home/threads-view';
 import { UnreadsView } from '../../components/home/unreads-view';
+import { FilesView } from '../../components/files/files-view';
+import { InboxView } from '../../components/inbox/inbox-view';
+import { SavedView } from '../../components/saved/saved-view';
+import { useNotificationCount } from '../../lib/notifications';
 import { TodoList } from '../../components/todos/todo-list';
 import { TodosView } from '../../components/todos/todos-view';
 import { DraftsView } from '../../components/home/drafts-view';
@@ -55,7 +59,7 @@ function Home() {
   const docParam = search.get('doc');
   const messageParam = search.get('m');
   const tabParam = search.get('tab');
-  const tab: ChatTab = docParam ? 'docs' : tabParam === 'posts' || tabParam === 'docs' || tabParam === 'todos' ? tabParam : 'messages';
+  const tab: ChatTab = docParam ? 'docs' : tabParam === 'posts' || tabParam === 'docs' || tabParam === 'todos' || tabParam === 'files' ? tabParam : 'messages';
   const directoryTab: DirectoryTab = search.get('dir') === 'channels' ? 'channels' : 'people';
 
   const [spaces, setSpaces] = useState<Space[]>([]);
@@ -70,6 +74,7 @@ function Home() {
   const [error, setError] = useState('');
   const [drawer, setDrawer] = useState(false);
   const sidebar = useSidebarData(!loading && !!user);
+  const notifications = useNotificationCount();
   const prefs = useRef(sidebar.data.prefs);
   prefs.current = sidebar.data.prefs;
 
@@ -288,8 +293,8 @@ function Home() {
   const channel = channels.find(item => item.id === selected) ?? null;
   const myRank = space?.my_role ? rank[space.my_role] : 0;
   const unreadTotal = unreads.reduce((sum, item) => sum + item.unread, 0);
-  const showView = view === 'unreads' || view === 'threads' || view === 'directory' || view === 'todos' || view === 'drafts' || (!conversation && !channel);
-  const activeView = view === 'directory' || view === 'todos' || view === 'drafts' ? view : showView && view !== 'threads' ? 'unreads' : view;
+  const showView = view === 'unreads' || view === 'threads' || view === 'directory' || view === 'todos' || view === 'drafts' || view === 'inbox' || view === 'saved' || view === 'files' || (!conversation && !channel);
+  const activeView = view === 'directory' || view === 'todos' || view === 'drafts' || view === 'saved' || view === 'files' || view === 'inbox' ? view : showView && view !== 'threads' ? 'unreads' : view;
   const threadChange = (id: string | null) => go({ c: selected, t: id });
 
   let main;
@@ -297,6 +302,21 @@ function Home() {
     main = <>
       <ChatHeader title="To-dos" onMenu={() => setDrawer(true)} />
       <TodosView userId={user.id} />
+    </>;
+  } else if (view === 'inbox') {
+    main = <>
+      <ChatHeader title="Notifications" onMenu={() => setDrawer(true)} />
+      <InboxView />
+    </>;
+  } else if (view === 'saved') {
+    main = <>
+      <ChatHeader title="Saved items" onMenu={() => setDrawer(true)} />
+      <SavedView />
+    </>;
+  } else if (view === 'files') {
+    main = <>
+      <ChatHeader title="All files" onMenu={() => setDrawer(true)} />
+      <FilesView spaces={spaces} />
     </>;
   } else if (view === 'directory') {
     main = <>
@@ -308,7 +328,8 @@ function Home() {
     main = <>
       <ChatHeader conversation={conversation} tab={tab} onTab={next => go({ c: conversation.id, tab: next === 'messages' ? null : next })}
         onMenu={() => setDrawer(true)} {...controls(conversation.id)} />
-      {tab === 'docs' && user ? <DocsView key={conversation.id} channelId={conversation.id} userId={user.id} canWrite docId={docParam}
+      {tab === 'files' ? <FilesView key={conversation.id} channelId={conversation.id} />
+        : tab === 'docs' && user ? <DocsView key={conversation.id} channelId={conversation.id} userId={user.id} canWrite docId={docParam}
         onOpen={id => go({ c: conversation.id, tab: 'docs', doc: id })} />
         : tab === 'todos' && user ? <div className="min-h-0 flex-1 overflow-y-auto"><TodoList key={conversation.id} scope="channel" channelId={conversation.id} userId={user.id}
           emptyTitle="No to-dos here yet" emptyText="Keep track of what needs doing in this conversation. Anyone in it can add and tick off to-dos." /></div>
@@ -323,6 +344,7 @@ function Home() {
         onLeft={() => { void loadChannels().catch(() => {}); go({ c: null }); }} />
       {channel.type === 'voice' ? <VoiceRoom channelId={channel.id} title={channel.name}
         reason={!space.my_role ? 'Join this space to use voice' : space.my_role === 'guest' ? 'Guests can listen only in text channels' : ''} />
+        : tab === 'files' ? <FilesView key={channel.id} channelId={channel.id} />
         : tab === 'docs' && user ? <DocsView key={channel.id} channelId={channel.id} slug={space.slug} userId={user.id}
           canWrite={!!space.my_role && space.my_role !== 'guest'} docId={docParam} onOpen={id => go({ c: channel.id, tab: 'docs', doc: id })} />
         : tab === 'todos' && user ? <div className="min-h-0 flex-1 overflow-y-auto"><TodoList key={channel.id} scope="channel" channelId={channel.id} userId={user.id}
@@ -358,7 +380,7 @@ function Home() {
   return <main className="flex h-dvh overflow-hidden bg-canvas">
     {drawer && <button type="button" aria-label="Close sidebar" onClick={() => setDrawer(false)} className="fixed inset-0 z-30 bg-[rgb(0_0_0/0.5)] md:hidden" />}
     <div className={`${drawer ? 'fixed inset-y-0 left-0 z-40 flex' : 'hidden'} h-full md:static md:z-auto md:flex`}>
-      <Rail spaces={spaces} current={space?.slug ?? null} onSwitch={next => go({ s: next })} unread={unreadTotal} todos={todoCount} />
+      <Rail spaces={spaces} current={space?.slug ?? null} onSwitch={next => go({ s: next })} unread={notifications} todos={todoCount} />
       <aside className="h-full w-[min(80vw,280px)] md:w-[280px]">
         {spacesReady && !spaces.length && <p className="on-dark bg-[var(--sidebar-from)] px-4 pt-4 text-sm text-white/70">You haven&apos;t joined a space yet. <Link href="/spaces" className="underline">Browse spaces</Link> or <Link href="/spaces/new" className="underline">create one</Link>.</p>}
         <Sidebar spaces={spaces} space={space} channels={channels} conversations={conversations}
@@ -367,7 +389,7 @@ function Home() {
           data={sidebar.data} update={sidebar.setData} onChanged={sidebar.reload}
           onBrowseChannels={() => go({ view: 'directory', dir: 'channels' })}
           onSwitchSpace={next => go({ s: next })} onOpen={id => go({ c: id })} onView={next => go({ view: next })}
-          onPerson={username => void openPerson(username)} onChannelCreated={channel => void channelCreated(channel)} />
+          onChannelCreated={channel => void channelCreated(channel)} />
       </aside>
     </div>
     <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface px-3 py-3 sm:px-6 sm:py-4">

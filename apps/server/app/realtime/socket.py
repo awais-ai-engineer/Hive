@@ -48,6 +48,7 @@ from app.messages.schemas import (
     ThreadReadIn,
 )
 from app.messages.threads import mark_thread_read, thread_participants
+from app.notifications import service as notifications
 from app.realtime import presence
 from app.spaces.service import member_for
 from app.users.blocks import blocked_among
@@ -176,6 +177,7 @@ def public_message(message):
 async def broadcast_message(session, user, message, parent=None):
     from app.messages.composer import notify_mentions
     await notify_mentions(session, message)
+    await notifications.notify_message(session, message, user, parent)
     room = f"channel:{message['channel_id']}"
     await sio.emit("message:new", public_message(message), room=room)
     if parent is not None:
@@ -247,6 +249,10 @@ async def delete(sid, data, session, user):
 async def react(sid, data, session, user):
     update = await service.toggle_reaction(session, user, data.messageId, data.emoji)
     await sio.emit("reaction:updated", update, room=f"channel:{update['channelId']}")
+    mine = next((r for r in update["reactions"] if r["emoji"] == data.emoji), None)
+    await notifications.notify_reaction(
+        session, user, data.messageId, mine is not None and user.id in mine["user_ids"]
+    )
     return update
 
 

@@ -1,7 +1,15 @@
 from datetime import UTC, date, datetime
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, BeforeValidator, Field, HttpUrl, field_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    HttpUrl,
+    field_validator,
+)
 
 from app.auth.schemas import Username
 from app.db.models import DmPolicy, SpaceType
@@ -54,6 +62,17 @@ class ProfileIn(BaseModel):
         return value
 
 
+class PersonOut(BaseModel):
+    """A person as shown in lists (files, saved items, notifications, search)."""
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: str
+    username: str
+    displayName: str | None = Field(None, validation_alias="display_name")
+    avatarUrl: str | None = Field(None, validation_alias="avatar_url")
+
+
 class SharedSpace(BaseModel):
     slug: str
     name: str
@@ -65,6 +84,7 @@ class PublicProfile(BaseModel):
     username: str
     display_name: str | None
     avatar_url: str | None
+    cover_url: str | None
     bio: str | None
     status_text: str | None
     status_emoji: str | None
