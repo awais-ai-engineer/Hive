@@ -66,9 +66,7 @@ def fake_network(monkeypatch, handler):
 
 
 def check_signature(request, secret):
-    stamp = request.headers["X-Hive-Timestamp"]
-    expected = "sha256=" + hmac.new(secret.encode(), stamp.encode() + b"." + request.content,
-                                    hashlib.sha256).hexdigest()
+    expected = "sha256=" + hmac.new(secret.encode(), request.content, hashlib.sha256).hexdigest()
     assert hmac.compare_digest(request.headers["X-Hive-Signature"], expected)
 
 

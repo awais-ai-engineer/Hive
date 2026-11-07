@@ -360,7 +360,7 @@ readable only to the server (signing secrets); members never see them.
   channels an admin added it to, including private ones. Messages show a `BOT` badge.
 - **Outgoing events**: a bot with an address receives signed JSON for `message.created` in its channels
   and for its slash commands. Headers: `X-Hive-Event`, `X-Hive-Timestamp`, `X-Hive-Signature`
-  (`sha256=` + HMAC-SHA256 of `timestamp + "." + body`). Events are queued and retried with back-off by the
+  (`sha256=` + HMAC-SHA256 of the raw request body). Events are queued and retried with back-off by the
   scheduler. Only public http/https addresses on ports 80/443 are contacted (checked again on every send).
 - **Custom slash commands**: `/name text` is sent to the bot, whose reply `{"text": "...", "ephemeral": false}`
   is posted in the channel, or shown only to the caller when `ephemeral` is true (socket event

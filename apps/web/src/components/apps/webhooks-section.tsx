@@ -27,6 +27,7 @@ export function WebhooksSection({ slug, channels, hooks, reload, fail }: {
       <SecretBox label={`Webhook address for "${secret.name}"`} value={`${API_URL}${secret.path}`} note="Copy it now. For safety Hive only shows it once; if you lose it, create a new address with Regenerate." onClose={() => setSecret(null)} />
       <Code label="Try it from a terminal">{curlExample(`${API_URL}${secret.path}`)}</Code>
     </>}
+    <Code label="Example: send a message with curl">{curlExample(`${API_URL}/api/hooks/YOUR_WEBHOOK_TOKEN`)}</Code>
     {!hooks.length ? <Empty>No webhooks yet. Create one below, then paste its address into the tool you want to hear from.</Empty> :
       <ul className="space-y-2">{hooks.map(hook => <li key={hook.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 p-3">
         <span className="text-xl" aria-hidden>{hook.emoji}</span>

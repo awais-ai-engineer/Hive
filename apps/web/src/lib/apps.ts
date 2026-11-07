@@ -33,7 +33,7 @@ export function botExample(apiUrl: string, channelId: string) {
 export const signatureExample = `// Node.js: check that a request really comes from Hive
 import crypto from 'node:crypto';
 const expected = 'sha256=' + crypto.createHmac('sha256', SIGNING_SECRET)
-  .update(req.headers['x-hive-timestamp'] + '.' + rawBody).digest('hex');
+  .update(rawBody).digest('hex');
 const ok = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(req.headers['x-hive-signature']));`;
 
 export const commandReplyExample = `{ "text": "pong", "ephemeral": true }   // ephemeral: only the person who typed the command sees it`;

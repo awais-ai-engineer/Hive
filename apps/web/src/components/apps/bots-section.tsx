@@ -86,7 +86,8 @@ export function BotsSection({ slug, channels, bots, reload, fail }: {
     </form>
     <details className="text-sm"><summary className="cursor-pointer font-medium">For developers: events and signatures</summary>
       <div className="mt-3 space-y-3">
-        <p className="text-white/70">Hive sends <code>POST</code> requests with a JSON body and these headers: <code>X-Hive-Event</code> (message.created or command), <code>X-Hive-Timestamp</code> and <code>X-Hive-Signature</code> (HMAC-SHA256 of timestamp + "." + body with the signing secret). Failed deliveries are retried a few times. Only public https/http addresses on ports 80 and 443 are allowed.</p>
+        <p className="text-white/70">Hive sends <code>POST</code> requests with a JSON body and these headers: <code>X-Hive-Event</code> (message.created or command), <code>X-Hive-Timestamp</code> and <code>X-Hive-Signature</code> (HMAC-SHA256 of the raw body with the signing secret, prefixed by sha256=). Failed deliveries are retried a few times. Only public https/http addresses on ports 80 and 443 are allowed.</p>
+        <Code label="Example: post a message as a bot">{botExample(API_URL, bots[0]?.channels[0]?.id ?? 'CHANNEL_ID')}</Code>
         <Code label="Verify a request">{signatureExample}</Code>
         <p className="text-white/70">Read recent messages with <code>GET /api/bot/channels/CHANNEL_ID/messages</code> and list the bot&apos;s channels with <code>GET /api/bot/channels</code>, using the same Bearer token.</p>
         <Code label="Answering a slash command">{commandReplyExample}</Code>

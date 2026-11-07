@@ -43,8 +43,9 @@ def check_url(url: str) -> str:
         raise ValueError(str(error)) from None
 
 
-def sign(secret: str, timestamp: str, body: bytes) -> str:
-    digest = hmac.new(secret.encode(), timestamp.encode() + b"." + body, hashlib.sha256)
+def sign(secret: str, body: bytes) -> str:
+    """HMAC-SHA256 of the exact bytes sent. Payloads carry their own timestamp for replay checks."""
+    digest = hmac.new(secret.encode(), body, hashlib.sha256)
     return "sha256=" + digest.hexdigest()
 
 
@@ -73,7 +74,7 @@ async def post_signed(url: str, secret: str, event: str, payload: dict) -> tuple
         "User-Agent": "Hive-Apps/1.0",
         "X-Hive-Event": event,
         "X-Hive-Timestamp": timestamp,
-        "X-Hive-Signature": sign(secret, timestamp, body),
+        "X-Hive-Signature": sign(secret, body),
     }
     try:
         async with asyncio.timeout(TIMEOUT + 2):
