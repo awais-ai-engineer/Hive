@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { I18nProvider } from '../lib/i18n';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '../lib/auth';
@@ -31,7 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body className="min-h-screen font-sans antialiased">
-        <AuthProvider><PwaSetup /><Nav /><SearchPalette />{children}</AuthProvider>
+        <I18nProvider><AuthProvider><PwaSetup /><Nav /><SearchPalette />{children}</AuthProvider></I18nProvider>
       </body>
     </html>
   );
