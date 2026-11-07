@@ -18,6 +18,11 @@ export type User = {
 
 export type AuthSession = { access_token: string; token_type: string; user: User };
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+// Login, refresh and logout use a cookie. When the site and the API live on different domains,
+// those calls go through the site's own domain (a rewrite in next.config.ts), so the cookie is
+// first-party and works in browsers that block third-party cookies.
+const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_PROXY === '1' ? '' : API_URL;
+const baseFor = (path: string) => path.startsWith('/api/auth/') ? AUTH_URL : API_URL;
 let session: AuthSession | null = null;
 let revision = 0;
 let refreshPromise: Promise<AuthSession | null> | null = null;
@@ -54,7 +59,7 @@ export function refreshSession(): Promise<AuthSession | null> {
     const started = revision;
     refreshPromise = (async () => {
       try {
-        const response = await fetch(`${API_URL}/api/auth/refresh`, {
+        const response = await fetch(`${AUTH_URL}/api/auth/refresh`, {
           method: 'POST', credentials: 'include',
         });
         const value = await responseData<AuthSession>(response);
@@ -77,7 +82,7 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
     if (session) headers.set('Authorization', `Bearer ${session.access_token}`);
     else headers.delete('Authorization');
     if (init.body && !(init.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-    return fetch(`${API_URL}${path}`, { ...init, headers, credentials: 'include' });
+    return fetch(`${baseFor(path)}${path}`, { ...init, headers, credentials: 'include' });
   };
   const token = session?.access_token;
   const response = await send();
