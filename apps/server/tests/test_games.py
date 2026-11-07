@@ -51,7 +51,14 @@ async def test_word_flow_hides_answer_and_awards_points_once(client, setup_chat)
     wrong = wrong_word(answer)
     first = await client.post(f"{base()}/word/guess", headers=bh, json={"guess": wrong.upper()})
     assert first.status_code == 200 and "answer" in first.json() and first.json()["answer"] is None
-    assert answer not in first.text or answer == wrong
+    # Look only at values: the answer can also be a field name such as "point(s)".
+    def values(item):
+        if isinstance(item, dict):
+            return [v for value in item.values() for v in values(value)]
+        if isinstance(item, list):
+            return [v for value in item for v in values(value)]
+        return [str(item).lower()]
+    assert answer not in values(first.json()) or answer == wrong
     won = (await client.post(f"{base()}/word/guess", headers=bh, json={"guess": answer})).json()
     assert won["status"] == "won" and won["answer"] == answer and won["points"] == 5
     assert won["share"].startswith(f"Hive Word {words.today()} 2/6")

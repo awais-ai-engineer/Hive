@@ -95,10 +95,12 @@ export function CallStage() {
   const count = call.peers.length + 1;
   const columns = count === 1 ? 'grid-cols-1' : count <= 4 ? 'grid-cols-2' : 'grid-cols-3';
 
-  return <section aria-label={`Huddle in ${call.title}`} role="dialog" aria-modal={full}
-    className={`animate-in fixed z-50 flex flex-col overflow-hidden bg-[#16131c] shadow-[0_24px_70px_rgb(0_0_0/0.45)] ${full
-      ? 'inset-0'
-      : 'inset-x-2 bottom-2 h-[min(78dvh,620px)] rounded-2xl sm:inset-x-auto sm:bottom-4 sm:right-4 sm:w-[min(720px,calc(100vw-2rem))]'}`}
+  return <div className={`fixed inset-0 z-50 flex items-center justify-center ${full ? '' : 'bg-[rgb(8_6_14/0.62)] p-3 backdrop-blur-sm sm:p-6'}`}
+    onMouseDown={event => { if (event.target === event.currentTarget) calls.setStageOpen(false); }}>
+  <section aria-label={`Huddle in ${call.title}`} role="dialog" aria-modal
+    className={`animate-in flex flex-col overflow-hidden bg-[#16131c] ${full
+      ? 'h-full w-full'
+      : 'h-[min(86dvh,760px)] w-[min(1100px,100%)] rounded-3xl shadow-[0_0_0_1.5px_rgb(139_92_246/0.75),0_0_40px_6px_rgb(124_58_237/0.45),0_30px_80px_rgb(0_0_0/0.55)]'}`}
     style={WHITE}>
     <header className="flex items-center gap-3 border-b border-[rgb(255_255_255/0.08)] px-4 py-3">
       <span className="relative flex h-2.5 w-2.5 shrink-0"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" /></span>
@@ -111,9 +113,9 @@ export function CallStage() {
     </header>
 
     <div className="min-h-0 flex-1 p-3">
-      {stage ? <div className={`flex h-full gap-3 ${full ? 'flex-row' : 'flex-col'}`}>
+      {stage ? <div className="flex h-full flex-col gap-3 md:flex-row">
         <div className="min-h-0 flex-1"><TileView tile={stage} big /></div>
-        {strip.length > 0 && <div className={`flex shrink-0 gap-2 overflow-auto ${full ? 'w-56 flex-col' : 'h-24 flex-row [&>figure]:w-40 [&>figure]:shrink-0'}`}>
+        {strip.length > 0 && <div className="flex h-24 shrink-0 flex-row gap-2 overflow-auto [&>figure]:w-40 [&>figure]:shrink-0 md:h-auto md:w-56 md:flex-col md:[&>figure]:w-full">
           {strip.map(tile => <TileView key={tile.key} tile={tile} />)}
         </div>}
       </div> : <div className={`grid h-full content-center gap-3 overflow-auto ${columns} ${count === 1 ? 'mx-auto w-full max-w-xl' : ''}`}>
@@ -141,5 +143,6 @@ export function CallStage() {
         </label>
       </div>}
     </footer>
-  </section>;
+  </section>
+  </div>;
 }
