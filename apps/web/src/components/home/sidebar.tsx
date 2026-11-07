@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '../../lib/i18n';
 import Link from 'next/link';
 import { useState, type Dispatch, type MouseEvent as ReactMouseEvent, type SetStateAction } from 'react';
 import { conversationTitle, type Conversation } from '../../lib/dms';
@@ -61,6 +62,7 @@ const hint = (text: string) => <li className="px-2.5 py-0.5 text-xs text-white/5
 
 /** Slack-style sidebar on the purple panel: space switcher, search, views, and your sections. */
 export function Sidebar(props: Props) {
+  const { t } = useT();
   const { space, channels, conversations, selected, view, data } = props;
   const [creatingChannel, setCreatingChannel] = useState(false);
   const [composing, setComposing] = useState<'group' | 'direct' | null>(null);
@@ -222,17 +224,17 @@ export function Sidebar(props: Props) {
     <div className="mt-3"><FindConversation /></div>
     <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
       <ul className="space-y-0.5">
-        <NavItem icon="threads" label="Threads" active={view === 'threads'} count={props.threadsUnread} onClick={() => props.onView('threads')} />
-        <NavItem icon="inbox" label="Unreads" active={view === 'unreads'} count={props.unreadTotal} onClick={() => props.onView('unreads')} />
-        <NavItem icon="directory" label="Directories" active={view === 'directory'} onClick={() => props.onView('directory')} />
-        <NavItem icon="send" label="Drafts & scheduled" active={view === 'drafts'} onClick={() => props.onView('drafts')} />
-        <NavItem icon="bookmark" label="Saved items" active={view === 'saved'} onClick={() => props.onView('saved')} />
-        <NavItem icon="folder" label="All files" active={view === 'files'} onClick={() => props.onView('files')} />
-        <NavItem icon="layers" label="Feed" href="/feed" />
-        {space && <NavItem icon="users" label="Members" href={`/s/${space.slug}/members`} />}
+        <NavItem icon="threads" label={t('nav.threads')} active={view === 'threads'} count={props.threadsUnread} onClick={() => props.onView('threads')} />
+        <NavItem icon="inbox" label={t('nav.unreads')} active={view === 'unreads'} count={props.unreadTotal} onClick={() => props.onView('unreads')} />
+        <NavItem icon="directory" label={t('nav.directories')} active={view === 'directory'} onClick={() => props.onView('directory')} />
+        <NavItem icon="send" label={t('nav.drafts')} active={view === 'drafts'} onClick={() => props.onView('drafts')} />
+        <NavItem icon="bookmark" label={t('nav.saved')} active={view === 'saved'} onClick={() => props.onView('saved')} />
+        <NavItem icon="folder" label={t('nav.allFiles')} active={view === 'files'} onClick={() => props.onView('files')} />
+        <NavItem icon="layers" label={t('nav.feed')} href="/feed" />
+        {space && <NavItem icon="users" label={t('nav.members')} href={`/s/${space.slug}/members`} />}
       </ul>
 
-      {heading('starred', 'Starred')}
+      {heading('starred', t('sidebar.starred'))}
       {!collapsed('starred') && <ul className="space-y-0.5">
         {starred.map(row)}
         {!starred.length && hint('Star a conversation to keep it here. Use the ⋯ next to any channel or message.')}
@@ -255,29 +257,29 @@ export function Sidebar(props: Props) {
         </ul>}
       </div>)}
 
-      {heading('channels', 'Channels', space ? addChannelsMenu : undefined, 'Add channels')}
+      {heading('channels', t('sidebar.channels'), space ? addChannelsMenu : undefined, t('sidebar.addChannels'))}
       {!collapsed('channels') && <ul className="space-y-0.5">
         {!space && hint('Join or create a space to see its channels.')}
         {rest('channel').map(row)}
-        {space && quickAction('Add channels', addChannelsMenu)}
+        {space && quickAction(t('sidebar.addChannels'), addChannelsMenu)}
       </ul>}
 
-      {heading('conversations', 'Conversations', () => setComposing(composing === 'group' ? null : 'group'), 'New group conversation')}
+      {heading('conversations', t('sidebar.conversations'), () => setComposing(composing === 'group' ? null : 'group'), 'New group conversation')}
       {!collapsed('conversations') && <ul className="space-y-0.5">
         {rest('group').map(row)}
         {!rest('group').length && composing !== 'group' && hint('No group conversations yet')}
         {newForm('group')}
       </ul>}
 
-      {heading('dms', 'Direct messages', () => setComposing(composing === 'direct' ? null : 'direct'), 'New message')}
+      {heading('dms', t('sidebar.directMessages'), () => setComposing(composing === 'direct' ? null : 'direct'), 'New message')}
       {!collapsed('dms') && <ul className="space-y-0.5">
         {rest('dm').map(row)}
         {newForm('direct')}
         {space && isAdmin && <li><Link href={`/s/${space.slug}/settings#invites`} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-white/60 hover:bg-white/10 hover:text-white">
-          <Icon name="plus" size={15} className="shrink-0" />Invite people</Link></li>}
+          <Icon name="plus" size={15} className="shrink-0" />{t('sidebar.invitePeople')}</Link></li>}
       </ul>}
       <div className="mt-4 border-t border-white/10 pt-2"><ul>
-        {quickAction('New section', () => setDialog({ mode: 'new' }))}
+        {quickAction(t('sidebar.newSection'), () => setDialog({ mode: 'new' }))}
       </ul></div>
       {error && <p role="alert" className="mt-3 px-2.5 text-xs text-rose-300">{error}</p>}
     </div>

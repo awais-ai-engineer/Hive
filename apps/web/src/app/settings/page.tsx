@@ -1,5 +1,6 @@
 'use client';
 
+import { LanguagePicker } from '../../components/language-picker';
 import { playMessageSound, setSoundsEnabled, soundsEnabled } from '../../lib/sounds';
 import Link from 'next/link';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -291,7 +292,7 @@ export default function SettingsPage() {
         <Link href="/communities/manage" className="rounded-xl px-3 py-2 text-sm text-brand">Manage communities</Link>
       </nav>
       <div className="min-w-0">
-        {section === 'profile' && <><ProfileCard user={user} updateUser={updateUser} /><TranslateCard user={user} updateUser={updateUser} /></>}
+        {section === 'profile' && <><ProfileCard user={user} updateUser={updateUser} /><section className="card mt-5 p-5 sm:p-6"><LanguagePicker /><p className="mt-2 text-sm text-white/60">Changes the language of Hive's menus and buttons on this device.</p></section><TranslateCard user={user} updateUser={updateUser} /></>}
         {section === 'notifications' && <><SoundCard /><NotificationsCard /><PushCard /></>}
         {section === 'privacy' && <><PrivacyCard user={user} updateUser={updateUser} /><DevicesCard /></>}
         {section === 'blocked' && <BlockedCard />}

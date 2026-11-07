@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '../../lib/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { calls } from '../../lib/call';
 import { useCall } from '../../lib/use-call';
@@ -52,6 +53,7 @@ export function RoundControl({ icon, label, active, warn, onClick, size = 'lg' }
 export function CallStage() {
   const call = useCall();
   const { user } = useAuth();
+  const { t } = useT();
   const [full, setFull] = useState(false);
   const [settings, setSettings] = useState(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
@@ -106,10 +108,10 @@ export function CallStage() {
       <span className="relative flex h-2.5 w-2.5 shrink-0"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" /></span>
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-sm font-semibold">{call.status === 'joining' ? 'Connecting…' : `Huddle in ${call.title}`}</h2>
-        <p className="text-xs" style={{ color: 'rgb(255 255 255 / 0.6)' }}>{count} {count === 1 ? 'person' : 'people'}{timer ? ` · ${timer}` : ''}</p>
+        <p className="text-xs" style={{ color: 'rgb(255 255 255 / 0.6)' }}>{t('huddle.people', { count })}{timer ? ` · ${timer}` : ''}</p>
       </div>
-      <RoundControl size="sm" icon={full ? 'shrink' : 'expand'} label={full ? 'Exit full screen' : 'Full screen'} onClick={() => setFull(value => !value)} />
-      <RoundControl size="sm" icon="x" label="Minimise (the huddle keeps going)" onClick={() => calls.setStageOpen(false)} />
+      <RoundControl size="sm" icon={full ? 'shrink' : 'expand'} label={full ? t('huddle.exitFullScreen') : t('huddle.fullScreen')} onClick={() => setFull(value => !value)} />
+      <RoundControl size="sm" icon="x" label={t('huddle.minimise')} onClick={() => calls.setStageOpen(false)} />
     </header>
 
     <div className="min-h-0 flex-1 p-3">
@@ -125,13 +127,13 @@ export function CallStage() {
 
     {call.error && <p role="alert" className="mx-4 mb-2 rounded-lg bg-rose-500/15 px-3 py-2 text-sm text-rose-200">{call.error}</p>}
     <footer className="relative flex items-center justify-center gap-2 border-t border-[rgb(255_255_255/0.08)] px-4 py-3">
-      <RoundControl icon={call.muted ? 'micOff' : 'mic'} label={call.muted ? 'Unmute microphone' : 'Mute microphone'} warn={call.muted} onClick={() => calls.toggleMute()} />
-      <RoundControl icon={call.camera ? 'video' : 'videoOff'} label={call.camera ? 'Turn camera off' : 'Turn camera on'} active={call.camera} onClick={() => void calls.toggleCamera()} />
-      {canShare && <RoundControl icon="screen" label={call.screen ? 'Stop sharing your screen' : 'Share your screen'} active={call.screen} onClick={() => void calls.toggleScreen()} />}
+      <RoundControl icon={call.muted ? 'micOff' : 'mic'} label={call.muted ? t('huddle.unmute') : t('huddle.mute')} warn={call.muted} onClick={() => calls.toggleMute()} />
+      <RoundControl icon={call.camera ? 'video' : 'videoOff'} label={call.camera ? t('huddle.cameraOff') : t('huddle.cameraOn')} active={call.camera} onClick={() => void calls.toggleCamera()} />
+      {canShare && <RoundControl icon="screen" label={call.screen ? t('huddle.stopShare') : t('huddle.share')} active={call.screen} onClick={() => void calls.toggleScreen()} />}
       <RoundControl icon="settings" label="Audio settings" active={settings} onClick={() => setSettings(value => !value)} />
       <button type="button" onClick={() => void calls.leave()}
         className="ml-2 flex h-11 items-center gap-2 rounded-full bg-rose-600 px-5 text-sm font-semibold transition hover:bg-rose-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fff]" style={WHITE}>
-        <Icon name="phoneOff" size={18} />Leave
+        <Icon name="phoneOff" size={18} />{t('huddle.leave')}
       </button>
       {settings && <div className="absolute bottom-full left-1/2 mb-2 w-72 -translate-x-1/2 rounded-xl bg-[#26222f] p-3 shadow-xl">
         <label className="block text-xs font-medium" style={{ color: 'rgb(255 255 255 / 0.7)' }}>Microphone

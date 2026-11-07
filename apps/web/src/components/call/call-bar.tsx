@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '../../lib/i18n';
 import { calls } from '../../lib/call';
 import { useCall } from '../../lib/use-call';
 import { useAuth } from '../../lib/auth';
@@ -11,6 +12,7 @@ import { useCallTimer } from './call-timer';
 export function CallBar() {
   const call = useCall();
   const { user } = useAuth();
+  const { t } = useT();
   const timer = useCallTimer(call.status === 'connected');
   if (call.status === 'idle' || !call.channelId) return null;
   const canShare = typeof navigator !== 'undefined' && !!navigator.mediaDevices && 'getDisplayMedia' in navigator.mediaDevices;
@@ -21,7 +23,7 @@ export function CallBar() {
       <span className="relative flex h-2 w-2 shrink-0"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" /></span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold">{call.status === 'joining' ? 'Connecting…' : call.title}</span>
-        <span className="block text-[11px]" style={{ color: 'rgb(255 255 255 / 0.6)' }}>Huddle{timer ? ` · ${timer}` : ''}</span>
+        <span className="block text-[11px]" style={{ color: 'rgb(255 255 255 / 0.6)' }}>{t('huddle.huddle')}{timer ? ` · ${timer}` : ''}</span>
       </span>
       <span className="flex -space-x-1.5">
         {people.slice(0, 4).map(person => <span key={person.key} title={person.name}
@@ -31,14 +33,14 @@ export function CallBar() {
     </button>
     {call.error && <p role="alert" className="mt-2 text-xs text-rose-300">{call.error}</p>}
     <div className="mt-3 flex items-center gap-1.5">
-      <RoundControl size="sm" icon={call.muted ? 'micOff' : 'mic'} label={call.muted ? 'Unmute microphone' : 'Mute microphone'} warn={call.muted} onClick={() => calls.toggleMute()} />
-      <RoundControl size="sm" icon={call.camera ? 'video' : 'videoOff'} label={call.camera ? 'Turn camera off' : 'Turn camera on'} active={call.camera}
+      <RoundControl size="sm" icon={call.muted ? 'micOff' : 'mic'} label={call.muted ? t('huddle.unmute') : t('huddle.mute')} warn={call.muted} onClick={() => calls.toggleMute()} />
+      <RoundControl size="sm" icon={call.camera ? 'video' : 'videoOff'} label={call.camera ? t('huddle.cameraOff') : t('huddle.cameraOn')} active={call.camera}
         onClick={() => { void calls.toggleCamera().then(() => { if (calls.getState().camera) calls.setStageOpen(true); }); }} />
-      {canShare && <RoundControl size="sm" icon="screen" label={call.screen ? 'Stop sharing your screen' : 'Share your screen'} active={call.screen}
+      {canShare && <RoundControl size="sm" icon="screen" label={call.screen ? t('huddle.stopShare') : t('huddle.share')} active={call.screen}
         onClick={() => { void calls.toggleScreen().then(() => { if (calls.getState().screen) calls.setStageOpen(true); }); }} />}
       <RoundControl size="sm" icon="popout" label="Open the huddle window" active={call.stageOpen} onClick={() => calls.setStageOpen(!call.stageOpen)} />
       <button type="button" onClick={() => void calls.leave()} title="Leave huddle"
-        className="ml-auto flex h-8 items-center gap-1.5 rounded-full bg-rose-600 px-3 text-xs font-semibold transition hover:bg-rose-500" style={{ color: '#fff' }}>Leave</button>
+        className="ml-auto flex h-8 items-center gap-1.5 rounded-full bg-rose-600 px-3 text-xs font-semibold transition hover:bg-rose-500" style={{ color: '#fff' }}>{t('huddle.leave')}</button>
     </div>
   </section>;
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { useT } from '../../lib/i18n';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { conversationTitle, type Conversation } from '../../lib/dms';
@@ -74,6 +75,7 @@ function Tab({ active, icon, label, onClick }: { active: boolean; icon: IconName
 
 /** Top of the main area: what is open, who is in it, and the Messages/Posts tabs for space channels. */
 export function ChatHeader({ title, channel, space, conversation, tab = 'messages', onTab, onMenu, onLeft, onTimerChanged, onError, ...controls }: Props) {
+  const { t } = useT();
   const [members, setMembers] = useState<Member[]>([]);
   const [panel, setPanel] = useState(false);
   useEffect(() => setPanel(false), [channel?.id]);
@@ -107,10 +109,10 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
       <Stack people={conversation.participants} total={conversation.participants.length} />
     </div>
       {onTab && <div role="tablist" aria-label="Conversation views" className="flex gap-6 overflow-x-auto">
-        <Tab active={tab === 'messages'} icon="message" label="Messages" onClick={() => onTab('messages')} />
-        <Tab active={tab === 'docs'} icon="file" label="Docs" onClick={() => onTab('docs')} />
-        <Tab active={tab === 'todos'} icon="checkSquare" label="To-dos" onClick={() => onTab('todos')} />
-        <Tab active={tab === 'files'} icon="folder" label="Files" onClick={() => onTab('files')} />
+        <Tab active={tab === 'messages'} icon="message" label={t('tabs.messages')} onClick={() => onTab('messages')} />
+        <Tab active={tab === 'docs'} icon="file" label={t('tabs.docs')} onClick={() => onTab('docs')} />
+        <Tab active={tab === 'todos'} icon="checkSquare" label={t('tabs.todos')} onClick={() => onTab('todos')} />
+        <Tab active={tab === 'files'} icon="folder" label={t('tabs.files')} onClick={() => onTab('files')} />
       </div>}
     </header>
     <TimerBanner seconds={conversation.disappear_after} />
@@ -140,11 +142,11 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
         <Stack people={members.map(member => member.user)} total={space.member_count} href={`/s/${space.slug}/members`} />
       </div>
       {onTab && channel.type !== 'voice' && <div role="tablist" aria-label="Channel views" className="mt-3 flex gap-6 overflow-x-auto">
-        <Tab active={tab === 'messages'} icon="message" label="Messages" onClick={() => onTab('messages')} />
-        <Tab active={tab === 'posts'} icon="layers" label="Posts" onClick={() => onTab('posts')} />
-        <Tab active={tab === 'docs'} icon="file" label="Docs" onClick={() => onTab('docs')} />
-        <Tab active={tab === 'todos'} icon="checkSquare" label="To-dos" onClick={() => onTab('todos')} />
-        <Tab active={tab === 'files'} icon="folder" label="Files" onClick={() => onTab('files')} />
+        <Tab active={tab === 'messages'} icon="message" label={t('tabs.messages')} onClick={() => onTab('messages')} />
+        <Tab active={tab === 'posts'} icon="layers" label={t('tabs.posts')} onClick={() => onTab('posts')} />
+        <Tab active={tab === 'docs'} icon="file" label={t('tabs.docs')} onClick={() => onTab('docs')} />
+        <Tab active={tab === 'todos'} icon="checkSquare" label={t('tabs.todos')} onClick={() => onTab('todos')} />
+        <Tab active={tab === 'files'} icon="folder" label={t('tabs.files')} onClick={() => onTab('files')} />
       </div>}
     </header>
     {channel.type !== 'voice' && <TimerBanner seconds={channel.disappear_after} />}
