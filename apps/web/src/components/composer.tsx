@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { parseWhen, safeLinkUrl, type Attachment } from '@hive/shared';
 import { UploadPicker, type UploadControls } from './upload-picker';
 import { EmojiPicker } from './emoji-picker';
+import { highlight } from './composer-highlight';
 import { VoiceRecorder } from './voice-recorder';
 import { RewriteButton } from './ai/rewrite';
 import { Icon } from './ui/icons';
@@ -45,6 +46,10 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
   const [dismissed, setDismissed] = useState('');
   const [custom, setCustom] = useState<CustomCommand[]>([]);
   const uploads = useRef<UploadControls | null>(null);
+  // Mentions read as "@name" while typing; they become stable id tokens only when sent.
+  const picked = useRef(new Map<string, string>());
+  const mirror = useRef<HTMLDivElement>(null);
+  const encode = (text: string) => text.replace(/[@#][\w-]+/g, word => picked.current.get(word) ?? word);
   const box = useRef<HTMLTextAreaElement>(null);
   const selection = useRef({ start: 0, end: 0 });
   const bodyRef = useRef(body); bodyRef.current = body;
@@ -94,7 +99,7 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
   const slash = secret ? null : /^\/([a-z]*)$/i.exec(body);
   const allCommands = [...commands, ...custom.map(item => ({ name: item.name, usage: item.usage, description: `${item.description || 'Custom command'} · ${item.botName}` }))];
   const commandChoices = slash ? allCommands.filter(command => command.name.startsWith(slash[1].toLowerCase())) : [];
-  const choices = tokenKind === '@' ? candidates.map(person => ({ id:person.userId, label:`@${person.username}`, detail:person.displayName ?? '', value:`@[user:${person.userId}] ` })) : tokenKind === '#' ? channels.filter(channel => channel.name.toLowerCase().startsWith(tokenQuery.toLowerCase())).slice(0,8).map(channel => ({ id:channel.id,label:`#${channel.name}`,detail:'Channel',value:`#[channel:${channel.id}] ` })) : commandChoices.map(command => ({id:command.name,label:`/${command.name}`,detail:command.description,value:`/${command.name} `}));
+  const choices = tokenKind === '@' ? candidates.map(person => ({ id:person.userId, label:`@${person.username}`, detail:person.displayName ?? '', value:`@${person.username} `, token:`@[user:${person.userId}]` })) : tokenKind === '#' ? channels.filter(channel => channel.name.toLowerCase().startsWith(tokenQuery.toLowerCase())).slice(0,8).map(channel => ({ id:channel.id,label:`#${channel.name}`,detail:'Channel',value:`#${channel.name} `, token:`#[channel:${channel.id}]` })) : commandChoices.map(command => ({id:command.name,label:`/${command.name}`,detail:command.description,value:`/${command.name} `}));
   const showSuggestions = !menu && dismissed !== tokenKey && choices.length > 0;
   useEffect(() => {
     setSelected(0); setCandidates([]);
@@ -105,6 +110,7 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
   }, [tokenKind, tokenQuery, channelId, owner, reason]);
   function choose(index: number) {
     const item = choices[index]; if (!item) return;
+    const mapped = (item as { token?: string }).token; if (mapped) picked.current.set(item.value.trim(), mapped);
     const from = token ? caret-tokenQuery.length-1 : 0;
     selectRange(body.slice(0,from)+item.value+body.slice(caret),from+item.value.length); setDismissed('');
   }
@@ -112,6 +118,7 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
     if (reason || !ready || busy || uploading || (!body.trim() && !files.length)) return;
     setBusy(true); setError(''); setNotice(''); setMenu(null);
     const sent = body;
+    const out = encode(body);
     try {
       const match = secret ? null : /^\/(poll|remind|status|shrug)(?:\s|$)/i.exec(body);
       if (match) {
@@ -128,7 +135,7 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
         if (files.length) throw new Error('Commands cannot include attachments.');
         const answer = await apiData<{ ephemeral: boolean; text?: string; botName?: string }>(`/api/channels/${channelId}/commands/run`, { method: 'POST', body: JSON.stringify({ command: name, text, parentId }) });
         if (answer.ephemeral) { clear(sent); setNotice(`${answer.botName}: ${answer.text} (only visible to you)`); return; }
-      } else if (await onSend(body,files,viewOnce&&files.length?{viewOnce:true}:undefined) === false) throw new Error('Message was not sent. Retry the message.');
+      } else if (await onSend(out,files,viewOnce&&files.length?{viewOnce:true}:undefined) === false) throw new Error('Message was not sent. Retry the message.');
       clear(sent);
     } catch (cause) { setError(requestError(cause)); } finally { setBusy(false); }
   }
@@ -137,7 +144,7 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
     if (reason || busy || uploading || (!body.trim() && !files.length)) return;
     if (/^\/(poll|remind|status|shrug)(?:\s|$)/i.test(body) || custom.some(item => body.toLowerCase().startsWith(`/${item.name}`))) { setError('Use Send for slash commands. Send later schedules ordinary messages.'); return; }
     setBusy(true); setError('');
-    try { await apiData(`/api/channels/${channelId}/scheduled`,{method:'POST',body:JSON.stringify({body,parentId,attachmentIds:files.map(file=>file.id),sendAt:date.toISOString()})}); clear(); setNotice('Message scheduled. Find it under Drafts & scheduled.'); setMenu(null); }
+    try { await apiData(`/api/channels/${channelId}/scheduled`,{method:'POST',body:JSON.stringify({body:encode(body),parentId,attachmentIds:files.map(file=>file.id),sendAt:date.toISOString()})}); clear(); setNotice('Message scheduled. Find it under Drafts & scheduled.'); setMenu(null); }
     catch (cause) { setError(requestError(cause)); } finally { setBusy(false); }
   }
   const disabled = !!reason || busy || !ready;
@@ -149,7 +156,9 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
     {secret && <p className="flex items-center gap-1.5 border-b border-white/5 px-4 py-1.5 text-xs text-white/60"><Icon name="lock" size={13} />End-to-end encrypted. Text only.</p>}
     {!secret && <div role="toolbar" aria-label="Message formatting" className="flex flex-wrap items-center gap-0.5 border-b border-white/5 px-2 py-1">{formats.map((item,index)=><button key={item.id} type="button" title={`${item.label} (${item.shortcut})`} aria-label={item.label} disabled={disabled} className={`${tool} ${index>3?'hidden sm:flex':''}`} onMouseDown={event=>event.preventDefault()} onClick={()=>format(item.id)}>{item.mark}</button>)}<button type="button" title="Link (Ctrl/Cmd+K)" aria-label="Link" disabled={disabled} className={tool} onClick={()=>{setMenu(menu==='link'?null:'link');setUrl('');}}>↗</button><button type="button" title="More formatting" aria-label="More formatting" aria-expanded={menu==='more'} disabled={disabled} className={`${tool} sm:hidden`} onClick={()=>setMenu(menu==='more'?null:'more')}>…</button><button type="button" title="Formatting help" aria-label="Formatting help" className={`${tool} ml-auto`} onClick={()=>setMenu(menu==='help'?null:'help')}>?</button></div>}
     {allowViewOnce&&files.some(file=>file.kind==='image'||file.kind==='video')&&<label className="flex cursor-pointer items-start gap-2 border-b border-white/5 px-4 py-2 text-sm"><input type="checkbox" className="mt-1 accent-[var(--brand)]" checked={viewOnce} onChange={event=>setViewOnce(event.target.checked)} /><span><span className="font-medium">View once</span><span className="block text-xs text-white/60">Each person can open it one time. It can&apos;t be saved or forwarded, and it won&apos;t appear in Files or search.</span></span></label>}
-    <textarea ref={box} aria-label="Message" role={showSuggestions?'combobox':undefined} aria-expanded={showSuggestions} aria-controls={showSuggestions?'composer-options':undefined} aria-activedescendant={showSuggestions?`composer-option-${selected}`:undefined} placeholder={reason||placeholder} disabled={disabled} value={body} maxLength={4000} rows={1} className="block max-h-48 min-h-11 w-full resize-none bg-transparent px-4 pt-3 text-[15px] outline-none placeholder:text-white/50 disabled:opacity-60 [field-sizing:content]" onChange={event=>change(event.target.value,event.target.selectionStart)} onSelect={event=>{selection.current={start:event.currentTarget.selectionStart,end:event.currentTarget.selectionEnd};setCaret(event.currentTarget.selectionStart);}} onBlur={stopTyping} onKeyDown={event=>{
+    <div className="relative">
+    <div ref={mirror} aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap px-4 pt-3 text-[15px] leading-6 text-white/90 [overflow-wrap:anywhere]">{highlight(body)}</div>
+    <textarea ref={box} aria-label="Message" role={showSuggestions?'combobox':undefined} aria-expanded={showSuggestions} aria-controls={showSuggestions?'composer-options':undefined} aria-activedescendant={showSuggestions?`composer-option-${selected}`:undefined} placeholder={reason||placeholder} disabled={disabled} value={body} maxLength={4000} rows={1} className="relative block max-h-48 min-h-11 w-full resize-none bg-transparent px-4 pt-3 text-[15px] leading-6 text-transparent caret-[var(--fg)] outline-none [overflow-wrap:anywhere] placeholder:text-white/50 selection:bg-brand/25 selection:text-transparent disabled:opacity-60 [field-sizing:content]" onScroll={event=>{if(mirror.current)mirror.current.scrollTop=event.currentTarget.scrollTop;}} onChange={event=>change(event.target.value,event.target.selectionStart)} onSelect={event=>{selection.current={start:event.currentTarget.selectionStart,end:event.currentTarget.selectionEnd};setCaret(event.currentTarget.selectionStart);}} onBlur={stopTyping} onKeyDown={event=>{
       if(event.nativeEvent.isComposing)return;
       if(event.key==='Escape'){event.preventDefault();event.stopPropagation();setMenu(null);setDismissed(tokenKey);return;}
       if(showSuggestions&&['ArrowDown','ArrowUp','Enter','Tab'].includes(event.key)){event.preventDefault();if(event.key==='ArrowDown')setSelected(index=>(index+1)%choices.length);else if(event.key==='ArrowUp')setSelected(index=>(index+choices.length-1)%choices.length);else choose(Math.min(selected,choices.length-1));return;}
@@ -157,9 +166,10 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
       if(event.key==='ArrowUp'&&!body){event.preventDefault();onEditLast?.();}
       if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();void submit();}
     }}/>
+    </div>
     <div className="flex flex-wrap items-center gap-1 px-2 pb-2 pt-1">{!secret&&<button type="button" className={tool} disabled={disabled} aria-label="Attach files" title="Attach files" onClick={()=>uploads.current?.open()}><Icon name="plus" /></button>}{!secret&&<RewriteButton body={body} disabled={disabled||uploading} onUse={text=>selectRange(text,text.length)} />}<button type="button" className={tool} disabled={disabled} aria-label="Insert emoji" title="Insert emoji" aria-expanded={menu==='emoji'} onClick={()=>setMenu(menu==='emoji'?null:'emoji')}>☺</button>{!secret&&<button type="button" className={tool} disabled={disabled} aria-label="Mention someone" title="Mention someone" onClick={()=>insert('@')}><Icon name="at" /></button>}<span className="hidden min-w-0 flex-1 truncate text-xs text-white/60 sm:inline">{reason||(uploading?'Uploading…':`${body.length}/4000 · Enter to send`)}</span><button type="submit" title="Send" aria-label="Send" disabled={disabled||uploading||(!body.trim()&&!files.length)} className="ml-auto flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-white disabled:opacity-40"><Icon name="send" size={17} /></button>{!secret&&<button type="button" className={tool} title="Send later" aria-label="Send later" disabled={disabled||uploading||(!body.trim()&&!files.length)} aria-expanded={menu==='later'} onClick={()=>setMenu(menu==='later'?null:'later')}>⌄</button>}</div>
     {!reason && !secret && <div className="px-3 pb-2"><VoiceRecorder disabled={disabled||uploading||files.length>0} onError={setError} onReady={async(file,durationMs,waveform)=>{
-      setBusy(true);setError('');try{const form=new FormData();form.append('file',file);form.append('kind','audio');form.append('durationMs',String(durationMs));form.append('waveform',JSON.stringify(waveform));const attachment=await responseData<Attachment>(await apiFetch(`/api/channels/${channelId}/uploads`,{method:'POST',body:form}));if(await onSend(body,[attachment],{kind:'voice'})===false)throw new Error('Voice message was not sent. Retry the message.');clear();}catch(cause){setError(requestError(cause));}finally{setBusy(false);}
+      setBusy(true);setError('');try{const form=new FormData();form.append('file',file);form.append('kind','audio');form.append('durationMs',String(durationMs));form.append('waveform',JSON.stringify(waveform));const attachment=await responseData<Attachment>(await apiFetch(`/api/channels/${channelId}/uploads`,{method:'POST',body:form}));if(await onSend(encode(body),[attachment],{kind:'voice'})===false)throw new Error('Voice message was not sent. Retry the message.');clear();}catch(cause){setError(requestError(cause));}finally{setBusy(false);}
     }}/></div>}
     {error&&<p role="alert" className="px-4 pb-2 text-sm text-rose-500">{error}</p>}{notice&&<p role="status" className="px-4 pb-2 text-sm text-brand">{notice}</p>}
     {menu==='emoji'&&<div className="absolute bottom-full left-2 z-30 mb-2"><EmojiPicker onSelect={value=>{insert(value);setMenu(null);}} onClose={()=>{setMenu(null);box.current?.focus();}} /></div>}

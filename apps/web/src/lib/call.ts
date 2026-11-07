@@ -87,7 +87,8 @@ class CallManager {
       const peer = this.peers.get(data.sid);
       if (!peer || data.channelId !== this.state.channelId) return;
       this.peers.set(data.sid, { ...peer, muted: data.muted, camera: data.camera, screen: data.screen });
-      this.emit();
+      // Someone started sharing their screen: show it right away instead of waiting for a click.
+      this.emit(data.screen && !peer.screen ? { stageOpen: true } : {});
     });
     socket.on('call:signal', (data: { channelId: string; from: string; data: Signal }) => {
       if (data.channelId === this.state.channelId) void this.onSignal(data.from, data.data);
@@ -200,8 +201,13 @@ class CallManager {
         track.onended = () => { if (this.state.screen) void this.toggleScreen(); };
         this.setVideo(track);
         this.emit({ screen: true, error: '' });
-      } catch {
-        return; // the user cancelled the screen picker
+      } catch (cause) {
+        // Closing the picker is not an error; anything else (unsupported, blocked) is explained.
+        if (!(cause instanceof DOMException && cause.name === 'NotAllowedError' && /cancel|dismiss|denied by user/i.test(cause.message)))
+          this.emit({ error: cause instanceof DOMException && cause.name === 'NotAllowedError'
+            ? 'Screen sharing was blocked. Allow it when your browser asks, or check its screen-recording permission.'
+            : 'Screen sharing is not available in this browser. Try Chrome, Edge or Firefox on a computer.' });
+        return;
       }
     }
     this.sendState();
