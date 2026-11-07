@@ -29,7 +29,7 @@ async def connected(url, account=None):
         "thread:activity", "thread:read",
         "call:peer-joined", "call:peer-left", "call:signal", "call:state", "call:incoming",
         "call:participants", "call:removed", "doc:updated", "task:updated",
-        "notification:new", "notification:count",
+        "notification:new", "notification:count", "command:response",
     )}
     for name, queue in queues.items():
         client.on(name, queue.put_nowait)

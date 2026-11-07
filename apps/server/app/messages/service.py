@@ -278,6 +278,7 @@ async def serialize(
                 channel_id=message.channel_id,
                 parent_id=message.parent_id,
                 author=AuthorOut.model_validate(author),
+                bot_name=message.bot_name,
                 body=None if deleted else message.body,
                 expires_at=message.expires_at,
                 ciphertext=None if deleted else message.ciphertext,
@@ -396,16 +397,26 @@ async def _check_secret(session: AsyncSession, channel: Channel, user: User, dat
         raise HTTPException(422, "The other person has no device that can read secret messages yet")
 
 
-async def send(session: AsyncSession, user: User, data: SendIn, *, commit=True):
-    """Returns (message, inserted, updated_parent). Retries with the same clientMsgId are no-ops."""
-    channel = await writable(session, data.channelId, user.id)
+async def send(
+    session: AsyncSession, user: User, data: SendIn, *, commit=True, trusted=False, bot_name=None
+):
+    """Returns (message, inserted, updated_parent). Retries with the same clientMsgId are no-ops.
+
+    `trusted` skips the member checks and the per-person rate limit. Only app code that has
+    already checked access itself (webhooks, bots, workflows) may pass it."""
+    if trusted:
+        channel = await session.get(Channel, data.channelId)
+        if channel is None or channel.type not in (ChannelType.text, ChannelType.dm) or channel.encrypted:
+            raise HTTPException(404, "Channel not found")
+    else:
+        channel = await writable(session, data.channelId, user.id)
     await _check_secret(session, channel, user, data)
     existing_query = select(Message).where(
         Message.author_id == user.id, Message.client_msg_id == data.clientMsgId
     )
     existing = await session.scalar(existing_query)
     if existing is None:
-        if not user.is_system:
+        if not user.is_system and not trusted:
             await _check_rate(user.id)
         parent = None
         if data.parentId is not None:
@@ -422,6 +433,7 @@ async def send(session: AsyncSession, user: User, data: SendIn, *, commit=True):
             insert(Message).values(
                 channel_id=data.channelId, author_id=user.id, parent_id=data.parentId,
                 body=data.body, kind=data.kind, client_msg_id=data.clientMsgId,
+                bot_name=bot_name,
                 expires_at=expires_at,
                 ciphertext=data.ciphertext.model_dump() if data.ciphertext else None,
             ).on_conflict_do_nothing(index_elements=["author_id", "client_msg_id"])

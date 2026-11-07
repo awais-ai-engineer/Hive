@@ -10,6 +10,8 @@ from app import scheduler
 from app.ai.router import me_router as ai_me_router
 from app.ai.router import router as ai_router
 from app.api import health
+from app.apps.router import public_router as apps_public_router
+from app.apps.router import router as apps_router
 from app.auth.router import router as auth_router
 from app.calls.router import router as calls_router
 from app.channels.router import router as channels_router
@@ -44,6 +46,7 @@ from app.storage.base import StorageError
 from app.tasks.router import router as tasks_router
 from app.uploads.router import router as uploads_router
 from app.users.router import router as users_router
+from app.workflows.router import router as workflows_router
 
 logging.basicConfig(level=logging.INFO)
 
@@ -99,6 +102,9 @@ api.include_router(files_router, prefix="/api")
 api.include_router(saved_router, prefix="/api")
 api.include_router(notifications_router, prefix="/api")
 api.include_router(search_router, prefix="/api")
+api.include_router(apps_router, prefix="/api")
+api.include_router(apps_public_router, prefix="/api")
+api.include_router(workflows_router, prefix="/api")
 api.include_router(disappearing_router, prefix="/api")
 api.include_router(secret_router, prefix="/api")
 api.include_router(push_router, prefix="/api")

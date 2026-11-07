@@ -108,12 +108,17 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
   return <article data-message-id={message.id} className={`group relative flex gap-3 rounded-xl px-2 py-1 transition hover:bg-[var(--surface-2)] ${mentioned?'border-s-2 border-brand bg-brand-soft':''} ${grouped ? '' : 'mt-3 pt-2'}`}>
     <div className="w-10 shrink-0">
       {grouped ? <time dateTime={message.created_at} className="hidden pt-1 text-right text-[10px] text-white/35 group-hover:block">{time}</time>
-        : <Link href={`/u/${message.author.username}`} aria-label={`${message.author.username}'s profile`}><Avatar name={message.author.username} src={message.author.avatar_url} size={40} /></Link>}
+        : message.author.is_bot
+          ? <span aria-hidden className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-soft text-xl">{message.author.bot_emoji ?? '🤖'}</span>
+          : <Link href={`/u/${message.author.username}`} aria-label={`${message.author.username}'s profile`}><Avatar name={message.author.username} src={message.author.avatar_url} size={40} /></Link>}
     </div>
     <div className="min-w-0 flex-1">
     {!grouped && <div className="flex items-baseline gap-2">
-      <Link href={`/u/${message.author.username}`} className="truncate font-semibold hover:underline">{message.author.username}</Link>
-      <StatusMark person={message.author} />
+      {message.author.is_bot
+        ? <><span className="truncate font-semibold">{message.bot_name ?? message.author.display_name ?? message.author.username}</span>
+            <span className="shrink-0 rounded bg-brand-soft px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-brand" title={message.author.bot_kind === 'webhook' ? 'Posted by an app through a webhook' : 'Posted by a bot'}>{message.author.bot_kind === 'webhook' ? 'APP' : 'BOT'}</span></>
+        : <><Link href={`/u/${message.author.username}`} className="truncate font-semibold hover:underline">{message.author.username}</Link>
+            <StatusMark person={message.author} /></>}
       <time dateTime={message.created_at} title={new Date(message.created_at).toLocaleString()} className="shrink-0 text-xs text-white/40">
         {time}
       </time>

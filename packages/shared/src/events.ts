@@ -45,6 +45,7 @@ export const SocketEvents = {
   PollClose: 'poll:close',
   PollUpdated: 'poll:updated',
   ReminderDue: 'reminder:due',
+  CommandResponse: 'command:response',
   ScheduledFailed: 'scheduled:failed',
   Sync: 'sync',
   PostNew: 'post:new',

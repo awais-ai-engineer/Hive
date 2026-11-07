@@ -11,6 +11,7 @@ import { RulesEditor } from '../../../../components/communities/rules';
 import { useAuth } from '../../../../lib/auth';
 import { apiData, requestError, spaceKindLabel, type Channel, type Space } from '../../../../lib/spaces';
 import { DomainInput } from '../../../../components/spaces/domain-input';
+import { SettingsTabs } from '../../../../components/apps/parts';
 
 type Invite = { id: string; code: string; max_uses: number | null; uses: number;
   expires_at: string | null; revoked_at: string | null; created_at: string };
@@ -147,6 +148,7 @@ export default function SettingsPage() {
   return <main className="mx-auto max-w-3xl space-y-10 px-4 py-10">
     <div><Link href={`/s/${slug}`} className="text-sm text-amber-400">← {space.name}</Link>
       <h1 className="mt-2 text-3xl font-bold">Space settings</h1></div>
+    <SettingsTabs slug={slug} active="general" />
     {error && <p role="alert" className="text-rose-400">{error}</p>}
     <section className="card p-5"><h2 className="mb-2 flex items-center gap-2 text-xl font-semibold"><SpaceKind space={space} size={18} />Privacy</h2>
       <p className="text-white/70"><strong>{spaceKindLabel(space)}.</strong> {space.type === 'workspace'

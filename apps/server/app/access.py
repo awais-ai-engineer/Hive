@@ -122,4 +122,4 @@ def not_blocked_author(user_id: str, author_column):
 
 def visible_person(user_id: str):
     """Condition on `User` for people search: no blocks either way, no system accounts."""
-    return and_(User.is_system.is_(False), not_blocked_author(user_id, User.id))
+    return and_(User.is_system.is_(False), User.is_bot.is_(False), not_blocked_author(user_id, User.id))

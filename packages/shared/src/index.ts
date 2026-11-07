@@ -11,4 +11,5 @@ export * from './schemas/comments';
 export * from './schemas/ai';
 export * from './schemas/games';
 export * from './schemas/notifications';
+export * from './schemas/apps';
 export * from './secret';

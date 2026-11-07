@@ -175,7 +175,10 @@ def public_message(message):
     return {**message, "channelLinks": [], "poll": {**message["poll"], "myVote": None} if message.get("poll") else None}
 
 
-async def broadcast_message(session, user, message, parent=None):
+async def broadcast_message(session, user, message, parent=None, source=None):
+    """`source` marks messages written by apps ("app") or workflows ("workflow"); the latter never
+    start workflows."""
+    from app.apps.events import after_message
     from app.messages.composer import notify_mentions
     await notify_mentions(session, message)
     await notifications.notify_message(session, message, user, parent)
@@ -200,6 +203,8 @@ async def broadcast_message(session, user, message, parent=None):
                 await sio.emit("dm:activity", activity, room=f"user:{participant}")
         else:
             await emit_channel_activity(session, channel, activity)
+    await after_message(message, source)
+
 
 async def emit_space_activity(session, channel: Channel) -> None:
     """Refresh personal totals without requiring an open space or thread."""
@@ -254,6 +259,10 @@ async def react(sid, data, session, user):
     await notifications.notify_reaction(
         session, user, data.messageId, mine is not None and user.id in mine["user_ids"]
     )
+    if mine is not None and user.id in mine["user_ids"]:
+        from app.workflows import engine
+
+        await engine.on_reaction(update["channelId"], data.messageId, user.id, data.emoji)
     return update
 
 

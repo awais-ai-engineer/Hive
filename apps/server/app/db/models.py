@@ -127,6 +127,10 @@ class User(Base):
         Enum(DmPolicy, name="dm_policy"), default=DmPolicy.everyone, server_default="everyone"
     )
     is_system: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # Bots and webhook identities: they post through the apps API and can never log in.
+    is_bot: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    bot_kind: Mapped[str | None] = mapped_column(String(8))
+    bot_emoji: Mapped[str | None] = mapped_column(String(16))
     appear_offline: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # The status disappears by itself after this moment (null: it stays until changed).
     status_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -370,6 +374,8 @@ class Message(Base):
     )
     # "huddle" and "system" mark lines the app writes itself (a huddle ended, a setting changed).
     kind: Mapped[str] = mapped_column(String(16), default="text", server_default="text")
+    # Incoming webhooks may post under another display name.
+    bot_name: Mapped[str | None] = mapped_column(String(80))
     # Huddle lines only: when the huddle began, so its chat can be looked up afterwards.
     huddle_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     reply_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
@@ -1041,3 +1047,138 @@ class NotificationPref(Base):
     )
     type: Mapped[str] = mapped_column(String(24), primary_key=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+
+class AppWebhook(Base):
+    """An incoming webhook: a secret URL that posts into one channel as its own app identity."""
+
+    __tablename__ = "app_webhooks"
+    __table_args__ = (Index("ix_app_webhooks_space_id", "space_id"),)
+
+    id: Mapped[str] = pk()
+    space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"))
+    channel_id: Mapped[str] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"))
+    bot_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(80))
+    emoji: Mapped[str] = mapped_column(String(16), default="🔔", server_default="🔔")
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    token_hint: Mapped[str] = mapped_column(String(8), default="", server_default="")
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = created_at()
+
+
+class AppBot(Base):
+    """A bot with an API token. It acts only in the channels listed in app_bot_channels."""
+
+    __tablename__ = "app_bots"
+    __table_args__ = (Index("ix_app_bots_space_id", "space_id"),)
+
+    id: Mapped[str] = pk()
+    space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"))
+    bot_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    name: Mapped[str] = mapped_column(String(80))
+    description: Mapped[str] = mapped_column(String(300), default="", server_default="")
+    emoji: Mapped[str] = mapped_column(String(16), default="🤖", server_default="🤖")
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    token_hint: Mapped[str] = mapped_column(String(8), default="", server_default="")
+    webhook_url: Mapped[str | None] = mapped_column(String(2000))
+    # Used to sign outgoing requests, so it has to be stored in a readable form.
+    signing_secret: Mapped[str] = mapped_column(String(80))
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = created_at()
+
+
+class AppBotChannel(Base):
+    __tablename__ = "app_bot_channels"
+
+    bot_id: Mapped[str] = mapped_column(ForeignKey("app_bots.id", ondelete="CASCADE"), primary_key=True)
+    channel_id: Mapped[str] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"), primary_key=True)
+    added_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    added_at: Mapped[datetime] = created_at()
+
+
+class AppCommand(Base):
+    """A custom slash command of a space, answered by one of its bots."""
+
+    __tablename__ = "app_commands"
+    __table_args__ = (UniqueConstraint("space_id", "name", name="uq_app_commands_name"),)
+
+    id: Mapped[str] = pk()
+    space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"))
+    bot_id: Mapped[str] = mapped_column(ForeignKey("app_bots.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(32))
+    description: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    usage: Mapped[str] = mapped_column(String(120), default="", server_default="")
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = created_at()
+
+
+class AppDelivery(Base):
+    """Outgoing event for a bot's URL; the scheduler delivers it and retries failures."""
+
+    __tablename__ = "app_deliveries"
+    __table_args__ = (
+        CheckConstraint("status IN ('pending', 'ok', 'failed')", name="ck_app_deliveries_status"),
+        Index("ix_app_deliveries_due", "status", "next_attempt_at"),
+        Index("ix_app_deliveries_bot", "bot_id", "id"),
+    )
+
+    id: Mapped[str] = pk()
+    bot_id: Mapped[str] = mapped_column(ForeignKey("app_bots.id", ondelete="CASCADE"))
+    event: Mapped[str] = mapped_column(String(32))
+    payload: Mapped[dict] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(8), default="pending", server_default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    next_attempt_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_error: Mapped[str | None] = mapped_column(String(300))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = created_at()
+
+
+class Workflow(Base):
+    """A no-code rule: when the trigger happens, run the action."""
+
+    __tablename__ = "workflows"
+    __table_args__ = (
+        CheckConstraint(
+            "trigger_type IN ('member_joined', 'message_keyword', 'reaction_added', 'schedule')",
+            name="ck_workflows_trigger",
+        ),
+        CheckConstraint(
+            "action_type IN ('post_message', 'create_todo', 'add_to_channel')", name="ck_workflows_action"
+        ),
+        Index("ix_workflows_space_id", "space_id"),
+        Index("ix_workflows_next_run", "next_run_at"),
+    )
+
+    id: Mapped[str] = pk()
+    space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(80))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    trigger_type: Mapped[str] = mapped_column(String(20))
+    trigger_config: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    action_type: Mapped[str] = mapped_column(String(20))
+    action_config: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    # Schedule triggers only: the next moment this rule is due.
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = created_at()
+
+
+class WorkflowRun(Base):
+    __tablename__ = "workflow_runs"
+    __table_args__ = (
+        CheckConstraint("status IN ('ok', 'error', 'skipped')", name="ck_workflow_runs_status"),
+        Index("ix_workflow_runs_workflow", "workflow_id", "id"),
+    )
+
+    id: Mapped[str] = pk()
+    workflow_id: Mapped[str] = mapped_column(ForeignKey("workflows.id", ondelete="CASCADE"))
+    status: Mapped[str] = mapped_column(String(8))
+    error: Mapped[str | None] = mapped_column(String(300))
+    detail: Mapped[str | None] = mapped_column(String(300))
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = created_at()

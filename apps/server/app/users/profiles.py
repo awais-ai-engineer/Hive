@@ -22,7 +22,7 @@ async def public_profile(
     - online: false for people who appear offline, and for a viewer the person has blocked.
     """
     user = await session.scalar(select(User).where(User.username == username))
-    if user is None:
+    if user is None or user.is_bot:
         raise HTTPException(404, "User not found")
     spaces: list[SharedSpace] = []
     blocked_by_me = blocked_me = False

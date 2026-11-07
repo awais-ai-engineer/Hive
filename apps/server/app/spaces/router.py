@@ -24,6 +24,7 @@ from app.spaces.service import (
     space_out,
     update_space,
 )
+from app.workflows import engine
 
 router = APIRouter(prefix="/spaces", tags=["spaces"])
 Session = Annotated[AsyncSession, Depends(get_session)]
@@ -97,7 +98,9 @@ async def join_space(slug: str, session: Session, user: CurrentUser, data: Annot
     session.add(member)
     await session.commit()
     await session.refresh(member)
-    return await space_out(session, space, member)
+    out = await space_out(session, space, member)
+    await engine.on_member_joined(space.id, user.id)
+    return out
 
 
 @router.get("/{slug}/rules")

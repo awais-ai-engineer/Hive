@@ -53,7 +53,7 @@ async def search_users(session: AsyncSession, me: User, query: str) -> list[User
         return []
     rows = await session.scalars(
         select(User)
-        .where(User.id != me.id, User.username.ilike(f"{pattern}%", escape="\\"), shares_space(me.id),
+        .where(User.id != me.id, User.is_bot.is_(False), User.username.ilike(f"{pattern}%", escape="\\"), shares_space(me.id),
                 not_blocked_with(me.id))
         .order_by(func.length(User.username), User.username)
         .limit(10)
