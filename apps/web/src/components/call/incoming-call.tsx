@@ -31,7 +31,7 @@ export function IncomingCall({ titleFor, onAccept }: { titleFor: (channelId: str
     <div className="mt-3 flex justify-end gap-2 text-sm">
       <button type="button" onClick={() => setRing(null)} className="btn-ghost">Decline</button>
       <button type="button" autoFocus className="auth-button !py-1.5 !text-sm"
-        onClick={() => { const { channelId } = ring; setRing(null); onAccept?.(channelId); void calls.join(channelId, titleFor(channelId, ring.from.username)); }}>Join</button>
+        onClick={() => { const { channelId } = ring; setRing(null); onAccept?.(channelId); void calls.join(channelId, titleFor(channelId, ring.from.username)).then(() => calls.setStageOpen(true)); }}>Join</button>
     </div>
   </div>;
 }

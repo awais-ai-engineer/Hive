@@ -22,15 +22,17 @@ export function HuddleButton({ channelId, title, ring = false }: { channelId: st
 
   async function toggle() {
     setError('');
-    if (inThis) { await calls.leave(); return; }
+    // Already in this huddle: bring the huddle window back to the centre of the screen.
+    if (inThis) { calls.setStageOpen(true); return; }
     const alone = count === 0;
     await calls.join(channelId, title);
     const state = calls.getState();
     if (state.status === 'error') { setError(state.error); return; }
+    calls.setStageOpen(true);
     if (ring && alone) await calls.ring(channelId).catch(cause => setError(requestError(cause)));
   }
 
-  const label = inThis ? 'Leave huddle' : count ? `Join the huddle with ${huddle.users.map(user => user.username).join(', ')}` : 'Start a huddle';
+  const label = inThis ? 'Open the huddle window' : count ? `Join the huddle with ${huddle.users.map(user => user.username).join(', ')}` : 'Start a huddle';
   return <div className="relative shrink-0">
     <button type="button" onClick={() => void toggle()} aria-label={label} title={label} aria-pressed={inThis}
       className={count || inThis
