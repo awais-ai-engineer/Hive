@@ -20,7 +20,8 @@ from app.core.config import settings
 from app.db.models import Base
 
 # Database URL comes from .env, not alembic.ini.
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# "%" must be doubled for the ini-style config (URL-encoded passwords contain it).
+config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 target_metadata = Base.metadata
 
 
