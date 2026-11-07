@@ -31,7 +31,7 @@ export function CallStage() {
   const count = call.peers.length + 1;
   const columns = count <= 2 ? 'grid-cols-1 min-[420px]:grid-cols-2' : 'grid-cols-2';
   return <section aria-label={`Huddle in ${call.title}`}
-    className="card on-surface animate-in fixed inset-x-3 bottom-3 z-40 max-h-[70dvh] overflow-y-auto p-3 sm:left-auto sm:right-4 sm:w-[420px]">
+    className={`card on-surface animate-in fixed inset-x-3 bottom-3 z-40 overflow-y-auto p-3 sm:left-auto sm:right-4 ${sharing || call.screen ? 'max-h-[85dvh] sm:w-[min(920px,calc(100vw-2rem))]' : 'max-h-[70dvh] sm:w-[420px]'}`}>
     <div className="mb-2 flex items-center justify-between gap-2">
       <h2 className="flex min-w-0 items-center gap-1.5 text-sm font-semibold"><Icon name="headphones" size={16} className="shrink-0 text-brand" /><span className="truncate">{call.title}</span></h2>
       <button type="button" onClick={() => calls.setStageOpen(false)} aria-label="Hide participants" title="Hide participants (Esc)"
