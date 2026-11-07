@@ -12,6 +12,8 @@ import { HuddleButton } from '../call/huddle-button';
 import { PopupMenu } from './popup-menu';
 import { Avatar } from '../ui/avatar';
 import { Icon, type IconName } from '../ui/icons';
+import { CatchUp } from '../ai/catch-up';
+import { TranslateAllToggle } from '../ai/translate';
 
 export type ChatTab = 'messages' | 'posts' | 'docs' | 'todos' | 'files';
 
@@ -106,12 +108,13 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
         <Tab active={tab === 'files'} icon="folder" label="Files" onClick={() => onTab('files')} />
       </div>}
     </header>
+    <div className="mb-3 flex flex-wrap items-start gap-x-4 gap-y-2"><CatchUp channelId={conversation.id} /><TranslateAllToggle channelId={conversation.id} /></div>
     {away && <p role="status" className="-mt-1 mb-3 rounded-xl bg-brand-soft px-3 py-2 text-sm">
       🌴 <strong>{partner?.username}</strong> is out of office until {dayText(away)}. They may reply late.</p>}</>;
   }
 
   if (channel && space) {
-    return <header className={shell}>
+    return <><header className={shell}>
       <div className="flex items-start gap-3">
         {menu}
         <div className="min-w-0 flex-1">
@@ -136,7 +139,8 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
         <Tab active={tab === 'todos'} icon="checkSquare" label="To-dos" onClick={() => onTab('todos')} />
         <Tab active={tab === 'files'} icon="folder" label="Files" onClick={() => onTab('files')} />
       </div>}
-    </header>;
+    </header>
+    {channel.type !== 'voice' && <div className="mb-3 flex flex-wrap items-start gap-x-4 gap-y-2"><CatchUp channelId={channel.id} /><TranslateAllToggle channelId={channel.id} /></div>}</>;
   }
 
   return <header className={`${shell} flex items-center gap-3 pb-3`}>

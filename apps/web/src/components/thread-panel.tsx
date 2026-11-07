@@ -5,6 +5,7 @@ import { socket } from '../lib/socket';
 import { useMessageList } from '../lib/use-channel-messages';
 import { Composer } from './composer';
 import { MessageItem } from './message-item';
+import { CatchUp } from './ai/catch-up';
 
 type Props = {
   channelId: string;
@@ -48,6 +49,7 @@ export function ThreadPanel({ channelId, channels, parentId, userId, reason, can
       <h2 className="font-semibold">Thread</h2>
       <button onClick={onClose} aria-label="Close thread" className="text-xl text-white/60 hover:text-white">×</button>
     </div>
+    {thread.ready && thread.messages.length > 0 && <CatchUp channelId={channelId} threadId={parentId} className="mb-2" />}
     {(error || thread.error) && <p role="alert" className="mb-2 text-sm text-rose-400">{error || thread.error}</p>}
     <div ref={list} className="min-h-0 flex-1 overflow-y-auto">
       {thread.parent && <div className="border-b border-white/10 pb-3">

@@ -18,10 +18,12 @@ import socket
 
 import asyncpg
 import httpx
+import pytest
 import pytest_asyncio
 import uvicorn
 from sqlalchemy import text
 
+from app.core.config import settings
 from app.db.models import Base
 from app.db.session import engine, redis
 from app.main import api, app
@@ -51,10 +53,17 @@ async def database():
 async def clean_state(database):
     async with engine.begin() as connection:
         await connection.execute(text("TRUNCATE users CASCADE"))
-    keys = [key async for key in redis.scan_iter("rl:*")]
+    keys = [key async for key in redis.scan_iter("rl:*")] + [key async for key in redis.scan_iter("ai:*")]
     if keys:
         await redis.delete(*keys)
     yield
+
+
+@pytest.fixture(autouse=True)
+def ai_off(monkeypatch):
+    """Tests never reach a real model: AI is off unless a test installs a fake provider."""
+    monkeypatch.setattr(settings, "ai_provider", "disabled")
+    monkeypatch.setattr(settings, "anthropic_api_key", "")
 
 
 @pytest_asyncio.fixture

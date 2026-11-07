@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app import scheduler
+from app.ai.router import me_router as ai_me_router
+from app.ai.router import router as ai_router
 from app.api import health
 from app.auth.router import router as auth_router
 from app.calls.router import router as calls_router
@@ -20,6 +22,8 @@ from app.dms.router import router as dms_router
 from app.docs.router import router as docs_router
 from app.explore.router import router as explore_router
 from app.files.router import router as files_router
+from app.games.router import hub_router as games_hub_router
+from app.games.router import router as games_router
 from app.invites.router import router as invites_router
 from app.linkpreview.router import router as linkpreview_router
 from app.messages.router import router as messages_router
@@ -80,6 +84,10 @@ api.include_router(docs_router, prefix="/api")
 api.include_router(tasks_router, prefix="/api")
 api.include_router(composer_router, prefix="/api")
 api.include_router(linkpreview_router, prefix="/api")
+api.include_router(games_hub_router, prefix="/api")
+api.include_router(games_router, prefix="/api")
+api.include_router(ai_router, prefix="/api")
+api.include_router(ai_me_router, prefix="/api")
 api.include_router(files_router, prefix="/api")
 api.include_router(saved_router, prefix="/api")
 api.include_router(notifications_router, prefix="/api")

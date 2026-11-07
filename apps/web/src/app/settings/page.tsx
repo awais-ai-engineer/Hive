@@ -12,6 +12,7 @@ import { TYPE_LABELS } from '../../lib/notifications';
 import { notificationTypes, type NotificationType } from '@hive/shared';
 import { useAuth } from '../../lib/auth';
 import { apiData, requestError } from '../../lib/spaces';
+import { useAiStatus } from '../../lib/ai';
 
 type Section = 'profile' | 'notifications' | 'privacy' | 'blocked' | 'interests';
 const sections: [Section, string][] = [['profile', 'Profile'], ['notifications', 'Notifications'], ['privacy', 'Privacy'], ['blocked', 'Blocked people'], ['interests', 'Interests']];
@@ -175,6 +176,30 @@ function PrivacyCard({ user, updateUser }: { user: User; updateUser: (user: User
   </div>;
 }
 
+function TranslateCard({ user, updateUser }: { user: User; updateUser: (user: User) => void }) {
+  const ai = useAiStatus();
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+  if (!ai) return null;
+  async function change(value: string) {
+    setError(''); setSaved(false);
+    try { updateUser(await patchMe({ translate_language: value || null })); setSaved(true); }
+    catch (cause) { setError(requestError(cause)); }
+  }
+  return <section className="card mt-5 p-5 sm:p-6">
+    <h2 className="text-lg font-bold">Translation</h2>
+    <label className="mt-3 block text-sm font-medium">Translate messages into
+      <select className="auth-input" value={user.translate_language ?? ''} onChange={event => void change(event.target.value)}>
+        <option value="">Don&apos;t offer translation</option>
+        {ai.languages.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}
+      </select>
+    </label>
+    <p className="mt-2 text-sm text-white/60">When this is set, messages from other people show a small Translate link. Only the text you ask to translate is sent to the AI service.</p>
+    {error && <p role="alert" className="mt-2 text-sm text-rose-500">{error}</p>}
+    <Saved show={saved} />
+  </section>;
+}
+
 function NotificationsCard() {
   const [prefs, setPrefs] = useState<Record<string, boolean> | null>(null);
   const [error, setError] = useState('');
@@ -247,7 +272,7 @@ export default function SettingsPage() {
         <Link href="/communities/manage" className="rounded-xl px-3 py-2 text-sm text-brand">Manage communities</Link>
       </nav>
       <div className="min-w-0">
-        {section === 'profile' && <ProfileCard user={user} updateUser={updateUser} />}
+        {section === 'profile' && <><ProfileCard user={user} updateUser={updateUser} /><TranslateCard user={user} updateUser={updateUser} /></>}
         {section === 'notifications' && <NotificationsCard />}
         {section === 'privacy' && <PrivacyCard user={user} updateUser={updateUser} />}
         {section === 'blocked' && <BlockedCard />}

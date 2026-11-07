@@ -97,6 +97,7 @@ export default function SpacePage() {
         <CategoryChips space={space} />
         {space.type === 'community' && <RulesCard slug={slug} />}
         <Link className="mt-3 inline-block text-sm text-amber-400" href={`/s/${slug}/members`}>View members</Link>
+        {space.type === 'community' && !!space.my_role && space.my_role !== 'guest' && <Link className="ml-3 mt-3 inline-block text-sm text-amber-400" href={`/s/${slug}/games`}>Games</Link>}
         {canAdmin && <Link className="ml-3 inline-block text-sm text-amber-400" href={`/s/${slug}/settings`}>Settings</Link>}
         <h2 className="mb-2 mt-6 text-sm font-semibold uppercase text-white/50">Channels</h2>
         <ul className="space-y-1">{channels.map(item => <li key={item.id}>

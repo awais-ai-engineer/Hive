@@ -17,6 +17,8 @@ import { EmojiPicker } from './emoji-picker';
 import { PollCard } from './poll-card';
 import { VoicePlayer } from './voice-player';
 import { LinkPreview } from './link-preview';
+import { HuddleNotes } from './ai/huddle-notes';
+import { TranslateLink } from './ai/translate';
 import { useSaved } from '../lib/saved';
 
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '🙏'];
@@ -80,9 +82,12 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
   const time = new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   if (message.kind === 'huddle') {
     // System line, for example the summary of a huddle that just ended.
-    return <div data-message-id={message.id} role="status" className="my-3 flex items-center justify-center gap-2 px-2 text-center text-xs text-white/55">
-      <Icon name="headphones" size={14} className="shrink-0" /><span>{message.body}</span>
-      <time dateTime={message.created_at} title={new Date(message.created_at).toLocaleString()} className="shrink-0 text-white/40">{time}</time>
+    return <div data-message-id={message.id} className="my-3 px-2">
+      <div role="status" className="flex items-center justify-center gap-2 text-center text-xs text-white/55">
+        <Icon name="headphones" size={14} className="shrink-0" /><span>{message.body}</span>
+        <time dateTime={message.created_at} title={new Date(message.created_at).toLocaleString()} className="shrink-0 text-white/40">{time}</time>
+      </div>
+      {!message.id.startsWith('pending:') && <HuddleNotes messageId={message.id} channelId={message.channel_id} userId={userId} />}
     </div>;
   }
   return <article data-message-id={message.id} className={`group relative flex gap-3 rounded-xl px-2 py-1 transition hover:bg-[var(--surface-2)] ${mentioned?'border-s-2 border-brand bg-brand-soft':''} ${grouped ? '' : 'mt-3 pt-2'}`}>
@@ -110,6 +115,8 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
         <RichText source={message.body} mentions={message.mentions ?? []} channels={message.channelLinks ?? channels} />
         {message.edited_at && <span className="text-xs text-white/40">(edited)</span>}
       </div> : null}
+    {!editing && live && !own && (!message.kind || message.kind === 'text') && !!message.body?.trim()
+      && <TranslateLink targetId={message.id} channelId={message.channel_id} />}
     {!editing && !message.deleted && message.kind !== 'poll' && !!message.body && !message.post_previews?.length
       && <LinkPreview source={message.body} messageId={message.id} userId={userId} />}
     {message.attachments.length > 0 && <div className="mt-1 flex flex-wrap gap-2">

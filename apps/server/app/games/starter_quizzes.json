@@ -1,0 +1,47 @@
+{
+  "general": {
+    "title": "General knowledge",
+    "questions": [
+      {"text": "How many days are there in a leap year?", "options": ["364", "365", "366", "367"], "correct": 2},
+      {"text": "Which planet is known as the Red Planet?", "options": ["Venus", "Mars", "Jupiter", "Mercury"], "correct": 1},
+      {"text": "What is the largest mammal in the world?", "options": ["African elephant", "Blue whale", "Giraffe", "Hippopotamus"], "correct": 1},
+      {"text": "Which language has the most native speakers?", "options": ["English", "Spanish", "Mandarin Chinese", "Hindi"], "correct": 2},
+      {"text": "How many strings does a standard guitar have?", "options": ["4", "5", "6", "8"], "correct": 2},
+      {"text": "Which colour do you get by mixing blue and yellow?", "options": ["Green", "Purple", "Orange", "Brown"], "correct": 0},
+      {"text": "What is the hardest natural substance?", "options": ["Gold", "Iron", "Quartz", "Diamond"], "correct": 3},
+      {"text": "In which sport would you perform a slam dunk?", "options": ["Tennis", "Basketball", "Golf", "Cricket"], "correct": 1},
+      {"text": "How many minutes are in two hours?", "options": ["90", "100", "120", "150"], "correct": 2},
+      {"text": "Which instrument has black and white keys?", "options": ["Violin", "Flute", "Piano", "Drums"], "correct": 2}
+    ]
+  },
+  "science": {
+    "title": "Science",
+    "questions": [
+      {"text": "What gas do plants take in from the air?", "options": ["Oxygen", "Carbon dioxide", "Nitrogen", "Helium"], "correct": 1},
+      {"text": "What is the chemical symbol for water?", "options": ["H2O", "CO2", "O2", "NaCl"], "correct": 0},
+      {"text": "How many bones does an adult human body have?", "options": ["106", "206", "306", "406"], "correct": 1},
+      {"text": "Which planet is closest to the Sun?", "options": ["Venus", "Earth", "Mercury", "Mars"], "correct": 2},
+      {"text": "What force keeps us on the ground?", "options": ["Magnetism", "Friction", "Gravity", "Inertia"], "correct": 2},
+      {"text": "At what temperature does water freeze, in degrees Celsius?", "options": ["-10", "0", "10", "32"], "correct": 1},
+      {"text": "Which organ pumps blood around the body?", "options": ["Lungs", "Liver", "Kidney", "Heart"], "correct": 3},
+      {"text": "What is the centre of an atom called?", "options": ["Electron", "Nucleus", "Molecule", "Cell"], "correct": 1},
+      {"text": "Which of these is a renewable energy source?", "options": ["Coal", "Oil", "Wind", "Natural gas"], "correct": 2},
+      {"text": "What do bees collect from flowers to make honey?", "options": ["Pollen only", "Nectar", "Sap", "Water"], "correct": 1}
+    ]
+  },
+  "geography": {
+    "title": "Geography",
+    "questions": [
+      {"text": "What is the capital of France?", "options": ["Lyon", "Marseille", "Paris", "Nice"], "correct": 2},
+      {"text": "Which is the longest river in Africa?", "options": ["Congo", "Nile", "Niger", "Zambezi"], "correct": 1},
+      {"text": "Which continent is the Sahara Desert on?", "options": ["Asia", "Australia", "South America", "Africa"], "correct": 3},
+      {"text": "What is the largest ocean on Earth?", "options": ["Atlantic", "Indian", "Arctic", "Pacific"], "correct": 3},
+      {"text": "Which country has the city of Tokyo as its capital?", "options": ["China", "Japan", "South Korea", "Thailand"], "correct": 1},
+      {"text": "Mount Everest is part of which mountain range?", "options": ["Andes", "Alps", "Himalayas", "Rockies"], "correct": 2},
+      {"text": "Which country is shaped like a boot?", "options": ["Spain", "Greece", "Portugal", "Italy"], "correct": 3},
+      {"text": "What is the capital of Canada?", "options": ["Toronto", "Ottawa", "Vancouver", "Montreal"], "correct": 1},
+      {"text": "Which is the smallest continent by land area?", "options": ["Europe", "Antarctica", "Australia", "South America"], "correct": 2},
+      {"text": "The Amazon rainforest is mostly in which country?", "options": ["Peru", "Colombia", "Brazil", "Argentina"], "correct": 2}
+    ]
+  }
+}

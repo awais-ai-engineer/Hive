@@ -12,6 +12,7 @@ import { MediaGallery, mediaUrl } from './media-gallery';
 import { RepostDialog } from './repost-dialog';
 import { ShareMenu } from './share-menu';
 import { VoteButtons } from './vote-buttons';
+import { TranslateLink } from '../ai/translate';
 
 /** The original post embedded inside a repost. */
 function OriginalPost({ original }: { original: PostSummary }) {
@@ -75,6 +76,7 @@ export function PostCard({ post, combined = false, full = false, reason, onChang
       </Link>}
     </div>
 
+    {!post.deleted && (post.title || post.body) && !!user && post.author?.id !== user.id && <TranslateLink targetType="post" targetId={post.id} />}
     {original && <OriginalPost original={original} />}
     {(full || !thumb) && !!post.media?.length && <MediaGallery files={post.media} postId={post.id} full={full} />}
 

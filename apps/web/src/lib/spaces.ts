@@ -36,6 +36,7 @@ export type Member = {
   role: Space['my_role'];
   joined_at: string;
   online: boolean;
+  top_player?: boolean;
 };
 
 export async function apiData<T>(path: string, init?: RequestInit): Promise<T> {

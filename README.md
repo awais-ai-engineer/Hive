@@ -291,6 +291,47 @@ quotes and links) with a toolbar and keyboard shortcuts (`Ctrl/Cmd+B`, `I`, `E`,
 The Markdown parser lives in `packages/shared/src/markdown.ts` and has its own tests
 (`pnpm --filter @hive/shared test`).
 
+## Games
+
+Every community has a **Games** page (`/s/<slug>/games`, and `/games` lists your communities):
+
+- **Daily Word**: one five-letter puzzle per community per UTC day, six guesses, per-letter feedback computed on the server. The answer is derived from `GAME_SECRET`, the community id and the date, and is never sent before you finish. Solving in N guesses earns `7 - N` points. "Copy result" shares an emoji grid without letters.
+- **Trivia**: admins write quizzes (or add a ready-made pack of ten questions). Each member plays a quiz once. The server keeps the correct answers, enforces the per-question time limit with its own clock and scores 10 points per correct answer plus up to 5 for speed.
+- **Predictions**: admins ask a question with 2 to 6 options and a closing time. Members vote (and can change their vote until it closes). Owners and admins settle it; everyone who voted for the winning option gets the points once.
+- **Leaderboards** (today, this week, all time) are sums over the append-only `game_scores` table. The top three of the previous ISO week carry a "Top player" badge in the leaderboard and member list.
+
+Workspaces have no games. Setting: `GAME_SECRET`.
+
+## AI features
+
+Optional, off by default. When no key is set, the AI buttons are hidden and the endpoints answer `503 {"code": "ai_disabled"}`.
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `AI_PROVIDER` | `disabled` or `anthropic` | `disabled` |
+| `ANTHROPIC_API_KEY` | API key for the Anthropic Messages API | empty |
+| `AI_MODEL` | model id | `claude-sonnet-5-5` |
+| `AI_RATE_LIMIT_PER_HOUR` | model calls per user per hour | `60` |
+| `AI_MAX_INPUT_CHARS` | text sent per request | `24000` |
+| `AI_MAX_OUTPUT_TOKENS` | answer length cap | `2000` |
+
+To enable: set `AI_PROVIDER=anthropic` and `ANTHROPIC_API_KEY` in `apps/server/.env`, then restart the API.
+
+What it does:
+
+- **Catch me up**: on the Unreads view and in each channel header. Short bullet points of what you have not read (or the last 24 hours), each linking to the source message. The thread panel has **Summarise thread**.
+- **Huddle notes**: under a huddle summary line, summarise the chat sent during the huddle and add the action items to your to-dos.
+- **Sort by priority** (Unreads): ranks unread conversations as Urgent, For you or Later with a one-line reason; cached per user for 10 minutes.
+- **Translate**: choose a language in Settings. Other people's messages, posts and comments then show a Translate link; "Translate all" in a channel header does it for the whole channel in batches. Translations are cached per item, language and text.
+- **Rewrite** in the composer (shorter, professional, friendlier, fix grammar) shows a suggestion you accept or discard; nothing is sent automatically.
+- **Ask Hive** (rail button or Ctrl+J): answers a question using full-text search over content you can read, with source links.
+
+Privacy and safety:
+
+- Text is only sent after the same access check as reading it in the app (members, private channels, DMs for participants); deleted messages, system lines and people you blocked are skipped. One module, `app/ai/context.py`, decides what may be sent.
+- Conversation text is put in the user turn inside an `<untrusted_content>` block that cannot be closed from inside, and the system prompt tells the model to treat it as data. Answers are shown as plain text; links to messages are built by the server.
+- Calls are rate limited per user, counted in `ai_usage` (`GET /api/me/ai-usage` shows your last 30 days). Prompts and keys are never logged.
+- Tests use a fake provider or a mocked HTTP transport; no network is used.
 ## Files, saved items, notifications and search
 
 **For users**

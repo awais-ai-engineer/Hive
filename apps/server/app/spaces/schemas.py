@@ -186,6 +186,7 @@ class MemberOut(BaseModel):
     role: MemberRole
     joined_at: datetime
     online: bool = False
+    top_player: bool = False
 
 
 class MemberRoleIn(BaseModel):

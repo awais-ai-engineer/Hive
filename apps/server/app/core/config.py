@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     supabase_service_key: str = ""
     supabase_bucket: str = "hive-media"
     signed_url_seconds: int = 3600
+    # Seeds the daily word so answers can't be worked out from the word list alone.
+    game_secret: str = "dev-game-secret"
+    # AI features: "disabled" or "anthropic". Everything AI stays off until a key is set.
+    ai_provider: str = "disabled"
+    anthropic_api_key: str = ""
+    ai_model: str = "claude-sonnet-5-5"
+    ai_rate_limit_per_hour: int = 60
+    ai_max_input_chars: int = 24000
+    ai_max_output_tokens: int = 2000
 
     def validate_storage(self):
         if self.storage_driver not in ("local", "supabase"):

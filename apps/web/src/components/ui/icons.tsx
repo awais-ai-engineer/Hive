@@ -65,6 +65,7 @@ const paths: Record<string, string> = {
   trash: 'M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6',
   grip: 'M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01',
   share: 'M4 12v8h16v-8M16 6l-4-4-4 4M12 2v14',
+  translate: 'M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6',
   download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
   chevronLeft: 'm15 18-6-6 6-6',
   rotateLeft: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5',

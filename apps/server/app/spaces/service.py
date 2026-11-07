@@ -189,16 +189,19 @@ async def list_members(session: AsyncSession, space: Space, cursor: str | None) 
     )
     more = len(rows) > 50
     rows = rows[:50]
+    from app.games.leaderboard import top_players
     from app.realtime.presence import visible_online
     from app.spaces.schemas import MemberOut, MemberUserOut
 
     online = await visible_online(session, [user.id for _, user in rows])
+    badge = await top_players(session, space.id) if space.type == SpaceType.community else set()
     result = [
         MemberOut(
             user=MemberUserOut.model_validate(user),
             role=member.role,
             joined_at=member.joined_at,
             online=user.id in online,
+            top_player=user.id in badge,
         )
         for member, user in rows
     ]

@@ -8,6 +8,7 @@ activity and presence go to each participant's `user:{id}` room instead.
 import json
 import logging
 import time
+from datetime import UTC, datetime, timedelta
 from functools import wraps
 
 import jwt
@@ -423,8 +424,9 @@ async def post_huddle_summary(channel_id: str, author_id: str, huddle: dict) -> 
         channel = await session.get(Channel, channel_id)
         if channel is None or channel.type == ChannelType.voice:
             return
+        started = datetime.now(UTC) - timedelta(seconds=huddle["seconds"])
         message = Message(channel_id=channel_id, author_id=author_id, kind="huddle",
-                          body=calls.huddle_text(names, huddle["seconds"]))
+                          body=calls.huddle_text(names, huddle["seconds"]), huddle_started_at=started)
         session.add(message)
         await session.commit()
         out = await service.message_out(session, message, author_id)

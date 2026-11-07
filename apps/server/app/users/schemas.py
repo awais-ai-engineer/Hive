@@ -42,6 +42,16 @@ class ProfileIn(BaseModel):
     out_of_office_until: date | None = None
     dm_policy: DmPolicy | None = None
     appear_offline: bool | None = None
+    translate_language: str | None = None
+
+    @field_validator("translate_language")
+    @classmethod
+    def known_language(cls, value: str | None) -> str | None:
+        from app.ai.languages import LANGUAGES
+
+        if value is not None and value not in LANGUAGES:
+            raise ValueError("Choose a language from the list")
+        return value
 
     @field_validator("username", "dm_policy", "appear_offline")
     @classmethod

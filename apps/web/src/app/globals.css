@@ -124,3 +124,6 @@ body {
 
 /* Brand-filled elements keep white text even though "white" means the theme foreground. */
 .bg-brand, .bg-amber-400, .bg-amber-500 { --fg: var(--on-brand); }
+
+@keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+@media (prefers-reduced-motion: reduce) { .animate-in, [class*="animate-[shake"] { animation: none; } }
