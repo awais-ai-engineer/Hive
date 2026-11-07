@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '../lib/auth';
 import Nav from '../components/nav';
+import { SearchPalette } from '../components/search/search-palette';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
 
@@ -26,7 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body className="min-h-screen font-sans antialiased">
-        <AuthProvider><Nav />{children}</AuthProvider>
+        <AuthProvider><Nav /><SearchPalette />{children}</AuthProvider>
       </body>
     </html>
   );

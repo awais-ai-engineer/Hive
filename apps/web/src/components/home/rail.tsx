@@ -64,9 +64,9 @@ export function Rail({ spaces, current, onSwitch, unread, todos = 0 }: {
     </div>
     <Link href="/communities/manage" title="Manage communities" aria-label="Manage communities" className={`${tile} text-white/70 hover:bg-white/10`}><Icon name="settings" /></Link>
     <Link href="/policies" title="Help & policies" aria-label="Help & policies" className={`${tile} text-white/70 hover:bg-white/10`}><Icon name="file" /></Link>
-    <Link href="/home?view=unreads" aria-label={unread ? `${unread} unread` : 'Unreads'} className={`${tile} relative text-white/70 hover:bg-white/10 hover:text-white`}>
+    <Link href="/home?view=inbox" title="Notifications" aria-label={unread ? `Notifications, ${unread > 99 ? '99+' : unread} unread` : 'Notifications'} className={`${tile} relative text-white/70 hover:bg-white/10 hover:text-white`}>
       <Icon name="bell" size={20} />
-      {unread > 0 && <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-rose-500" />}
+      {unread > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full bg-rose-500 px-1 text-center text-[10px] font-semibold" style={{ color: '#fff' }}>{unread > 99 ? '99+' : unread}</span>}
     </Link>
     <Link href="/home?view=todos" title="To-dos" aria-label={todos ? `To-dos, ${todos} due` : 'To-dos'} className={`${tile} relative text-white/70 hover:bg-white/10 hover:text-white`}>
       <Icon name="checkSquare" size={20} />

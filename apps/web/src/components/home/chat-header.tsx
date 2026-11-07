@@ -13,7 +13,7 @@ import { PopupMenu } from './popup-menu';
 import { Avatar } from '../ui/avatar';
 import { Icon, type IconName } from '../ui/icons';
 
-export type ChatTab = 'messages' | 'posts' | 'docs' | 'todos';
+export type ChatTab = 'messages' | 'posts' | 'docs' | 'todos' | 'files';
 
 type Props = {
   title?: string;
@@ -103,6 +103,7 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
         <Tab active={tab === 'messages'} icon="message" label="Messages" onClick={() => onTab('messages')} />
         <Tab active={tab === 'docs'} icon="file" label="Docs" onClick={() => onTab('docs')} />
         <Tab active={tab === 'todos'} icon="checkSquare" label="To-dos" onClick={() => onTab('todos')} />
+        <Tab active={tab === 'files'} icon="folder" label="Files" onClick={() => onTab('files')} />
       </div>}
     </header>
     {away && <p role="status" className="-mt-1 mb-3 rounded-xl bg-brand-soft px-3 py-2 text-sm">
@@ -133,6 +134,7 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
         <Tab active={tab === 'posts'} icon="layers" label="Posts" onClick={() => onTab('posts')} />
         <Tab active={tab === 'docs'} icon="file" label="Docs" onClick={() => onTab('docs')} />
         <Tab active={tab === 'todos'} icon="checkSquare" label="To-dos" onClick={() => onTab('todos')} />
+        <Tab active={tab === 'files'} icon="folder" label="Files" onClick={() => onTab('files')} />
       </div>}
     </header>;
   }

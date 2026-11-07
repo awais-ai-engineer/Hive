@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { relativeTime, type Post, type PostSummary, type VoteResult } from '../../lib/posts';
 import { Avatar } from '../ui/avatar';
+import { useSaved } from '../../lib/saved';
 import { ReportDialog } from '../report-dialog';
 import { Icon } from '../ui/icons';
 import { MediaGallery, mediaUrl } from './media-gallery';
@@ -36,6 +37,8 @@ export function PostCard({ post, combined = false, full = false, reason, onChang
   const [reposting, setReposting] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [reporting, setReporting] = useState(false);
+  const saved = useSaved();
+  const isSaved = saved.isSaved('post', post.id);
   const canRepost = !!user && !post.deleted && post.space.type !== 'workspace';
   const original = post.repost_of;
   const thumb = !full ? post.media?.find(file => file.kind === 'image') : undefined;
@@ -83,6 +86,9 @@ export function PostCard({ post, combined = false, full = false, reason, onChang
       {!canRepost && post.repost_count > 0 && <span className={action}>🔁 {post.repost_count}</span>}
       {!post.deleted && <button type="button" className={action} aria-haspopup="menu" aria-expanded={sharing}
         onClick={() => setSharing(value => !value)}><Icon name="send" size={15} />Share</button>}
+      {!!user && !post.deleted && <button type="button" className={`${action} ${isSaved ? '!text-brand' : ''}`} aria-pressed={isSaved}
+        title={isSaved ? 'Remove from saved items' : 'Save for later'} onClick={() => void saved.toggle('post', post.id).catch(() => {})}>
+        <Icon name="bookmark" size={15} fill={isSaved ? 'currentColor' : 'none'} />{isSaved ? 'Saved' : 'Save'}</button>}
       {!!user && !post.deleted && post.author && post.author.id !== user.id && <button type="button" className={action} onClick={() => setReporting(true)}><Icon name="flag" size={15} />Report</button>}
       <ShareMenu post={post} isOpen={sharing} onClose={() => setSharing(false)} />
     </footer>
