@@ -15,7 +15,14 @@ from app.spaces import management
 from app.spaces.schemas import InterestsIn, MembershipPatch, SpaceOrderIn, SpaceOut
 from app.spaces.service import load_space, my_spaces, space_out
 from app.users import blocks
-from app.users.avatars import avatar_redirect_url, clear_avatar, set_avatar
+from app.users.avatars import (
+    avatar_redirect_url,
+    clear_avatar,
+    clear_cover,
+    cover_redirect_url,
+    set_avatar,
+    set_cover,
+)
 from app.users.profiles import public_profile
 from app.users.schemas import BlockedUser, BlockIn, ProfileIn, PublicProfile
 from app.users.service import clear_expired, update_profile
@@ -85,6 +92,16 @@ async def delete_avatar(user: CurrentUser, session: Session) -> User:
     return await clear_avatar(session, user)
 
 
+@router.post("/me/cover", response_model=UserOut)
+async def upload_cover(file: UploadFile, user: CurrentUser, session: Session) -> User:
+    return await set_cover(session, user, file)
+
+
+@router.delete("/me/cover", response_model=UserOut)
+async def delete_cover(user: CurrentUser, session: Session) -> User:
+    return await clear_cover(session, user)
+
+
 @router.get("/me/blocks", response_model=list[BlockedUser])
 async def get_blocks(user: CurrentUser, session: Session) -> list[BlockedUser]:
     return await blocks.list_blocked(session, user)
@@ -103,6 +120,12 @@ async def delete_block(user_id: str, user: CurrentUser, session: Session) -> Non
 @router.get("/users/{user_id}/avatar")
 async def get_avatar(user_id: str, session: Session) -> RedirectResponse:
     url = await avatar_redirect_url(await session.get(User, user_id))
+    return RedirectResponse(url, status_code=302, headers={"Cache-Control": "public, max-age=300"})
+
+
+@router.get("/users/{user_id}/cover")
+async def get_cover(user_id: str, session: Session) -> RedirectResponse:
+    url = await cover_redirect_url(await session.get(User, user_id))
     return RedirectResponse(url, status_code=302, headers={"Cache-Control": "public, max-age=300"})
 
 

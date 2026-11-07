@@ -66,6 +66,12 @@ const paths: Record<string, string> = {
   grip: 'M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01',
   share: 'M4 12v8h16v-8M16 6l-4-4-4 4M12 2v14',
   translate: 'M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6',
+  download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
+  chevronLeft: 'm15 18-6-6 6-6',
+  rotateLeft: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5',
+  rotateRight: 'M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5',
+  image: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm4 6a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm12 7-5-5L5 21',
+  folder: 'M3 6a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z',
   calendar: 'M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM16 2v4M8 2v4M3 10h18',
 };
 

@@ -15,7 +15,7 @@ import { Icon, type IconName } from '../ui/icons';
 import { CatchUp } from '../ai/catch-up';
 import { TranslateAllToggle } from '../ai/translate';
 
-export type ChatTab = 'messages' | 'posts' | 'docs' | 'todos';
+export type ChatTab = 'messages' | 'posts' | 'docs' | 'todos' | 'files';
 
 type Props = {
   title?: string;
@@ -105,6 +105,7 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
         <Tab active={tab === 'messages'} icon="message" label="Messages" onClick={() => onTab('messages')} />
         <Tab active={tab === 'docs'} icon="file" label="Docs" onClick={() => onTab('docs')} />
         <Tab active={tab === 'todos'} icon="checkSquare" label="To-dos" onClick={() => onTab('todos')} />
+        <Tab active={tab === 'files'} icon="folder" label="Files" onClick={() => onTab('files')} />
       </div>}
     </header>
     <div className="mb-3 flex flex-wrap items-start gap-x-4 gap-y-2"><CatchUp channelId={conversation.id} /><TranslateAllToggle channelId={conversation.id} /></div>
@@ -136,6 +137,7 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
         <Tab active={tab === 'posts'} icon="layers" label="Posts" onClick={() => onTab('posts')} />
         <Tab active={tab === 'docs'} icon="file" label="Docs" onClick={() => onTab('docs')} />
         <Tab active={tab === 'todos'} icon="checkSquare" label="To-dos" onClick={() => onTab('todos')} />
+        <Tab active={tab === 'files'} icon="folder" label="Files" onClick={() => onTab('files')} />
       </div>}
     </header>
     {channel.type !== 'voice' && <div className="mb-3 flex flex-wrap items-start gap-x-4 gap-y-2"><CatchUp channelId={channel.id} /><TranslateAllToggle channelId={channel.id} /></div>}</>;

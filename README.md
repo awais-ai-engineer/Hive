@@ -332,3 +332,17 @@ Privacy and safety:
 - Conversation text is put in the user turn inside an `<untrusted_content>` block that cannot be closed from inside, and the system prompt tells the model to treat it as data. Answers are shown as plain text; links to messages are built by the server.
 - Calls are rate limited per user, counted in `ai_usage` (`GET /api/me/ai-usage` shows your last 30 days). Prompts and keys are never logged.
 - Tests use a fake provider or a mocked HTTP transport; no network is used.
+## Files, saved items, notifications and search
+
+**For users**
+- **Files**: every channel and conversation has a Files tab (filter by type, person or file name; images and videos open in a viewer). *All files* in the sidebar lists everything you can read, with a space filter.
+- **Profile**: crop, zoom and rotate your photo and cover image before saving (Settings, Profile).
+- **Saved items**: use *Save* on a message, post or comment; find them under *Saved items*. Items you can no longer read disappear from the list.
+- **Notifications**: the bell shows an unread count. The inbox lists mentions, thread replies, reactions, post comments, accepted invites and direct messages that arrived while you were offline. Switch each type on or off in Settings, Notifications.
+- **Search**: Ctrl/Cmd+K opens search over messages, posts, comments, people, channels and files, with filters for space, person and dates. `/search` shows the same results as a page.
+
+**For developers**
+- `app/access.py` is the single access rule (SQL conditions for readable channels, DMs, posts and messages, plus block filtering). Files, saved items, notifications and search are all built on it, and re-check access on every read.
+- Endpoints: `GET /api/channels/{id}/files`, `GET /api/files`, `PUT/DELETE /api/saved/{messages|posts|comments}/{id}`, `GET /api/saved`, `GET /api/saved/ids`, `GET /api/notifications`, `GET /api/notifications/unread-count`, `POST /api/notifications/{id}/read`, `POST /api/notifications/read-all`, `GET/PUT /api/notifications/preferences`, `GET /api/search`, `POST/DELETE /api/me/cover`, `GET /api/users/{id}/cover`.
+- Socket events: `notification:new` (the full item) and `notification:count` go to the `user:{id}` room.
+- Search uses PostgreSQL full-text search (`simple` configuration) on generated `search_tsv` columns with GIN indexes; people and file names use escaped `ILIKE`. Highlights are returned as `{text, match}` segments, never HTML.

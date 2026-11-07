@@ -6,13 +6,16 @@ import { Avatar } from '../../components/ui/avatar';
 import { InterestsSettings } from '../../components/communities/interests-settings';
 import { StatusDialog } from '../../components/status-dialog';
 import { activeStatus, statusTitle } from '../../lib/status';
-import { apiFetch, responseData, uploadFile, type User } from '../../lib/api';
+import { API_URL, apiFetch, responseData, uploadFile, type User } from '../../lib/api';
+import { ImageCropper } from '../../components/image-cropper';
+import { TYPE_LABELS } from '../../lib/notifications';
+import { notificationTypes, type NotificationType } from '@hive/shared';
 import { useAuth } from '../../lib/auth';
 import { apiData, requestError } from '../../lib/spaces';
 import { useAiStatus } from '../../lib/ai';
 
-type Section = 'profile' | 'privacy' | 'blocked' | 'interests';
-const sections: [Section, string][] = [['profile', 'Profile'], ['privacy', 'Privacy'], ['blocked', 'Blocked people'], ['interests', 'Interests']];
+type Section = 'profile' | 'notifications' | 'privacy' | 'blocked' | 'interests';
+const sections: [Section, string][] = [['profile', 'Profile'], ['notifications', 'Notifications'], ['privacy', 'Privacy'], ['blocked', 'Blocked people'], ['interests', 'Interests']];
 
 function Saved({ show }: { show: boolean }) {
   return <span role="status" className="text-sm font-medium text-emerald-500">{show ? 'Saved' : ''}</span>;
@@ -30,40 +33,33 @@ function ProfileCard({ user, updateUser }: { user: User; updateUser: (user: User
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState('');
-  const [progress, setProgress] = useState<number | null>(null);
+  const [cropping, setCropping] = useState<{ file: File; shape: 'avatar' | 'cover' } | null>(null);
   const [photoError, setPhotoError] = useState('');
-  const input = useRef<HTMLInputElement>(null);
+  const avatarInput = useRef<HTMLInputElement>(null);
+  const coverInput = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (!file) { setPreview(''); return; }
-    const url = URL.createObjectURL(file);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
-
-  function pick(chosen?: File) {
+  function pick(shape: 'avatar' | 'cover', chosen?: File) {
     setPhotoError('');
+    if (avatarInput.current) avatarInput.current.value = '';
+    if (coverInput.current) coverInput.current.value = '';
     if (!chosen) return;
     if (!chosen.type.startsWith('image/')) return setPhotoError('Please choose an image file.');
-    if (chosen.size > 5 * 1024 * 1024) return setPhotoError('That image is over 5 MB. Please pick a smaller one.');
-    setFile(chosen);
+    const limit = shape === 'avatar' ? 5 : 8;
+    if (chosen.size > limit * 1024 * 1024) return setPhotoError(`That image is over ${limit} MB. Please pick a smaller one.`);
+    setCropping({ file: chosen, shape });
   }
-  function resetPicker() {
-    setFile(null);
-    if (input.current) input.current.value = '';
-  }
-  async function upload() {
-    if (!file) return;
-    setProgress(0); setPhotoError('');
-    try { updateUser(await uploadFile<User>('/api/me/avatar', file, setProgress)); resetPicker(); }
-    catch (cause) { setPhotoError(requestError(cause)); }
-    finally { setProgress(null); }
-  }
-  async function removePhoto() {
+  async function upload(image: File) {
+    if (!cropping) return;
+    const shape = cropping.shape;
     setPhotoError('');
-    try { updateUser(await responseData<User>(await apiFetch('/api/me/avatar', { method: 'DELETE' }))); resetPicker(); }
+    try {
+      updateUser(await uploadFile<User>(`/api/me/${shape}`, image, () => {}));
+      setCropping(null);
+    } catch (cause) { setPhotoError(requestError(cause)); throw cause; }
+  }
+  async function removeImage(shape: 'avatar' | 'cover') {
+    setPhotoError('');
+    try { updateUser(await responseData<User>(await apiFetch(`/api/me/${shape}`, { method: 'DELETE' }))); }
     catch (cause) { setPhotoError(requestError(cause)); }
   }
   async function save(event: FormEvent) {
@@ -80,23 +76,31 @@ function ProfileCard({ user, updateUser }: { user: User; updateUser: (user: User
     <div>
       <h2 className="text-lg font-bold">Profile photo</h2>
       <div className="mt-3 flex flex-wrap items-center gap-4">
-        <Avatar name={user.username} src={preview || user.avatar_url} size={80} />
+        <Avatar name={user.username} src={user.avatar_url} size={80} />
         <div className="space-y-2">
           <div className="flex flex-wrap gap-2">
-            <input ref={input} id="photo" type="file" accept="image/*" className="peer sr-only" onChange={event => pick(event.target.files?.[0])} />
+            <input ref={avatarInput} id="photo" type="file" accept="image/*" className="peer sr-only" onChange={event => pick('avatar', event.target.files?.[0])} />
             <label htmlFor="photo" className="btn-ghost cursor-pointer peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-[var(--ring)]">Upload photo</label>
-            {file && <button type="button" onClick={upload} disabled={progress !== null} className="auth-button text-sm">
-              {progress !== null ? `Uploading ${progress}%` : 'Use this photo'}</button>}
-            {file && progress === null && <button type="button" className="btn-ghost" onClick={resetPicker}>Cancel</button>}
-            {user.avatar_url && !file && <button type="button" onClick={removePhoto} className="btn-ghost text-rose-500">Remove</button>}
+            {user.avatar_url && <button type="button" onClick={() => void removeImage('avatar')} className="btn-ghost text-rose-500">Remove</button>}
           </div>
-          {progress !== null && <div role="progressbar" aria-label="Upload progress" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} className="h-1.5 w-48 overflow-hidden rounded-full bg-[var(--surface-2)]">
-            <div className="h-full bg-brand transition-all" style={{ width: `${progress}%` }} /></div>}
-          <p className="text-xs text-white/50">PNG, JPG or GIF, up to 5 MB.</p>
-          {photoError && <p role="alert" className="text-sm text-rose-500">{photoError}</p>}
+          <p className="text-xs text-white/50">PNG, JPG, GIF or WebP, up to 5 MB. You can crop and zoom before saving.</p>
         </div>
       </div>
     </div>
+
+    <div>
+      <h2 className="text-lg font-bold">Cover image</h2>
+      <div className="mt-3 h-24 overflow-hidden rounded-xl bg-gradient-to-br from-[#a78bfa] via-[#6d4aff] to-[#2b1d63]">
+        {user.cover_url && <img src={user.cover_url.startsWith('/') ? `${API_URL}${user.cover_url}` : user.cover_url} alt="" className="h-full w-full object-cover" />}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <input ref={coverInput} id="cover" type="file" accept="image/*" className="peer sr-only" onChange={event => pick('cover', event.target.files?.[0])} />
+        <label htmlFor="cover" className="btn-ghost cursor-pointer peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-[var(--ring)]">{user.cover_url ? 'Change cover' : 'Upload cover'}</label>
+        {user.cover_url && <button type="button" onClick={() => void removeImage('cover')} className="btn-ghost text-rose-500">Remove</button>}
+      </div>
+      {photoError && <p role="alert" className="mt-2 text-sm text-rose-500">{photoError}</p>}
+    </div>
+    {cropping && <ImageCropper file={cropping.file} shape={cropping.shape} onCancel={() => setCropping(null)} onSave={upload} />}
 
     <div className="grid gap-4 sm:grid-cols-2">
       <label className="block text-sm font-medium">Display name
@@ -196,6 +200,36 @@ function TranslateCard({ user, updateUser }: { user: User; updateUser: (user: Us
   </section>;
 }
 
+function NotificationsCard() {
+  const [prefs, setPrefs] = useState<Record<string, boolean> | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    apiData<{ preferences: Record<string, boolean> }>('/api/notifications/preferences').then(result => setPrefs(result.preferences)).catch(cause => setError(requestError(cause)));
+  }, []);
+  async function toggle(type: NotificationType) {
+    if (!prefs) return;
+    const next = !prefs[type];
+    setPrefs({ ...prefs, [type]: next });
+    setError('');
+    try {
+      const result = await apiData<{ preferences: Record<string, boolean> }>('/api/notifications/preferences', { method: 'PUT', body: JSON.stringify({ preferences: { [type]: next } }) });
+      setPrefs(result.preferences);
+    } catch (cause) { setPrefs(current => current && { ...current, [type]: !next }); setError(requestError(cause)); }
+  }
+  return <section className="card p-5 sm:p-6">
+    <h2 className="text-lg font-bold">Notifications</h2>
+    <p className="mt-1 text-sm text-white/60">Choose what lands in your inbox. Muted spaces and quiet conversations still only let mentions through.</p>
+    {error && <p role="alert" className="mt-2 text-sm text-rose-500">{error}</p>}
+    {!prefs ? !error && <div role="status" aria-label="Loading notification settings" className="mt-4 h-40 animate-pulse rounded-xl bg-white/5" />
+      : <ul className="mt-3 divide-y divide-white/10">{notificationTypes.map(type => <li key={type} className="flex items-start justify-between gap-4 py-3">
+        <div><p id={`pref-${type}`} className="font-medium">{TYPE_LABELS[type].title}</p><p className="text-sm text-white/60">{TYPE_LABELS[type].hint}</p></div>
+        <button type="button" role="switch" aria-checked={prefs[type]} aria-labelledby={`pref-${type}`} onClick={() => void toggle(type)}
+          className={`relative mt-1 h-6 w-11 shrink-0 rounded-full transition ${prefs[type] ? 'bg-brand' : 'bg-white/20'}`}>
+          <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-[#fff] shadow transition-all ${prefs[type] ? 'left-[22px]' : 'left-0.5'}`} /></button>
+      </li>)}</ul>}
+  </section>;
+}
+
 type Blocked = { id: string; username: string; avatar_url: string | null };
 
 function BlockedCard() {
@@ -239,6 +273,7 @@ export default function SettingsPage() {
       </nav>
       <div className="min-w-0">
         {section === 'profile' && <><ProfileCard user={user} updateUser={updateUser} /><TranslateCard user={user} updateUser={updateUser} /></>}
+        {section === 'notifications' && <NotificationsCard />}
         {section === 'privacy' && <PrivacyCard user={user} updateUser={updateUser} />}
         {section === 'blocked' && <BlockedCard />}
         {section === 'interests' && <InterestsSettings />}

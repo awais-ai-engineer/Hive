@@ -36,6 +36,8 @@ export const SocketEvents = {
   ThreadRead: 'thread:read',
   ThreadActivity: 'thread:activity',
   MentionNew: 'mention:new',
+  NotificationNew: 'notification:new',
+  NotificationCount: 'notification:count',
   PollVote: 'poll:vote',
   PollClose: 'poll:close',
   PollUpdated: 'poll:updated',

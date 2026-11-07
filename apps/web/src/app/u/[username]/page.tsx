@@ -6,12 +6,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '../../../components/ui/avatar';
 import { Icon } from '../../../components/ui/icons';
 import { ReportDialog } from '../../../components/report-dialog';
-import { apiFetch } from '../../../lib/api';
+import { API_URL, apiFetch } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth';
 import { apiData, requestError } from '../../../lib/spaces';
 
 type Profile = {
-  id: string; username: string; display_name: string | null; avatar_url: string | null; bio: string | null;
+  id: string; username: string; display_name: string | null; avatar_url: string | null; cover_url: string | null; bio: string | null;
   status_text: string | null; status_emoji: string | null; created_at: string; online: boolean;
   shared_spaces: { slug: string; name: string; type: 'community' | 'workspace' }[]; blocked_by_me: boolean;
 };
@@ -78,7 +78,10 @@ export default function ProfilePage() {
   const item = 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--surface-2)]';
   return <main className="mx-auto max-w-2xl px-4 py-6">
     <article className="card overflow-hidden">
-      <div className="h-32 bg-gradient-to-br from-[#a78bfa] via-[#6d4aff] to-[#2b1d63] sm:h-40" />
+      <div className="relative h-32 overflow-hidden bg-gradient-to-br from-[#a78bfa] via-[#6d4aff] to-[#2b1d63] sm:h-40">
+        {profile.cover_url && <img src={profile.cover_url.startsWith('/') ? `${API_URL}${profile.cover_url}` : profile.cover_url} alt="" className="h-full w-full object-cover" />}
+        {own && <Link href="/settings" className="absolute right-3 top-3 rounded-lg bg-[rgb(0_0_0/0.5)] px-3 py-1.5 text-sm font-medium hover:bg-[rgb(0_0_0/0.7)]" style={{ color: '#fff' }}>Edit cover</Link>}
+      </div>
       <div className="px-5 pb-6 sm:px-8">
         <div className="-mt-12 flex items-end justify-between gap-3">
           <div className="rounded-full border-4 border-[var(--surface)] bg-surface"><Avatar name={profile.username} src={profile.avatar_url} size={96} online={profile.online} /></div>

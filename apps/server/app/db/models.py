@@ -11,6 +11,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Computed,
     Date,
     DateTime,
     Enum,
@@ -28,7 +29,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.types import UserDefinedType
@@ -115,6 +116,9 @@ class User(Base):
     avatar_url: Mapped[str | None] = mapped_column(Text)
     # Storage key of the current avatar object (avatar_url is the public, versioned link to it).
     avatar_key: Mapped[str | None] = mapped_column(Text)
+    # Profile banner: storage key of the current object and the public, versioned link to it.
+    cover_key: Mapped[str | None] = mapped_column(Text)
+    cover_url: Mapped[str | None] = mapped_column(Text)
     display_name: Mapped[str | None] = mapped_column(String(50))
     bio: Mapped[str | None] = mapped_column(String(300))
     status_text: Mapped[str | None] = mapped_column(String(80))
@@ -262,7 +266,10 @@ class SpaceRule(Base):
 
 class Channel(Base):
     __tablename__ = "channels"
-    __table_args__ = (UniqueConstraint("space_id", "name", name="uq_channels_space_name"),)
+    __table_args__ = (
+        UniqueConstraint("space_id", "name", name="uq_channels_space_name"),
+        Index("ix_channels_search_tsv", "search_tsv", postgresql_using="gin"),
+    )
 
     # Private channels are visible only to the people in channel_members.
     is_private: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
@@ -280,6 +287,9 @@ class Channel(Base):
     position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     # Sorted participant ids of a DM, so the same group of people always gets one conversation.
     dm_key: Mapped[str | None] = mapped_column(Text, unique=True)
+    search_tsv: Mapped[str] = mapped_column(
+        TSVECTOR, Computed("to_tsvector('simple', name || ' ' || coalesce(topic, ''))", persisted=True)
+    )
     created_at: Mapped[datetime] = created_at()
 
 
@@ -335,6 +345,7 @@ class Message(Base):
         Index("messages_thread_idx", "parent_id", "id"),
         Index("messages_client_msg_uq", "author_id", "client_msg_id", unique=True),
         Index("ix_messages_fts", text("to_tsvector('simple', body)"), postgresql_using="gin"),
+        Index("ix_messages_search_tsv", "search_tsv", postgresql_using="gin"),
     )
 
     id: Mapped[str] = pk()
@@ -343,6 +354,9 @@ class Message(Base):
     parent_id: Mapped[str | None] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE"))
     client_msg_id: Mapped[str | None] = mapped_column(String(64))
     body: Mapped[str] = mapped_column(Text)
+    search_tsv: Mapped[str] = mapped_column(
+        TSVECTOR, Computed("to_tsvector('simple', body)", persisted=True)
+    )
     # "huddle" marks the system line posted when a huddle ends.
     kind: Mapped[str] = mapped_column(String(16), default="text", server_default="text")
     # Huddle lines only: when the huddle began, so its chat can be looked up afterwards.
@@ -435,6 +449,7 @@ class Post(Base):
         UniqueConstraint("author_id", "space_id", "repost_of_id", name="posts_repost_once"),
         Index("ix_posts_title_fts", text("to_tsvector('simple', title)"), postgresql_using="gin"),
         Index("ix_posts_body_fts", text("to_tsvector('simple', coalesce(body, ''))"), postgresql_using="gin"),
+        Index("ix_posts_search_tsv", "search_tsv", postgresql_using="gin"),
     )
     id: Mapped[str] = pk()
     space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"))
@@ -442,6 +457,9 @@ class Post(Base):
     title: Mapped[str] = mapped_column(String(300))
     body: Mapped[str | None] = mapped_column(Text)
     url: Mapped[str | None] = mapped_column(Text)
+    search_tsv: Mapped[str] = mapped_column(
+        TSVECTOR, Computed("to_tsvector('simple', title || ' ' || coalesce(body, ''))", persisted=True)
+    )
     score: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     upvotes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     downvotes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
@@ -476,6 +494,7 @@ class Comment(Base):
         Index("comments_post_parent_id", "post_id", "parent_id", "id"),
         Index("comments_author_idx", "author_id"),
         Index("ix_comments_fts", text("to_tsvector('simple', coalesce(body, ''))"), postgresql_using="gin"),
+        Index("ix_comments_search_tsv", "search_tsv", postgresql_using="gin"),
     )
 
     id: Mapped[str] = pk()
@@ -487,6 +506,9 @@ class Comment(Base):
     path: Mapped[str] = mapped_column(LTree(), nullable=False)
     depth: Mapped[int] = mapped_column(SmallInteger, default=0, server_default="0", nullable=False)
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    search_tsv: Mapped[str] = mapped_column(
+        TSVECTOR, Computed("to_tsvector('simple', coalesce(body, ''))", persisted=True)
+    )
     score: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     upvotes: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     downvotes: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
@@ -864,3 +886,95 @@ class PredictionVote(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     option_id: Mapped[str] = mapped_column(ForeignKey("prediction_options.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = created_at()
+class SavedItem(Base):
+    """A message, post or comment a person bookmarked. Visibility is checked on every read."""
+
+    __tablename__ = "saved_items"
+    __table_args__ = (
+        CheckConstraint(
+            "(message_id IS NOT NULL)::int + (post_id IS NOT NULL)::int"
+            " + (comment_id IS NOT NULL)::int = 1",
+            name="ck_saved_items_one_target",
+        ),
+        Index("ix_saved_items_user_id", "user_id", "id"),
+        Index("uq_saved_items_user_message", "user_id", "message_id", unique=True,
+              postgresql_where=text("message_id IS NOT NULL")),
+        Index("uq_saved_items_user_post", "user_id", "post_id", unique=True,
+              postgresql_where=text("post_id IS NOT NULL")),
+        Index("uq_saved_items_user_comment", "user_id", "comment_id", unique=True,
+              postgresql_where=text("comment_id IS NOT NULL")),
+    )
+
+    id: Mapped[str] = pk()
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE", name="fk_saved_items_user")
+    )
+    message_id: Mapped[str | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="CASCADE", name="fk_saved_items_message")
+    )
+    post_id: Mapped[str | None] = mapped_column(
+        ForeignKey("posts.id", ondelete="CASCADE", name="fk_saved_items_post")
+    )
+    comment_id: Mapped[str | None] = mapped_column(
+        ForeignKey("comments.id", ondelete="CASCADE", name="fk_saved_items_comment")
+    )
+    created_at: Mapped[datetime] = created_at()
+
+
+NOTIFICATION_TYPES = (
+    "mention", "reply", "reaction", "post_comment", "invite_accepted", "dm",
+)
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    __table_args__ = (
+        CheckConstraint(
+            "type IN (" + ", ".join(f"'{name}'" for name in NOTIFICATION_TYPES) + ")",
+            name="ck_notifications_type",
+        ),
+        Index("ix_notifications_user_unread", "user_id", "read_at", "id"),
+    )
+
+    id: Mapped[str] = pk()
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE", name="fk_notifications_user")
+    )
+    type: Mapped[str] = mapped_column(String(24))
+    actor_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE", name="fk_notifications_actor")
+    )
+    space_id: Mapped[str | None] = mapped_column(
+        ForeignKey("spaces.id", ondelete="CASCADE", name="fk_notifications_space")
+    )
+    channel_id: Mapped[str | None] = mapped_column(
+        ForeignKey("channels.id", ondelete="CASCADE", name="fk_notifications_channel")
+    )
+    message_id: Mapped[str | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="CASCADE", name="fk_notifications_message")
+    )
+    post_id: Mapped[str | None] = mapped_column(
+        ForeignKey("posts.id", ondelete="CASCADE", name="fk_notifications_post")
+    )
+    comment_id: Mapped[str | None] = mapped_column(
+        ForeignKey("comments.id", ondelete="CASCADE", name="fk_notifications_comment")
+    )
+    snippet: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    # Reactions on one message collapse into a single row; this is how many people reacted.
+    count: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = created_at()
+
+
+class NotificationPref(Base):
+    """A notification type the person can switch off (no row: the type is on)."""
+
+    __tablename__ = "notification_prefs"
+    __table_args__ = (PrimaryKeyConstraint("user_id", "type", name="pk_notification_prefs"),)
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE", name="fk_notification_prefs_user"),
+        primary_key=True,
+    )
+    type: Mapped[str] = mapped_column(String(24), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")

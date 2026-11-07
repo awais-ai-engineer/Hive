@@ -9,6 +9,8 @@ import { Icon, Logo } from './ui/icons';
 import { DMS_CHANGED } from '../lib/dms';
 import { socket } from '../lib/socket';
 import { apiData } from '../lib/spaces';
+import { useNotificationCount } from '../lib/notifications';
+import { OPEN_SEARCH } from './search/search-palette';
 
 export default function Nav() {
   const { user, loading, logout } = useAuth();
@@ -19,6 +21,7 @@ export default function Nav() {
   const [menu, setMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const notifications = useNotificationCount();
 
   // Total unread direct messages, refreshed on new DM activity and after reading.
   useEffect(() => {
@@ -81,12 +84,18 @@ export default function Nav() {
         </div>
         {!loading && <div className="ml-auto flex items-center gap-2 text-sm">
           {user ? <>
+            <button type="button" aria-label="Search (Ctrl+K)" title="Search (Ctrl+K)" onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH))}
+              className="rounded-xl p-2 text-white/65 hover:bg-[var(--surface-2)] hover:text-white"><Icon name="search" size={20} /></button>
+            <Link href="/home?view=inbox" title="Notifications" aria-label={notifications ? `Notifications, ${notifications > 99 ? '99+' : notifications} unread` : 'Notifications'}
+              className="relative rounded-xl p-2 text-white/65 hover:bg-[var(--surface-2)] hover:text-white"><Icon name="bell" size={20} />
+              {notifications > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full bg-rose-500 px-1 text-center text-[10px] font-semibold" style={{ color: '#fff' }}>{notifications > 99 ? '99+' : notifications}</span>}
+            </Link>
             <Link href="/spaces/new" className="auth-button hidden h-10 sm:inline-flex"><Icon name="plus" size={16} />Create</Link>
             <div ref={menuRef} className="relative ml-1">
               <button type="button" aria-label="Account menu" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(value => !value)} className="rounded-full">
                 <Avatar name={user.username} src={user.avatar_url} size={36} /></button>
               {menu && <div role="menu" className="card animate-in absolute right-0 z-40 mt-2 w-48 p-1 shadow-[var(--shadow-pop)]">
-                {([[`/u/${user.username}`, 'Your profile'], ['/settings', 'Settings'], ['/communities/manage', 'Manage communities'], ['/policies', 'Help & policies']] as const).map(([href, label]) =>
+                {([[`/u/${user.username}`, 'Your profile'], ['/home?view=saved', 'Saved items'], ['/home?view=files', 'All files'], ['/settings', 'Settings'], ['/communities/manage', 'Manage communities'], ['/policies', 'Help & policies']] as const).map(([href, label]) =>
                   <Link key={href} role="menuitem" href={href} className="block rounded-lg px-3 py-2 text-sm hover:bg-[var(--surface-2)]">{label}</Link>)}
                 <button type="button" role="menuitem" onClick={signOut} disabled={busy} className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--surface-2)] disabled:opacity-40">Log out</button>
               </div>}

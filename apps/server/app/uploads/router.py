@@ -143,9 +143,11 @@ async def download(attachment_id: str, exp: int, sig: str, session: Session):
 
 
 async def local_avatar(session: AsyncSession, version: str) -> FileResponse:
-    """Signed avatar links reuse the download route; the version is the end of the storage key."""
+    """Signed avatar and cover links reuse the download route; the version ends the storage key."""
     key = await session.scalar(
         select(User.avatar_key).where(User.avatar_key.like(f"avatars/%/{version}"))
+    ) or await session.scalar(
+        select(User.cover_key).where(User.cover_key.like(f"covers/%/{version}"))
     )
     target = path_for(key) if key else None
     if target is None or not target.exists():

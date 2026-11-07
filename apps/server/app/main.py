@@ -21,14 +21,18 @@ from app.directory.router import router as directory_router
 from app.dms.router import router as dms_router
 from app.docs.router import router as docs_router
 from app.explore.router import router as explore_router
+from app.files.router import router as files_router
 from app.games.router import hub_router as games_hub_router
 from app.games.router import router as games_router
 from app.invites.router import router as invites_router
 from app.linkpreview.router import router as linkpreview_router
 from app.messages.router import router as messages_router
+from app.notifications.router import router as notifications_router
 from app.posts.router import router as posts_router
 from app.realtime.socket import sio
 from app.reports.router import router as reports_router
+from app.saved.router import router as saved_router
+from app.search.router import router as search_router
 from app.sidebar.router import router as sidebar_router
 from app.spaces.router import router as spaces_router
 from app.storage.base import StorageError
@@ -84,6 +88,10 @@ api.include_router(games_hub_router, prefix="/api")
 api.include_router(games_router, prefix="/api")
 api.include_router(ai_router, prefix="/api")
 api.include_router(ai_me_router, prefix="/api")
+api.include_router(files_router, prefix="/api")
+api.include_router(saved_router, prefix="/api")
+api.include_router(notifications_router, prefix="/api")
+api.include_router(search_router, prefix="/api")
 
 # One ASGI app: Socket.IO handles /socket.io, everything else goes to FastAPI.
 app = socketio.ASGIApp(sio, other_asgi_app=api)

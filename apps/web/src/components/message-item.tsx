@@ -19,6 +19,7 @@ import { VoicePlayer } from './voice-player';
 import { LinkPreview } from './link-preview';
 import { HuddleNotes } from './ai/huddle-notes';
 import { TranslateLink } from './ai/translate';
+import { useSaved } from '../lib/saved';
 
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '🙏'];
 
@@ -59,6 +60,8 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
   const [picker, setPicker] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [todo, setTodo] = useState(false);
+  const saved = useSaved();
+  const isSaved = saved.isSaved('message', message.id);
   const own = userId === message.author.id;
   const live = !message.deleted && !message.status;
   const mentioned = !!userId && !!message.mentions?.some(mention=>mention.userId===userId);
@@ -146,6 +149,8 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
       {canWrite && <button aria-label="Add reaction" aria-expanded={picker} onClick={() => setPicker(value => !value)}>React</button>}
       {canWrite && onReply && <button aria-label="Reply in thread" onClick={() => onReply(message)}>Reply</button>}
       {own && <button aria-label="Edit message" onClick={() => { setEditing(true); setDraft(message.body ?? ''); }}>Edit</button>}
+      {!!userId && !message.id.startsWith('pending:') && <button aria-label={isSaved ? 'Remove from saved items' : 'Save message'} aria-pressed={isSaved}
+        onClick={() => void saved.toggle('message', message.id).catch(cause => onError(requestError(cause)))}>{isSaved ? 'Saved' : 'Save'}</button>}
       {canWrite && !!userId && !message.id.startsWith('pending:') && <button aria-label="Add to to-dos" onClick={() => setTodo(true)}>Add to to-dos</button>}
       {!own && !!userId && !message.id.startsWith('pending:') && <button aria-label="Report message" onClick={() => setReporting(true)}>Report</button>}
       {(own || canModerate) && <button aria-label="Delete message" onClick={() => void run('message:delete', { messageId: message.id })}>Delete</button>}

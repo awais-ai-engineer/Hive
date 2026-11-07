@@ -201,6 +201,7 @@ async def vote(session, user, message_id, option_id=None, close=False):
 
 async def notify_mentions(session, message):
     from app.messages.service import readable
+    from app.notifications.service import notify_mention
     from app.realtime.socket import sio
 
     channel = await session.get(Channel, message["channel_id"])
@@ -211,6 +212,7 @@ async def notify_mentions(session, message):
             await readable(session, channel.id, user["userId"])
         except HTTPException:
             continue
+        await notify_mention(session, message, channel, user["userId"])
         await sio.emit(
             "mention:new",
             {

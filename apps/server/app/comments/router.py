@@ -13,8 +13,9 @@ from app.comments.schemas import (
     CommentPatch,
     CommentVoteIn,
 )
-from app.db.models import User
+from app.db.models import Comment, Post, User
 from app.db.session import get_session
+from app.notifications import service as notifications
 from app.realtime.socket import sio
 
 router = APIRouter(tags=["comments"])
@@ -58,6 +59,10 @@ async def create_comment(
 ):
     comment = await service.create_comment(session, user, post_id, data)
     await sio.emit("comment:new", comment, room=f"post:{post_id}")
+    parent = await session.get(Comment, data.parentId) if data.parentId else None
+    await notifications.notify_comment(
+        session, user, await session.get(Post, post_id), comment, parent.author_id if parent else None
+    )
     return comment
 
 

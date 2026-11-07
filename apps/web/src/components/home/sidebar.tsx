@@ -35,9 +35,8 @@ type Props = {
   onChanged: () => void;
   onSwitchSpace: (slug: string) => void;
   onOpen: (id: string) => void;
-  onView: (view: 'unreads' | 'threads' | 'directory' | 'drafts') => void;
+  onView: (view: 'unreads' | 'threads' | 'directory' | 'drafts' | 'saved' | 'files') => void;
   onBrowseChannels: () => void;
-  onPerson: (username: string) => void;
   onChannelCreated: (channel: Channel) => void;
 };
 
@@ -219,13 +218,15 @@ export function Sidebar(props: Props) {
 
   return <nav aria-label="Conversations" className="on-dark flex h-full min-h-0 flex-col bg-gradient-to-b from-[var(--sidebar-from)] to-[var(--sidebar-to)] px-3 py-4">
     <SpaceSwitcher spaces={props.spaces} current={space} onSwitch={props.onSwitchSpace} />
-    <div className="mt-3"><FindConversation channels={channels} conversations={conversations} onOpen={props.onOpen} onPerson={props.onPerson} /></div>
+    <div className="mt-3"><FindConversation /></div>
     <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
       <ul className="space-y-0.5">
         <NavItem icon="threads" label="Threads" active={view === 'threads'} count={props.threadsUnread} onClick={() => props.onView('threads')} />
         <NavItem icon="inbox" label="Unreads" active={view === 'unreads'} count={props.unreadTotal} onClick={() => props.onView('unreads')} />
         <NavItem icon="directory" label="Directories" active={view === 'directory'} onClick={() => props.onView('directory')} />
         <NavItem icon="send" label="Drafts & scheduled" active={view === 'drafts'} onClick={() => props.onView('drafts')} />
+        <NavItem icon="bookmark" label="Saved items" active={view === 'saved'} onClick={() => props.onView('saved')} />
+        <NavItem icon="folder" label="All files" active={view === 'files'} onClick={() => props.onView('files')} />
         <NavItem icon="layers" label="Feed" href="/feed" />
         {space && <NavItem icon="users" label="Members" href={`/s/${space.slug}/members`} />}
       </ul>
