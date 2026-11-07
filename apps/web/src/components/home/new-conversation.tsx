@@ -11,6 +11,7 @@ export function NewConversation({ onOpened, onCancel }: { onOpened: (id: string)
   const [chosen, setChosen] = useState<UserResult[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [secret, setSecret] = useState(false);
 
   useEffect(() => {
     if (!query.trim()) { setResults([]); return; }
@@ -28,7 +29,7 @@ export function NewConversation({ onOpened, onCancel }: { onOpened: (id: string)
     if (!chosen.length) return;
     setBusy(true); setError('');
     try {
-      const conversation = await apiData<Conversation>('/api/dms', {
+      const conversation = await apiData<Conversation>(secret && chosen.length === 1 ? '/api/dms/secret' : '/api/dms', {
         method: 'POST', body: JSON.stringify({ usernames: chosen.map(person => person.username) }),
       });
       onOpened(conversation.id);
@@ -49,11 +50,13 @@ export function NewConversation({ onOpened, onCancel }: { onOpened: (id: string)
       <button type="button" className="w-full px-3 py-2 text-left text-sm hover:bg-white/5"
         onClick={() => { setChosen(list => [...list, result]); setQuery(''); }}>{result.username}</button>
     </li>)}</ul>}
+    {chosen.length === 1 && <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm"><input type="checkbox" className="mt-1 accent-[var(--brand)]" checked={secret} onChange={event => setSecret(event.target.checked)} />
+      <span><span className="font-medium">Secret conversation</span><span className="block text-xs text-white/60">End-to-end encrypted, text only. Even Hive can&apos;t read it, and it only opens on your devices.</span></span></label>}
     {query.trim() && !available.length && <p className="mt-2 text-xs text-white/40">No one found. You can message people who share a space with you.</p>}
     {error && <p role="alert" className="mt-2 text-sm text-rose-400">{error}</p>}
     <div className="mt-3 flex justify-end gap-2 text-sm">
       <button type="button" onClick={onCancel} className="px-3 py-1 text-white/60">Cancel</button>
-      <button disabled={!chosen.length || busy} className="auth-button">{chosen.length > 1 ? 'Start group' : 'Start chat'}</button>
+      <button disabled={!chosen.length || busy} className="auth-button">{chosen.length > 1 ? 'Start group' : secret ? 'Start secret chat' : 'Start chat'}</button>
     </div>
   </form>;
 }
