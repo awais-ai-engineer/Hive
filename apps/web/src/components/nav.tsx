@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../lib/auth';
 import { Avatar } from './ui/avatar';
 import { Icon, Logo } from './ui/icons';
+import { useInstall } from '../lib/push';
 import { DMS_CHANGED } from '../lib/dms';
 import { socket } from '../lib/socket';
 import { apiData } from '../lib/spaces';
@@ -19,6 +20,7 @@ export default function Nav() {
   const [error, setError] = useState('');
   const [unread, setUnread] = useState(0);
   const [menu, setMenu] = useState(false);
+  const install = useInstall();
   const menuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const notifications = useNotificationCount();
@@ -97,6 +99,7 @@ export default function Nav() {
               {menu && <div role="menu" className="card animate-in absolute right-0 z-40 mt-2 w-48 p-1 shadow-[var(--shadow-pop)]">
                 {([[`/u/${user.username}`, 'Your profile'], ['/home?view=saved', 'Saved items'], ['/home?view=files', 'All files'], ['/settings', 'Settings'], ['/communities/manage', 'Manage communities'], ['/policies', 'Help & policies']] as const).map(([href, label]) =>
                   <Link key={href} role="menuitem" href={href} className="block rounded-lg px-3 py-2 text-sm hover:bg-[var(--surface-2)]">{label}</Link>)}
+                {install && <button type="button" role="menuitem" onClick={() => { setMenu(false); void install(); }} className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--surface-2)]">Install Hive</button>}
                 <button type="button" role="menuitem" onClick={signOut} disabled={busy} className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--surface-2)] disabled:opacity-40">Log out</button>
               </div>}
             </div>
