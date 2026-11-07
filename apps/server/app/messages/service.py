@@ -1,5 +1,5 @@
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlparse
 
 from fastapi import HTTPException
@@ -7,9 +7,11 @@ from sqlalchemy import and_, delete, exists, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.access import SYSTEM_KINDS, message_live
 from app.core.config import settings
 from app.db.models import (
     Attachment,
+    AttachmentView,
     Channel,
     ChannelMember,
     ChannelRead,
@@ -29,6 +31,7 @@ from app.db.models import (
     SpaceType,
     ThreadRead,
     User,
+    UserDeviceKey,
 )
 from app.db.session import redis
 from app.messages.composer import extras, update_mentions
@@ -112,6 +115,31 @@ async def writable(session: AsyncSession, channel_id: str, user_id: str):
     return channel
 
 
+async def view_states(session: AsyncSession, files: list[Attachment], viewer_id: str | None) -> dict:
+    """Per view-once file: a recipient sees whether they opened it; the sender, whether everyone did."""
+    if not files or viewer_id is None:
+        return {}
+    views = set((await session.execute(
+        select(AttachmentView.attachment_id, AttachmentView.user_id)
+        .where(AttachmentView.attachment_id.in_([f.id for f in files]))
+    )).all())
+    people: dict[str, set[str]] = {}
+    for channel_id, user_id in await session.execute(
+        select(DirectMember.channel_id, DirectMember.user_id)
+        .where(DirectMember.channel_id.in_({f.channel_id for f in files if f.channel_id}))
+    ):
+        people.setdefault(channel_id, set()).add(user_id)
+    result = {}
+    for file in files:
+        if file.uploader_id == viewer_id:
+            others = people.get(file.channel_id, set()) - {viewer_id}
+            opened = bool(others) and all((file.id, person) in views for person in others)
+        else:
+            opened = (file.id, viewer_id) in views
+        result[file.id] = "opened" if opened else "unopened"
+    return result
+
+
 async def serialize(
     session: AsyncSession, rows: list[tuple[Message, User]], viewer_id: str | None = None
 ) -> list[dict]:
@@ -133,8 +161,11 @@ async def serialize(
             )
         )
         serialized = await serialize_files(files)
+        states = await view_states(session, [f for f in files if f.view_once], viewer_id)
         for file in files:
             if file.id in serialized:
+                if file.id in states:
+                    serialized[file.id].viewState = states[file.id]
                 attachments.setdefault(file.message_id, []).append(serialized[file.id])
 
     # Extract post links from message bodies: {WEB_ORIGIN}/p/<26-char id>, max 3 per message
@@ -248,6 +279,8 @@ async def serialize(
                 parent_id=message.parent_id,
                 author=AuthorOut.model_validate(author),
                 body=None if deleted else message.body,
+                expires_at=message.expires_at,
+                ciphertext=None if deleted else message.ciphertext,
                 client_msg_id=message.client_msg_id,
                 created_at=message.created_at,
                 edited_at=message.edited_at,
@@ -274,7 +307,7 @@ async def message_out(
 
 
 def _with_authors():
-    return select(Message, User).join(User, User.id == Message.author_id)
+    return select(Message, User).join(User, User.id == Message.author_id).where(message_live())
 
 
 async def _page(
@@ -304,7 +337,7 @@ async def history(session, channel_id, user_id, before=None, after=None, limit=5
 
 async def thread(session, message_id, user_id, after=None, limit=100):
     parent = await session.get(Message, message_id)
-    if parent is None or parent.parent_id is not None:
+    if parent is None or parent.parent_id is not None or _expired(parent):
         raise HTTPException(404, "Message not found")
     await readable(session, parent.channel_id, user_id)
     query = _with_authors().where(Message.parent_id == parent.id)
@@ -326,9 +359,47 @@ async def _check_rate(user_id: str) -> None:
         raise HTTPException(429, "Too many messages; try again shortly")
 
 
+def _expired(message: Message) -> bool:
+    return message.expires_at is not None and message.expires_at <= datetime.now(UTC)
+
+
+def expiry_for(channel: Channel) -> datetime | None:
+    """When a message sent now to this conversation disappears (None: it stays)."""
+    if not channel.disappear_after:
+        return None
+    return datetime.now(UTC) + timedelta(seconds=channel.disappear_after)
+
+
+async def _check_secret(session: AsyncSession, channel: Channel, user: User, data: SendIn) -> None:
+    """Secret conversations accept only ciphertext addressed to devices of their two people."""
+    box = data.ciphertext
+    if not channel.encrypted:
+        if box is not None:
+            raise HTTPException(422, "This conversation is not end-to-end encrypted")
+        return
+    if box is None:
+        raise HTTPException(422, "Messages in a secret conversation are encrypted on your device")
+    if data.parentId is not None:
+        raise HTTPException(422, "Secret conversations don't have threads")
+    people = list(await session.scalars(
+        select(DirectMember.user_id).where(DirectMember.channel_id == channel.id)
+    ))
+    owner = dict((await session.execute(
+        select(UserDeviceKey.id, UserDeviceKey.user_id).where(UserDeviceKey.user_id.in_(people))
+    )).all())
+    targets = [envelope.deviceId for envelope in box.envelopes]
+    if owner.get(box.senderDeviceId) != user.id:
+        raise HTTPException(422, "Unknown sending device")
+    if len(set(targets)) != len(targets) or any(device not in owner for device in targets):
+        raise HTTPException(422, "The message was addressed to an unknown device")
+    if not {person for person in people if person != user.id} <= {owner[device] for device in targets}:
+        raise HTTPException(422, "The other person has no device that can read secret messages yet")
+
+
 async def send(session: AsyncSession, user: User, data: SendIn, *, commit=True):
     """Returns (message, inserted, updated_parent). Retries with the same clientMsgId are no-ops."""
-    await writable(session, data.channelId, user.id)
+    channel = await writable(session, data.channelId, user.id)
+    await _check_secret(session, channel, user, data)
     existing_query = select(Message).where(
         Message.author_id == user.id, Message.client_msg_id == data.clientMsgId
     )
@@ -336,16 +407,23 @@ async def send(session: AsyncSession, user: User, data: SendIn, *, commit=True):
     if existing is None:
         if not user.is_system:
             await _check_rate(user.id)
+        parent = None
         if data.parentId is not None:
             parent = await session.get(Message, data.parentId)
             if parent is None or parent.channel_id != data.channelId:
                 raise HTTPException(404, "Message not found")
-            if parent.parent_id is not None or parent.deleted_at is not None or parent.kind == "huddle":
+            if (parent.parent_id is not None or parent.deleted_at is not None
+                    or parent.kind in SYSTEM_KINDS or _expired(parent)):
                 raise HTTPException(422, "Replies can only be added to an existing top-level message")
+        expires_at = expiry_for(channel)
+        if parent is not None and parent.expires_at is not None:
+            expires_at = min(expires_at or parent.expires_at, parent.expires_at)
         existing = await session.scalar(
             insert(Message).values(
                 channel_id=data.channelId, author_id=user.id, parent_id=data.parentId,
                 body=data.body, kind=data.kind, client_msg_id=data.clientMsgId,
+                expires_at=expires_at,
+                ciphertext=data.ciphertext.model_dump() if data.ciphertext else None,
             ).on_conflict_do_nothing(index_elements=["author_id", "client_msg_id"])
             .returning(Message)
         )
@@ -368,6 +446,13 @@ async def _finish_insert(session, user, data: SendIn, message: Message, *, commi
         session.add_all([PollOption(message_id=message.id, position=i, label=label) for i, label in enumerate(data.poll.options)])
     await update_mentions(session, message)
     await session.execute(delete(Draft).where(Draft.user_id == user.id, Draft.channel_id == data.channelId, Draft.parent_id == data.parentId))
+    if data.viewOnce:
+        channel = await session.get(Channel, data.channelId)
+        kinds = list(await session.scalars(
+            select(Attachment.kind).where(Attachment.id.in_(data.attachmentIds))
+        ))
+        if channel.type != ChannelType.dm or any(kind not in ("image", "video") for kind in kinds):
+            raise HTTPException(422, "Only photos and videos in direct messages can be sent to view once")
     if data.attachmentIds:
         claimed = await session.scalars(
             update(Attachment)
@@ -375,7 +460,7 @@ async def _finish_insert(session, user, data: SendIn, message: Message, *, commi
                 Attachment.id.in_(data.attachmentIds), Attachment.uploader_id == user.id,
                 Attachment.channel_id == data.channelId, Attachment.message_id.is_(None),
             )
-            .values(message_id=message.id)
+            .values(message_id=message.id, view_once=data.viewOnce)
             .returning(Attachment.id)
         )
         if len(list(claimed)) != len(data.attachmentIds):
@@ -402,8 +487,10 @@ async def change(session: AsyncSession, user: User, message_id: str, body: str |
     if message is None:
         raise HTTPException(404, "Message not found")
     _, member = await readable(session, message.channel_id, user.id)
-    if message.kind == "huddle":
+    if message.kind in SYSTEM_KINDS:
         raise HTTPException(422, "System messages cannot be changed")
+    if _expired(message):
+        raise HTTPException(404, "Message not found")
     if message.author_id != user.id:
         if body is not None:
             raise HTTPException(403, "Only the author can edit a message")
@@ -411,7 +498,10 @@ async def change(session: AsyncSession, user: User, message_id: str, body: str |
     if body is None:
         message.deleted_at = message.deleted_at or datetime.now(UTC)
         message.body = ""
+        message.ciphertext = None
     else:
+        if message.ciphertext is not None:
+            raise HTTPException(422, "Secret messages can't be edited")
         if message.deleted_at:
             raise HTTPException(422, "Deleted messages cannot be edited")
         message.body = body
@@ -426,7 +516,7 @@ async def toggle_reaction(session: AsyncSession, user: User, message_id: str, em
     if message is None:
         raise HTTPException(404, "Message not found")
     await writable(session, message.channel_id, user.id)
-    if message.deleted_at is not None or message.kind == "huddle":
+    if message.deleted_at is not None or message.kind in SYSTEM_KINDS or _expired(message):
         raise HTTPException(422, "This message cannot be reacted to")
     removed = await session.scalar(
         delete(Reaction).where(
@@ -496,7 +586,8 @@ async def unread_counts(session: AsyncSession, user_id: str, channel_ids: list[s
         ))
         .where(
             Message.channel_id.in_(channel_ids), True if mention_username else Message.parent_id.is_(None),
-            Message.deleted_at.is_(None), Message.author_id != user_id, Message.kind != "huddle",
+            Message.deleted_at.is_(None), Message.author_id != user_id,
+            Message.kind.notin_(SYSTEM_KINDS), message_live(),
             mention_condition(mention_username) if mention_username else True,
             unread_thread_mention(user_id) if mention_username else True,
             or_(

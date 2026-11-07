@@ -82,7 +82,9 @@ async def own_scheduled(session, user, item_id):
 
 
 async def save_scheduled(session, user, channel_id, data, row=None):
-    await writable(session, channel_id, user.id)
+    channel = await writable(session, channel_id, user.id)
+    if channel.encrypted:
+        raise HTTPException(422, "Secret conversations can't schedule messages")
     await parent_scope(session, channel_id, data.parentId)
     if data.attachmentIds:
         ids = list(
@@ -120,7 +122,9 @@ async def get_draft(session, user, channel_id, parent_id):
 
 
 async def save_draft(session, user, channel_id, data):
-    await readable(session, channel_id, user.id)
+    channel, _ = await readable(session, channel_id, user.id)
+    if channel.encrypted:
+        raise HTTPException(422, "Drafts aren't saved in secret conversations")
     await parent_scope(session, channel_id, data.parentId)
     # The unique expression index is the final guard; the user lock serializes upserts.
     await session.scalar(select(User).where(User.id == user.id).with_for_update())

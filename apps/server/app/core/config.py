@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     ai_max_input_chars: int = 24000
     ai_max_output_tokens: int = 2000
 
+    # Browser push (Web Push with VAPID). Leave empty to switch push off; generate a pair with
+    # `python -m app.push.keys`.
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = "mailto:admin@example.com"
+
     def validate_storage(self):
         if self.storage_driver not in ("local", "supabase"):
             raise ValueError("STORAGE_DRIVER must be local or supabase")

@@ -47,6 +47,7 @@ class ChannelOut(BaseModel):
     topic: str | None
     position: int
     is_private: bool = False
+    disappear_after: int | None = None
     unread: int = 0
 
 

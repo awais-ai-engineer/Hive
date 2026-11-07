@@ -12,6 +12,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from app.db.models import Channel, ChannelType, DirectMember, Reminder, ScheduledMessage, User
 from app.db.session import SessionLocal
+from app.disappearing.service import expire_due
 from app.messages.schemas import SendIn
 from app.messages.service import send
 
@@ -143,6 +144,7 @@ async def _loop():
     while True:
         try:
             await run_due()
+            await expire_due()
         except Exception:
             log.exception("Scheduled delivery failed; retrying on next tick")
         await asyncio.sleep(15)

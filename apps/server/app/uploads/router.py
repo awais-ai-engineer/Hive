@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import UTC, datetime
 from pathlib import PurePath
 from typing import Annotated
 
@@ -7,14 +8,15 @@ from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import get_current_user
 from app.core.config import settings
-from app.db.models import Attachment, MemberRole, User, new_id
+from app.db.models import Attachment, AttachmentView, MemberRole, Message, User, new_id
 from app.db.session import get_session
 from app.messages.schemas import AttachmentOut
-from app.messages.service import writable
+from app.messages.service import readable, view_states, writable
 from app.spaces.permissions import require_role
 from app.spaces.service import load_space
 from app.storage import get_storage
@@ -110,7 +112,9 @@ async def upload(channel_id: str, file: UploadFile, session: Session, user: Curr
                  kind: Annotated[str | None, Form()] = None,
                  durationMs: Annotated[int | None, Form()] = None,
                  waveform: Annotated[str | None, Form()] = None):
-    await writable(session, channel_id, user.id)
+    channel = await writable(session, channel_id, user.id)
+    if channel.encrypted:
+        raise HTTPException(422, "Attachments aren't available in secret conversations")
     return await store_upload(file, session, user, channel_id=channel_id,
                               requested_kind=kind, duration_ms=durationMs, waveform=waveform)
 
@@ -133,6 +137,11 @@ async def download(attachment_id: str, exp: int, sig: str, session: Session):
     if not target.exists():
         raise HTTPException(404, "File not found")
     inline = attachment.kind in ("image", "video", "audio")
+    if attachment.view_once:
+        return FileResponse(
+            target, media_type=attachment.content_type, content_disposition_type="inline",
+            headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"},
+        )
     return FileResponse(
         target,
         media_type=attachment.content_type if inline else "application/octet-stream",
@@ -158,3 +167,39 @@ async def local_avatar(session: AsyncSession, version: str) -> FileResponse:
         target, media_type=content_type, content_disposition_type="inline",
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=3600"},
     )
+
+
+VIEW_ONCE_LINK_SECONDS = 30
+
+
+@router.post("/attachments/{attachment_id}/view-once")
+async def open_view_once(attachment_id: str, session: Session, user: CurrentUser):
+    """Open a view-once photo or video. Each recipient gets exactly one short-lived link."""
+    from app.realtime.socket import sio
+
+    attachment = await session.get(Attachment, attachment_id)
+    message = await session.get(Message, attachment.message_id) if attachment and attachment.message_id else None
+    gone = message is None or message.deleted_at is not None or (
+        message.expires_at is not None and message.expires_at <= datetime.now(UTC))
+    if attachment is None or not attachment.view_once or gone:
+        raise HTTPException(404, "File not found")
+    await readable(session, message.channel_id, user.id)
+    if attachment.uploader_id == user.id:
+        raise HTTPException(403, "You sent this. Your recipients can open it once.")
+    opened = await session.scalar(
+        insert(AttachmentView).values(attachment_id=attachment.id, user_id=user.id)
+        .on_conflict_do_nothing().returning(AttachmentView.attachment_id)
+    )
+    await session.commit()
+    if opened is None:
+        raise HTTPException(410, "You already opened this. It can't be shown again.")
+    url = (await get_storage().signed_urls([
+        SignRequest(attachment.storage_key, attachment.filename, True, ttl=VIEW_ONCE_LINK_SECONDS)
+    ]))[attachment.storage_key]
+    sender_state = (await view_states(session, [attachment], attachment.uploader_id))[attachment.id]
+    event = {"attachmentId": attachment.id, "messageId": message.id, "channelId": message.channel_id,
+             "viewerId": user.id, "uploaderId": attachment.uploader_id, "senderState": sender_state}
+    for person in {attachment.uploader_id, user.id}:
+        await sio.emit("attachment:viewed", event, room=f"user:{person}")
+    return {"url": url, "kind": attachment.kind, "contentType": attachment.content_type,
+            "expiresIn": VIEW_ONCE_LINK_SECONDS}

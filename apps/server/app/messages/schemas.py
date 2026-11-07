@@ -46,8 +46,25 @@ class PollVoteIn(MessageIn):
     optionId: str | None = None
 
 
+class Envelope(BaseModel):
+    """The message text, encrypted for one device (its id is the recipient device)."""
+
+    deviceId: str = Field(min_length=1, max_length=40)
+    iv: str = Field(min_length=8, max_length=40)
+    ct: str = Field(min_length=8, max_length=24000)
+
+
+class CiphertextIn(BaseModel):
+    v: Literal[1] = 1
+    senderDeviceId: str = Field(min_length=1, max_length=40)
+    salt: str = Field(min_length=8, max_length=64)
+    envelopes: list[Envelope] = Field(min_length=1, max_length=20)
+
+
 class SendIn(ChannelIn):
     kind: Literal["text", "poll", "voice"] = "text"
+    viewOnce: bool = False
+    ciphertext: CiphertextIn | None = None
     poll: PollIn | None = None
     body: str = ""
     clientMsgId: str
@@ -74,7 +91,13 @@ class SendIn(ChannelIn):
             raise ValueError("Poll is required")
         if self.kind == "voice" and len(self.attachmentIds) != 1:
             raise ValueError("Voice messages require one audio attachment")
-        if not self.body and not self.attachmentIds and not self.poll:
+        if self.ciphertext is not None and (
+            self.body or self.attachmentIds or self.poll or self.kind != "text" or self.viewOnce
+        ):
+            raise ValueError("Secret messages contain only encrypted text")
+        if self.viewOnce and (not self.attachmentIds or self.kind != "text"):
+            raise ValueError("Only photos and videos can be sent to view once")
+        if not self.body and not self.attachmentIds and not self.poll and self.ciphertext is None:
             raise ValueError("Message must contain text or an attachment")
         self.attachmentIds = list(dict.fromkeys(self.attachmentIds))
         return self
@@ -146,6 +169,10 @@ class AttachmentOut(BaseModel):
     content_type: str
     size: int
     url: str
+    # View once: no link until the recipient opens it. `viewState` is for the viewer: a recipient
+    # sees whether they opened it, the sender sees whether everyone has.
+    viewOnce: bool = False
+    viewState: Literal["unopened", "opened"] | None = None
 
 
 class PostSummaryPlace(BaseModel):
@@ -196,7 +223,9 @@ class PollOut(BaseModel):
 
 
 class MessageOut(BaseModel):
-    kind: Literal["text", "poll", "voice", "huddle"] = "text"
+    kind: Literal["text", "poll", "voice", "huddle", "system"] = "text"
+    expires_at: datetime | None = None
+    ciphertext: dict | None = None
     channelLinks: list[ChannelLinkOut] = Field(default_factory=list)
     mentions: list[MentionOut] = Field(default_factory=list)
     poll: PollOut | None = None

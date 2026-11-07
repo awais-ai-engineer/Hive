@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.access import message_live
 from app.ai.prompt import clean_line
 from app.core.config import settings
 from app.db.models import ChannelRead, Message, User
@@ -46,8 +47,8 @@ class Snippet:
 def _visible(query, user_id: str):
     return (
         query.join(User, User.id == Message.author_id)
-        .where(Message.deleted_at.is_(None), Message.kind.in_(READABLE_KINDS), Message.body != "",
-               not_blocked_with(user_id))
+        .where(Message.deleted_at.is_(None), message_live(), Message.kind.in_(READABLE_KINDS),
+               Message.body != "", Message.ciphertext.is_(None), not_blocked_with(user_id))
     )
 
 
@@ -71,8 +72,15 @@ async def _rows(session: AsyncSession, user: User, *conditions, limit: int = MAX
     return list((await session.execute(query.order_by(Message.id.desc()).limit(limit))).all())
 
 
+async def _readable(session: AsyncSession, channel_id: str, user_id: str):
+    channel, member = await readable(session, channel_id, user_id)
+    if channel.encrypted:
+        raise HTTPException(422, "AI features are not available in secret conversations.")
+    return channel, member
+
+
 async def thread_snippets(session: AsyncSession, user: User, channel_id: str, parent_id: str):
-    await readable(session, channel_id, user.id)
+    await _readable(session, channel_id, user.id)
     parent = await session.get(Message, parent_id)
     if parent is None or parent.channel_id != channel_id or parent.parent_id is not None:
         raise HTTPException(404, "Message not found")
@@ -83,7 +91,7 @@ async def thread_snippets(session: AsyncSession, user: User, channel_id: str, pa
 
 async def channel_catch_up(session: AsyncSession, user: User, channel_id: str) -> tuple[list[Snippet], str]:
     """What you have not read in a channel, or the last 24 hours when nothing is unread."""
-    channel, _ = await readable(session, channel_id, user.id)
+    channel, _ = await _readable(session, channel_id, user.id)
     marker = await session.scalar(select(ChannelRead.last_read_id).where(
         ChannelRead.channel_id == channel_id, ChannelRead.user_id == user.id))
     base = [Message.channel_id == channel_id, Message.parent_id.is_(None), Message.author_id != user.id]
@@ -97,7 +105,7 @@ async def channel_catch_up(session: AsyncSession, user: User, channel_id: str) -
 
 
 async def channel_recent(session: AsyncSession, user: User, channel_id: str) -> list[Snippet]:
-    channel, _ = await readable(session, channel_id, user.id)
+    channel, _ = await _readable(session, channel_id, user.id)
     rows = await _rows(session, user, Message.channel_id == channel_id, Message.parent_id.is_(None), limit=100)
     return _fit(rows, place=channel.name)
 
@@ -105,7 +113,7 @@ async def channel_recent(session: AsyncSession, user: User, channel_id: str) -> 
 async def channel_window(
     session: AsyncSession, user: User, channel_id: str, start: datetime, end: datetime
 ) -> list[Snippet]:
-    channel, _ = await readable(session, channel_id, user.id)
+    channel, _ = await _readable(session, channel_id, user.id)
     rows = await _rows(session, user, Message.channel_id == channel_id,
                        and_(Message.created_at >= start, Message.created_at <= end))
     return _fit(rows, place=channel.name)
