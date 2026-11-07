@@ -20,6 +20,7 @@ import { LinkPreview } from './link-preview';
 import { HuddleNotes } from './ai/huddle-notes';
 import { TranslateLink } from './ai/translate';
 import { useSaved } from '../lib/saved';
+import { ViewOnce } from './view-once';
 
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '🙏'];
 
@@ -33,13 +34,16 @@ type Props = {
   onReply?: (message: ChatMessage) => void;
   onError: (message: string) => void;
   channels?: {id:string;name:string;href:string}[];
+  /** Secret conversations: the decrypted text (undefined while decrypting, null when this device cannot read it). */
+  secretText?: string | null;
 };
 
 export function formatSize(bytes: number) {
   return bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(0)} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
-function AttachmentView({ file }: { file: Attachment }) {
+function AttachmentView({ file, own }: { file: Attachment; own: boolean }) {
+  if (file.viewOnce) return <ViewOnce file={file} own={own} />;
   if (file.kind === 'audio') return <VoicePlayer attachment={file} />;
   const href = /^https?:\/\//.test(file.url) ? file.url : `${API_URL}${file.url}`;
   if (file.kind === 'video') return <video src={href} controls preload="metadata" playsInline className="max-h-80 max-w-full rounded" />;
@@ -54,7 +58,7 @@ function AttachmentView({ file }: { file: Attachment }) {
   </a>;
 }
 
-export function MessageItem({ message, grouped, userId, canWrite, canModerate, onRetry, onReply, onError, channels = [] }: Props) {
+export function MessageItem({ message, grouped, userId, canWrite, canModerate, onRetry, onReply, onError, channels = [], secretText }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [picker, setPicker] = useState(false);
@@ -64,8 +68,11 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
   const isSaved = saved.isSaved('message', message.id);
   const own = userId === message.author.id;
   const live = !message.deleted && !message.status;
+  const secret = !!message.ciphertext || message.plain !== undefined;
+  const secretBody = message.plain ?? secretText;
+  const viewOnce = message.attachments.some(file => file.viewOnce);
   const mentioned = !!userId && !!message.mentions?.some(mention=>mention.userId===userId);
-  useEffect(()=>{const edit=(event:Event)=>{if(own&&message.kind!=='poll'&&message.kind!=='voice'&&(event as CustomEvent<{id:string}>).detail.id===message.id){setDraft(message.body??'');setEditing(true);}};window.addEventListener('hive:edit-message',edit);return()=>window.removeEventListener('hive:edit-message',edit);},[own,message.id,message.body,message.kind]);
+  useEffect(()=>{const edit=(event:Event)=>{if(own&&!message.ciphertext&&message.kind!=='poll'&&message.kind!=='voice'&&(event as CustomEvent<{id:string}>).detail.id===message.id){setDraft(message.body??'');setEditing(true);}};window.addEventListener('hive:edit-message',edit);return()=>window.removeEventListener('hive:edit-message',edit);},[own,message.id,message.body,message.kind]);
 
   async function run(event: string, payload: object) {
     try { await chatRequest(event, payload); return true; }
@@ -80,6 +87,14 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
   }
 
   const time = new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (message.kind === 'system') {
+    return <div data-message-id={message.id} className="my-3 px-2">
+      <div role="status" className="flex items-center justify-center gap-2 text-center text-xs text-white/55">
+        <Icon name="clock" size={14} className="shrink-0" /><span><strong>{message.author.username}</strong> {message.body}</span>
+        <time dateTime={message.created_at} title={new Date(message.created_at).toLocaleString()} className="shrink-0 text-white/40">{time}</time>
+      </div>
+    </div>;
+  }
   if (message.kind === 'huddle') {
     // System line, for example the summary of a huddle that just ended.
     return <div data-message-id={message.id} className="my-3 px-2">
@@ -107,6 +122,7 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
       <time dateTime={message.created_at} title={new Date(message.created_at).toLocaleString()} className="shrink-0 text-xs text-white/40">
         {time}
       </time>
+      {message.expires_at && <span className="shrink-0 text-xs text-white/40" title={`Disappears ${new Date(message.expires_at).toLocaleString()}`}><Icon name="clock" size={12} className="inline" /></span>}
     </div>}
     {mentioned&&<span className="my-1 inline-block rounded-full bg-brand px-2 py-0.5 text-xs text-white">Mentions you</span>}
     {editing ? <textarea autoFocus aria-label="Edit message" value={draft} maxLength={4000}
@@ -115,17 +131,19 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
         if (event.key === 'Escape') setEditing(false);
         if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void saveEdit(); }
       }} /> : message.deleted ? <p className="italic leading-relaxed text-white/40">Message deleted</p>
+      : secret ? <p className="whitespace-pre-wrap break-words leading-relaxed text-white/90 [overflow-wrap:anywhere]">{secretBody === undefined ? <span className="italic text-white/50">Decrypting…</span>
+        : secretBody === null ? <span className="italic text-white/50">This message can&apos;t be read on this device. Secret messages only open on devices that were set up when they were sent.</span> : secretBody}</p>
       : message.kind === 'poll' && message.poll ? <PollCard message={message} userId={userId} />
       : message.body ? <div className="break-words leading-relaxed text-white/90 [overflow-wrap:anywhere]">
         <RichText source={message.body} mentions={message.mentions ?? []} channels={message.channelLinks ?? channels} />
         {message.edited_at && <span className="text-xs text-white/40">(edited)</span>}
       </div> : null}
-    {!editing && live && !own && (!message.kind || message.kind === 'text') && !!message.body?.trim()
+    {!editing && live && !own && !secret && (!message.kind || message.kind === 'text') && !!message.body?.trim()
       && <TranslateLink targetId={message.id} channelId={message.channel_id} />}
-    {!editing && !message.deleted && message.kind !== 'poll' && !!message.body && !message.post_previews?.length
+    {!editing && !message.deleted && !secret && message.kind !== 'poll' && !!message.body && !message.post_previews?.length
       && <LinkPreview source={message.body} messageId={message.id} userId={userId} />}
     {message.attachments.length > 0 && <div className="mt-1 flex flex-wrap gap-2">
-      {message.attachments.map(file => <AttachmentView key={file.id} file={file} />)}
+      {message.attachments.map(file => <AttachmentView key={file.id} file={file} own={own} />)}
     </div>}
     {!message.deleted && !!message.post_previews?.length && <div className="mt-1 flex flex-col gap-2">
       {message.post_previews.map(preview => <Link key={preview.id} href={`/p/${preview.id}`}
@@ -153,10 +171,10 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
     {live && (canWrite || own || canModerate || !!userId) && <div className="mt-1 flex flex-wrap gap-3 text-xs font-medium text-brand sm:absolute sm:-top-3 sm:right-3 sm:mt-0 sm:gap-1 sm:rounded-xl sm:border sm:border-white/10 sm:bg-surface sm:p-1 sm:shadow-[var(--shadow-card)] sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 [&>button]:rounded-lg [&>button]:px-2 [&>button]:py-1 [&>button:hover]:bg-[var(--surface-2)]">
       {canWrite && <button aria-label="Add reaction" aria-expanded={picker} onClick={() => setPicker(value => !value)}>React</button>}
       {canWrite && onReply && <button aria-label="Reply in thread" onClick={() => onReply(message)}>Reply</button>}
-      {own && <button aria-label="Edit message" onClick={() => { setEditing(true); setDraft(message.body ?? ''); }}>Edit</button>}
-      {!!userId && !message.id.startsWith('pending:') && <button aria-label={isSaved ? 'Remove from saved items' : 'Save message'} aria-pressed={isSaved}
+      {own && !secret && <button aria-label="Edit message" onClick={() => { setEditing(true); setDraft(message.body ?? ''); }}>Edit</button>}
+      {!!userId && !secret && !viewOnce && !message.id.startsWith('pending:') && <button aria-label={isSaved ? 'Remove from saved items' : 'Save message'} aria-pressed={isSaved}
         onClick={() => void saved.toggle('message', message.id).catch(cause => onError(requestError(cause)))}>{isSaved ? 'Saved' : 'Save'}</button>}
-      {canWrite && !!userId && !message.id.startsWith('pending:') && <button aria-label="Add to to-dos" onClick={() => setTodo(true)}>Add to to-dos</button>}
+      {canWrite && !!userId && !secret && !viewOnce && !message.id.startsWith('pending:') && <button aria-label="Add to to-dos" onClick={() => setTodo(true)}>Add to to-dos</button>}
       {!own && !!userId && !message.id.startsWith('pending:') && <button aria-label="Report message" onClick={() => setReporting(true)}>Report</button>}
       {(own || canModerate) && <button aria-label="Delete message" onClick={() => void run('message:delete', { messageId: message.id })}>Delete</button>}
     </div>}

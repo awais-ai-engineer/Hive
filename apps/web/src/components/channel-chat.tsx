@@ -8,6 +8,9 @@ import { JoinPrompt } from './join-prompt';
 import { Composer } from './composer';
 import { MessageItem } from './message-item';
 import { ThreadPanel } from './thread-panel';
+import { SecretNotice } from './secret-notice';
+import { useSecretChat } from '../lib/secret';
+import { requestError } from '../lib/spaces';
 
 type Props = {
   channel: { id: string; name: string };
@@ -24,9 +27,13 @@ type Props = {
   /** Optional controlled thread panel (e.g. kept in the URL); otherwise managed internally. */
   threadId?: string | null;
   onThreadChange?: (threadId: string | null) => void;
+  /** Secret conversation: messages are encrypted on this device, text only. */
+  encrypted?: boolean;
+  /** Direct messages: photos and videos can be sent to view once. */
+  allowViewOnce?: boolean;
 };
 
-export function ChannelChat({ channel, space, channels, placeholder, reason, canModerate, tracksReads, onRead, ...thread }: Props) {
+export function ChannelChat({ channel, space, channels, placeholder, reason, canModerate, tracksReads, onRead, encrypted = false, allowViewOnce = false, ...thread }: Props) {
   const { user } = useAuth();
   const chat = useChannelMessages(channel.id);
   const [error, setError] = useState('');
@@ -42,6 +49,24 @@ export function ChannelChat({ channel, space, channels, placeholder, reason, can
   const anchor = useRef<{ height: number; top: number } | null>(null);
   const lastRead = useRef<string | null>(null);
   const canWrite = !reason;
+  const secret = useSecretChat(user?.id, channel.id, encrypted);
+  const [plain, setPlain] = useState<Record<string, string | null>>({});
+  const decrypt = secret.decrypt;
+  useEffect(() => {
+    if (!encrypted) return;
+    let active = true;
+    for (const message of chat.messages) {
+      if (!message.ciphertext || message.id in plain) continue;
+      void decrypt(message).then(text => { if (active) setPlain(current => ({ ...current, [message.id]: text })); }).catch(() => { if (active) setPlain(current => ({ ...current, [message.id]: null })); });
+    }
+    return () => { active = false; };
+  }, [encrypted, chat.messages, decrypt, plain]);
+  async function sendSecret(text: string) {
+    try {
+      const ciphertext = await secret.encrypt(text.trim());
+      return await chat.send('', undefined, [], { ciphertext, plain: text.trim() });
+    } catch (cause) { setError(requestError(cause)); return false; }
+  }
 
   useLayoutEffect(() => {
     const element = list.current;
@@ -97,7 +122,7 @@ export function ChannelChat({ channel, space, channels, placeholder, reason, can
     // A failed request does not produce a list update.
     requestAnimationFrame(() => { anchor.current = null; });
   }
-  const retry = (message: ChatMessage) => void chat.send(message.body ?? '', message.client_msg_id!, message.attachments, { kind: message.kind === 'huddle' ? 'text' : message.kind ?? 'text', ...(message.poll ? { poll: { question: message.poll.question, options: message.poll.options.map(option => option.label) } } : {}) });
+  const retry = (message: ChatMessage) => encrypted ? void sendSecret(message.plain ?? '') : void chat.send(message.body ?? '', message.client_msg_id!, message.attachments, { kind: message.kind === 'huddle' || message.kind === 'system' ? 'text' : message.kind ?? 'text', ...(message.poll ? { poll: { question: message.poll.question, options: message.poll.options.map(option => option.label) } } : {}) });
   const closeThread = useCallback(() => setThreadId(null), [setThreadId]);
   const names = Object.values(typers).map(value => value.name);
   const typingText = names.length > 2 ? 'Several people are typing…'
@@ -126,7 +151,8 @@ export function ChannelChat({ channel, space, channels, placeholder, reason, can
           Date.parse(message.created_at) - Date.parse(previous.created_at) < 300000;
         return <MessageItem key={message.id} message={message} grouped={grouped} userId={user?.id}
           canWrite={canWrite} canModerate={canModerate} onRetry={retry} onError={setError}
-          onReply={item => setThreadId(item.id)} />;
+          secretText={message.ciphertext ? plain[message.id] : undefined}
+          onReply={encrypted ? undefined : item => setThreadId(item.id)} />;
       })}
     </div>
     {newMessages && <button className="mt-2 w-full rounded bg-amber-400/15 py-1 text-sm text-amber-400" onClick={() => {
@@ -134,10 +160,11 @@ export function ChannelChat({ channel, space, channels, placeholder, reason, can
       nearBottom.current = true; setNewMessages(false);
     }}>New messages ↓</button>}
     <p role="status" className="min-h-7 py-1 text-xs text-white/50">{typingText}</p>
-    <Composer channelId={channel.id} channels={channels} placeholder={placeholder} reason={reason} sendTyping onEditLast={() => { const last=chat.messages.filter(item=>item.author.id===user?.id&&!item.deleted&&!item.status&&(!item.kind||item.kind==='text')).at(-1);if(last)window.dispatchEvent(new CustomEvent('hive:edit-message',{detail:{id:last.id}})); }}
-      onSend={(body, files, options) => { nearBottom.current = true; return chat.send(body, undefined, files, options); }} />
+    {encrypted && <SecretNotice name={secret.other?.username ?? 'them'} safety={secret.safety} ready={secret.ready} peerReady={secret.peerReady} error={secret.error} />}
+    <Composer channelId={channel.id} channels={channels} secret={encrypted} allowViewOnce={allowViewOnce} placeholder={placeholder} reason={reason || (encrypted && !!secret.error ? secret.error : '')} sendTyping onEditLast={() => { const last=chat.messages.filter(item=>item.author.id===user?.id&&!item.deleted&&!item.status&&(!item.kind||item.kind==='text')).at(-1);if(last)window.dispatchEvent(new CustomEvent('hive:edit-message',{detail:{id:last.id}})); }}
+      onSend={(body, files, options) => { nearBottom.current = true; return encrypted ? sendSecret(body) : chat.send(body, undefined, files, options); }} />
    </div>
-    {threadId && <ThreadPanel key={threadId} channelId={channel.id} channels={channels} parentId={threadId} userId={user?.id}
+    {threadId && !encrypted && <ThreadPanel key={threadId} channelId={channel.id} channels={channels} parentId={threadId} userId={user?.id}
       reason={reason} canWrite={canWrite} canModerate={canModerate} onClose={closeThread} />}
   </div>;
 }

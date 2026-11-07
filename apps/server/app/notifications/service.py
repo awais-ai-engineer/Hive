@@ -12,6 +12,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.access import (
+    message_live,
     not_blocked_author,
     readable_channel_ids,
     readable_post_condition,
@@ -36,6 +37,7 @@ from app.messages.service import readable
 from app.messages.threads import thread_participants
 from app.notifications.schemas import NotificationOut
 from app.places import channel_places
+from app.push import service as push
 from app.realtime import presence
 from app.snippets import plain_text
 from app.spaces.service import member_for
@@ -49,7 +51,7 @@ def _visible(user_id: str):
     """Condition on `Notification`: the target still exists and the owner can still read it."""
     live_message = or_(
         Notification.message_id.is_(None),
-        Notification.message_id.in_(select(Message.id).where(Message.deleted_at.is_(None))),
+        Notification.message_id.in_(select(Message.id).where(Message.deleted_at.is_(None), message_live())),
     )
     live_comment = or_(
         Notification.comment_id.is_(None),
@@ -264,6 +266,7 @@ async def create(
     await session.commit()
     await session.refresh(row)
     await publish(session, row)
+    await push.notify(session, row)
     return row
 
 
@@ -273,7 +276,7 @@ async def notify_message(session: AsyncSession, message: dict, author: User, par
     Mentions are created by `notify_mention`, in the same code path as the `mention:new` event.
     """
     channel = await session.get(Channel, message["channel_id"])
-    snippet = await plain_text(session, message["body"])
+    snippet = "New secret message" if channel.encrypted else await plain_text(session, message["body"])
     wanted: dict[str, str] = {}
     if parent is not None:
         parent_row = await session.get(Message, parent["id"])

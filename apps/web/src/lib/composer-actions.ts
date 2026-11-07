@@ -1,5 +1,12 @@
+import type { CiphertextBox } from '@hive/shared';
 export type FormatAction = 'bold' | 'italic' | 'strike' | 'code' | 'block' | 'bullet' | 'number' | 'quote';
-export type ComposerSendOptions = { kind?: 'text' | 'poll' | 'voice'; poll?: { question: string; options: string[] } };
+export type ComposerSendOptions = {
+  kind?: 'text' | 'poll' | 'voice'; poll?: { question: string; options: string[] };
+  /** Photos and videos that each recipient can open only once. */
+  viewOnce?: boolean;
+  /** Secret conversations: the encrypted message, and the text it was made from (kept on this device only). */
+  ciphertext?: CiphertextBox; plain?: string;
+};
 export const formats: { id: FormatAction; label: string; mark: string; shortcut: string }[] = [
   { id: 'bold', label: 'Bold', mark: 'B', shortcut: 'Ctrl/Cmd+B' }, { id: 'italic', label: 'Italic', mark: 'I', shortcut: 'Ctrl/Cmd+I' },
   { id: 'strike', label: 'Strike', mark: 'S', shortcut: 'Ctrl/Cmd+Shift+X' }, { id: 'code', label: 'Code', mark: '<>', shortcut: 'Ctrl/Cmd+E' },

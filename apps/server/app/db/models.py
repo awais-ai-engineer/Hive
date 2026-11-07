@@ -140,6 +140,10 @@ class User(Base):
     sidebar_prefs: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
     # Language code that messages can be translated into (null: no translate links).
     translate_language: Mapped[str | None] = mapped_column(String(8))
+    # Quiet hours for browser push: minutes after midnight in `quiet_tz` (null: always allowed).
+    quiet_start: Mapped[int | None] = mapped_column(SmallInteger)
+    quiet_end: Mapped[int | None] = mapped_column(SmallInteger)
+    quiet_tz: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = created_at()
 
 
@@ -291,6 +295,10 @@ class Channel(Base):
     position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     # Sorted participant ids of a DM, so the same group of people always gets one conversation.
     dm_key: Mapped[str | None] = mapped_column(Text, unique=True)
+    # New messages vanish this many seconds after they are sent (null: they stay).
+    disappear_after: Mapped[int | None] = mapped_column(Integer)
+    # Secret conversations: the server only ever stores ciphertext for their messages.
+    encrypted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     search_tsv: Mapped[str] = mapped_column(
         TSVECTOR, Computed("to_tsvector('simple', name || ' ' || coalesce(topic, ''))", persisted=True)
     )
@@ -344,7 +352,10 @@ class Invite(Base):
 class Message(Base):
     __tablename__ = "messages"
     __table_args__ = (
-        CheckConstraint("kind IN ('text', 'poll', 'voice', 'huddle')", name="ck_messages_kind"),
+        CheckConstraint(
+            "kind IN ('text', 'poll', 'voice', 'huddle', 'system')", name="ck_messages_kind"
+        ),
+        Index("ix_messages_expires_at", "expires_at", postgresql_where=text("expires_at IS NOT NULL")),
         Index("messages_channel_idx", "channel_id", "id"),
         Index("messages_thread_idx", "parent_id", "id"),
         Index("messages_client_msg_uq", "author_id", "client_msg_id", unique=True),
@@ -361,7 +372,7 @@ class Message(Base):
     search_tsv: Mapped[str] = mapped_column(
         TSVECTOR, Computed("to_tsvector('simple', body)", persisted=True)
     )
-    # "huddle" marks the system line posted when a huddle ends.
+    # "huddle" and "system" mark lines the app writes itself (a huddle ended, a setting changed).
     kind: Mapped[str] = mapped_column(String(16), default="text", server_default="text")
     # Incoming webhooks may post under another display name.
     bot_name: Mapped[str | None] = mapped_column(String(80))
@@ -370,6 +381,10 @@ class Message(Base):
     reply_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Disappearing messages: the moment after which the message is hidden and then erased.
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Secret conversations: {"v", "senderDeviceId", "envelopes": [...]}; body stays empty.
+    ciphertext: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = created_at()
 
 
@@ -408,6 +423,54 @@ class Attachment(Base):
     filename: Mapped[str] = mapped_column(String(255))
     content_type: Mapped[str] = mapped_column(String(100))
     size: Mapped[int] = mapped_column(BigInteger)
+    # View once: each recipient can open the media a single time; it never appears in file lists.
+    view_once: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    created_at: Mapped[datetime] = created_at()
+
+
+class AttachmentView(Base):
+    """A recipient opened a view-once attachment (one row per person, written exactly once)."""
+
+    __tablename__ = "attachment_views"
+
+    attachment_id: Mapped[str] = mapped_column(
+        ForeignKey("attachments.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    viewed_at: Mapped[datetime] = created_at()
+
+
+class UserDeviceKey(Base):
+    """Public key of one device, used by secret conversations (the private key never leaves it)."""
+
+    __tablename__ = "user_device_keys"
+    __table_args__ = (UniqueConstraint("user_id", "public_key", name="uq_user_device_keys_key"),)
+
+    id: Mapped[str] = pk()
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE", name="fk_user_device_keys_user"), index=True
+    )
+    public_key: Mapped[str] = mapped_column(Text)
+    label: Mapped[str] = mapped_column(String(80), default="", server_default="")
+    created_at: Mapped[datetime] = created_at()
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PushSubscription(Base):
+    """A browser that agreed to receive push notifications for one account."""
+
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[str] = pk()
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE", name="fk_push_subscriptions_user"), index=True
+    )
+    endpoint: Mapped[str] = mapped_column(Text, unique=True)
+    p256dh: Mapped[str] = mapped_column(String(200))
+    auth: Mapped[str] = mapped_column(String(100))
+    user_agent: Mapped[str] = mapped_column(String(200), default="", server_default="")
     created_at: Mapped[datetime] = created_at()
 
 

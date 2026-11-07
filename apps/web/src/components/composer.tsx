@@ -15,7 +15,7 @@ import { DRAFTS_CHANGED, saveComposerDraft, type SavedDraft } from '../lib/compo
 import { emojiData } from '../lib/emoji-data';
 import { formats, formatSelection, pollCommand, type ComposerSendOptions, type FormatAction } from '../lib/composer-actions';
 
-type Props = { channelId: string; parentId?: string | null; channels?: { id: string; name: string }[]; placeholder: string; reason: string; sendTyping?: boolean; onEditLast?: () => void; onSend: (body: string, files: Attachment[], options?: ComposerSendOptions) => Promise<boolean | void> | boolean | void };
+type Props = { channelId: string; parentId?: string | null; channels?: { id: string; name: string }[]; placeholder: string; reason: string; sendTyping?: boolean; secret?: boolean; allowViewOnce?: boolean; onEditLast?: () => void; onSend: (body: string, files: Attachment[], options?: ComposerSendOptions) => Promise<boolean | void> | boolean | void };
 type Candidate = { userId: string; username: string; displayName?: string | null };
 type CustomCommand = { id: string; name: string; description: string; usage: string; botName: string };
 const commands = [
@@ -25,7 +25,7 @@ const commands = [
   { name: 'shrug', usage: '/shrug ', description: 'Add a shrug to your message' },
 ];
 
-export function Composer({ channelId, parentId = null, channels = [], placeholder, reason, sendTyping = false, onSend, onEditLast }: Props) {
+export function Composer({ channelId, parentId = null, channels = [], placeholder, reason, sendTyping = false, secret = false, allowViewOnce = false, onSend, onEditLast }: Props) {
   const { user, updateUser } = useAuth();
   const [body, setBody] = useState('');
   const [files, setFiles] = useState<Attachment[]>([]);
@@ -37,6 +37,7 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
   const [notice, setNotice] = useState('');
   const [menu, setMenu] = useState<'emoji' | 'more' | 'help' | 'link' | 'later' | null>(null);
   const [url, setUrl] = useState('');
+  const [viewOnce, setViewOnce] = useState(false);
   const [when, setWhen] = useState('');
   const [caret, setCaret] = useState(0);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -60,12 +61,12 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
   }, [owner, channelId, reason]);
   useEffect(() => {
     let active = true; loaded.current = false; setReady(false); setBody(''); saved.current = '';
-    if (!owner || reason) { setReady(true); return; }
+    if (!owner || reason || secret) { setReady(true); return; }
     apiData<SavedDraft | null>(`/api/channels/${channelId}/draft${parentId ? `?parentId=${parentId}` : ''}`).then(draft => {
       if (active) { saved.current = draft?.body ?? ''; setBody(saved.current); setCaret(saved.current.length); loaded.current = true; setReady(true); }
     }).catch(cause => { if (active) { setError(`Draft could not be restored: ${requestError(cause)}`); loaded.current = true; setReady(true); } });
     return () => { active = false; if (loaded.current && bodyRef.current !== saved.current) void saveComposerDraft(owner, channelId, parentId, bodyRef.current).catch(() => {}); };
-  }, [owner, channelId, parentId, reason]);
+  }, [owner, channelId, parentId, reason, secret]);
   useEffect(() => {
     if (!loaded.current || !owner || reason || body === saved.current) return;
     const timer = setTimeout(() => { saved.current = body; void saveComposerDraft(owner, channelId, parentId, body).catch(() => setError('Could not save your draft. Keep this page open and retry.')); }, 800);
@@ -86,11 +87,11 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
   }
   function insert(value: string) { const { start, end } = selection.current; selectRange(body.slice(0,start)+value+body.slice(end),start+value.length); }
   function format(action: FormatAction) { const { start,end } = selection.current; const result = formatSelection(body,start,end,action); selectRange(result.value,result.start,result.end); }
-  function clear(sent?: string) { stopTyping(); if (sent !== undefined && bodyRef.current !== sent) { setFiles([]); setPickerKey(value => value+1); return; } bodyRef.current = ''; saved.current = ''; setBody(''); setCaret(0); selection.current = { start:0,end:0 }; setFiles([]); setPickerKey(value => value+1); if (owner) void saveComposerDraft(owner,channelId,parentId,'').catch(() => setError('Message sent, but the saved draft could not be cleared.')); window.dispatchEvent(new Event(DRAFTS_CHANGED)); }
-  const token = /(?:^|[\s(])([@#])([\w-]*)$/.exec(body.slice(0,caret));
+  function clear(sent?: string) { stopTyping(); if (sent !== undefined && bodyRef.current !== sent) { setFiles([]); setPickerKey(value => value+1); return; } bodyRef.current = ''; saved.current = ''; setBody(''); setCaret(0); selection.current = { start:0,end:0 }; setFiles([]); setViewOnce(false); setPickerKey(value => value+1); if (owner && !secret) void saveComposerDraft(owner,channelId,parentId,'').catch(() => setError('Message sent, but the saved draft could not be cleared.')); window.dispatchEvent(new Event(DRAFTS_CHANGED)); }
+  const token = secret ? null : /(?:^|[\s(])([@#])([\w-]*)$/.exec(body.slice(0,caret));
   const tokenKind = token?.[1], tokenQuery = token?.[2] ?? '';
   const tokenKey = `${body}:${caret}`;
-  const slash = /^\/([a-z]*)$/i.exec(body);
+  const slash = secret ? null : /^\/([a-z]*)$/i.exec(body);
   const allCommands = [...commands, ...custom.map(item => ({ name: item.name, usage: item.usage, description: `${item.description || 'Custom command'} · ${item.botName}` }))];
   const commandChoices = slash ? allCommands.filter(command => command.name.startsWith(slash[1].toLowerCase())) : [];
   const choices = tokenKind === '@' ? candidates.map(person => ({ id:person.userId, label:`@${person.username}`, detail:person.displayName ?? '', value:`@[user:${person.userId}] ` })) : tokenKind === '#' ? channels.filter(channel => channel.name.toLowerCase().startsWith(tokenQuery.toLowerCase())).slice(0,8).map(channel => ({ id:channel.id,label:`#${channel.name}`,detail:'Channel',value:`#[channel:${channel.id}] ` })) : commandChoices.map(command => ({id:command.name,label:`/${command.name}`,detail:command.description,value:`/${command.name} `}));
@@ -112,7 +113,7 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
     setBusy(true); setError(''); setNotice(''); setMenu(null);
     const sent = body;
     try {
-      const match = /^\/(poll|remind|status|shrug)(?:\s|$)/i.exec(body);
+      const match = secret ? null : /^\/(poll|remind|status|shrug)(?:\s|$)/i.exec(body);
       if (match) {
         const name = match[1].toLowerCase(), text = body.slice(match[0].length).trim();
         if (name === 'poll') { const poll = pollCommand(text); if (files.length) throw new Error('Send attachments separately from a poll.'); if (await onSend(poll.question,[],{kind:'poll',poll}) === false) throw new Error('Poll was not sent. Retry the message.'); }
@@ -122,12 +123,12 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
           if (text !== 'clear') { const parts = /^:([\w+-]+):\s*(.+)$/.exec(text); if (!parts) throw new Error('Use /status :emoji: text or /status clear.'); const aliases: Record<string,string> = { smile:'😀',thumbsup:'👍',heart:'❤️',tada:'🎉' }; emoji = aliases[parts[1]] ?? emojiData.find(item => item.name === parts[1].replace(/_/g,' ') || item.keywords.includes(parts[1]))?.emoji ?? ''; status=parts[2]; if (!emoji || status.length>80) throw new Error('Choose a known emoji name and status up to 80 characters.'); }
           updateUser(await apiData('/api/me',{method:'PATCH',body:JSON.stringify({status_emoji:emoji,status_text:status})})); setNotice('Status updated.');
         } else if (await onSend(`${text}${text ? ' ' : ''}¯\\_(ツ)_/¯`,files) === false) throw new Error('Message was not sent. Retry the message.');
-      } else if (custom.some(item => new RegExp('^/' + item.name + '(?:\\s|$)', 'i').test(body))) {
+      } else if (!secret && custom.some(item => new RegExp('^/' + item.name + '(?:\\s|$)', 'i').test(body))) {
         const name = /^\/([\w-]+)/.exec(body)![1].toLowerCase(), text = body.slice(name.length + 1).trim();
         if (files.length) throw new Error('Commands cannot include attachments.');
         const answer = await apiData<{ ephemeral: boolean; text?: string; botName?: string }>(`/api/channels/${channelId}/commands/run`, { method: 'POST', body: JSON.stringify({ command: name, text, parentId }) });
         if (answer.ephemeral) { clear(sent); setNotice(`${answer.botName}: ${answer.text} (only visible to you)`); return; }
-      } else if (await onSend(body,files) === false) throw new Error('Message was not sent. Retry the message.');
+      } else if (await onSend(body,files,viewOnce&&files.length?{viewOnce:true}:undefined) === false) throw new Error('Message was not sent. Retry the message.');
       clear(sent);
     } catch (cause) { setError(requestError(cause)); } finally { setBusy(false); }
   }
@@ -144,8 +145,10 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
   const popover = 'on-surface absolute bottom-full left-2 z-30 mb-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/10 bg-surface p-3 text-white shadow-[var(--shadow-pop)]';
   const applyLink = () => { const safe = safeLinkUrl(url); if (!safe) { setError('Use an http, https or mailto URL.'); return; } const {start,end}=selection.current; const label=body.slice(start,end)||'link'; selectRange(body.slice(0,start)+`[${label}](${safe})`+body.slice(end),start+label.length+safe.length+4); setMenu(null); setUrl(''); };
   return <form className="relative rounded-2xl border border-white/12 bg-surface shadow-[var(--shadow-card)] focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/15" onSubmit={event=>{event.preventDefault();void submit();}} onDragOver={event=>{if(!disabled)event.preventDefault();}} onDrop={event=>{if(disabled)return;event.preventDefault();uploads.current?.add(Array.from(event.dataTransfer.files));}}>
-    {!reason && <UploadPicker key={pickerKey} compact controls={uploads} path={`/api/channels/${channelId}/uploads`} onChange={setFiles} onBusy={setUploading} />}
-    <div role="toolbar" aria-label="Message formatting" className="flex flex-wrap items-center gap-0.5 border-b border-white/5 px-2 py-1">{formats.map((item,index)=><button key={item.id} type="button" title={`${item.label} (${item.shortcut})`} aria-label={item.label} disabled={disabled} className={`${tool} ${index>3?'hidden sm:flex':''}`} onMouseDown={event=>event.preventDefault()} onClick={()=>format(item.id)}>{item.mark}</button>)}<button type="button" title="Link (Ctrl/Cmd+K)" aria-label="Link" disabled={disabled} className={tool} onClick={()=>{setMenu(menu==='link'?null:'link');setUrl('');}}>↗</button><button type="button" title="More formatting" aria-label="More formatting" aria-expanded={menu==='more'} disabled={disabled} className={`${tool} sm:hidden`} onClick={()=>setMenu(menu==='more'?null:'more')}>…</button><button type="button" title="Formatting help" aria-label="Formatting help" className={`${tool} ml-auto`} onClick={()=>setMenu(menu==='help'?null:'help')}>?</button></div>
+    {!reason && !secret && <UploadPicker key={pickerKey} compact controls={uploads} path={`/api/channels/${channelId}/uploads`} onChange={setFiles} onBusy={setUploading} />}
+    {secret && <p className="flex items-center gap-1.5 border-b border-white/5 px-4 py-1.5 text-xs text-white/60"><Icon name="lock" size={13} />End-to-end encrypted. Text only.</p>}
+    {!secret && <div role="toolbar" aria-label="Message formatting" className="flex flex-wrap items-center gap-0.5 border-b border-white/5 px-2 py-1">{formats.map((item,index)=><button key={item.id} type="button" title={`${item.label} (${item.shortcut})`} aria-label={item.label} disabled={disabled} className={`${tool} ${index>3?'hidden sm:flex':''}`} onMouseDown={event=>event.preventDefault()} onClick={()=>format(item.id)}>{item.mark}</button>)}<button type="button" title="Link (Ctrl/Cmd+K)" aria-label="Link" disabled={disabled} className={tool} onClick={()=>{setMenu(menu==='link'?null:'link');setUrl('');}}>↗</button><button type="button" title="More formatting" aria-label="More formatting" aria-expanded={menu==='more'} disabled={disabled} className={`${tool} sm:hidden`} onClick={()=>setMenu(menu==='more'?null:'more')}>…</button><button type="button" title="Formatting help" aria-label="Formatting help" className={`${tool} ml-auto`} onClick={()=>setMenu(menu==='help'?null:'help')}>?</button></div>}
+    {allowViewOnce&&files.some(file=>file.kind==='image'||file.kind==='video')&&<label className="flex cursor-pointer items-start gap-2 border-b border-white/5 px-4 py-2 text-sm"><input type="checkbox" className="mt-1 accent-[var(--brand)]" checked={viewOnce} onChange={event=>setViewOnce(event.target.checked)} /><span><span className="font-medium">View once</span><span className="block text-xs text-white/60">Each person can open it one time. It can&apos;t be saved or forwarded, and it won&apos;t appear in Files or search.</span></span></label>}
     <textarea ref={box} aria-label="Message" role={showSuggestions?'combobox':undefined} aria-expanded={showSuggestions} aria-controls={showSuggestions?'composer-options':undefined} aria-activedescendant={showSuggestions?`composer-option-${selected}`:undefined} placeholder={reason||placeholder} disabled={disabled} value={body} maxLength={4000} rows={1} className="block max-h-48 min-h-11 w-full resize-none bg-transparent px-4 pt-3 text-[15px] outline-none placeholder:text-white/50 disabled:opacity-60 [field-sizing:content]" onChange={event=>change(event.target.value,event.target.selectionStart)} onSelect={event=>{selection.current={start:event.currentTarget.selectionStart,end:event.currentTarget.selectionEnd};setCaret(event.currentTarget.selectionStart);}} onBlur={stopTyping} onKeyDown={event=>{
       if(event.nativeEvent.isComposing)return;
       if(event.key==='Escape'){event.preventDefault();event.stopPropagation();setMenu(null);setDismissed(tokenKey);return;}
@@ -154,8 +157,8 @@ export function Composer({ channelId, parentId = null, channels = [], placeholde
       if(event.key==='ArrowUp'&&!body){event.preventDefault();onEditLast?.();}
       if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();void submit();}
     }}/>
-    <div className="flex flex-wrap items-center gap-1 px-2 pb-2 pt-1"><button type="button" className={tool} disabled={disabled} aria-label="Attach files" title="Attach files" onClick={()=>uploads.current?.open()}><Icon name="plus" /></button><RewriteButton body={body} disabled={disabled||uploading} onUse={text=>selectRange(text,text.length)} /><button type="button" className={tool} disabled={disabled} aria-label="Insert emoji" title="Insert emoji" aria-expanded={menu==='emoji'} onClick={()=>setMenu(menu==='emoji'?null:'emoji')}>☺</button><button type="button" className={tool} disabled={disabled} aria-label="Mention someone" title="Mention someone" onClick={()=>insert('@')}><Icon name="at" /></button><span className="hidden min-w-0 flex-1 truncate text-xs text-white/60 sm:inline">{reason||(uploading?'Uploading…':`${body.length}/4000 · Enter to send`)}</span><button type="submit" title="Send" aria-label="Send" disabled={disabled||uploading||(!body.trim()&&!files.length)} className="ml-auto flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-white disabled:opacity-40"><Icon name="send" size={17} /></button><button type="button" className={tool} title="Send later" aria-label="Send later" disabled={disabled||uploading||(!body.trim()&&!files.length)} aria-expanded={menu==='later'} onClick={()=>setMenu(menu==='later'?null:'later')}>⌄</button></div>
-    {!reason && <div className="px-3 pb-2"><VoiceRecorder disabled={disabled||uploading||files.length>0} onError={setError} onReady={async(file,durationMs,waveform)=>{
+    <div className="flex flex-wrap items-center gap-1 px-2 pb-2 pt-1">{!secret&&<button type="button" className={tool} disabled={disabled} aria-label="Attach files" title="Attach files" onClick={()=>uploads.current?.open()}><Icon name="plus" /></button>}{!secret&&<RewriteButton body={body} disabled={disabled||uploading} onUse={text=>selectRange(text,text.length)} />}<button type="button" className={tool} disabled={disabled} aria-label="Insert emoji" title="Insert emoji" aria-expanded={menu==='emoji'} onClick={()=>setMenu(menu==='emoji'?null:'emoji')}>☺</button>{!secret&&<button type="button" className={tool} disabled={disabled} aria-label="Mention someone" title="Mention someone" onClick={()=>insert('@')}><Icon name="at" /></button>}<span className="hidden min-w-0 flex-1 truncate text-xs text-white/60 sm:inline">{reason||(uploading?'Uploading…':`${body.length}/4000 · Enter to send`)}</span><button type="submit" title="Send" aria-label="Send" disabled={disabled||uploading||(!body.trim()&&!files.length)} className="ml-auto flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-white disabled:opacity-40"><Icon name="send" size={17} /></button>{!secret&&<button type="button" className={tool} title="Send later" aria-label="Send later" disabled={disabled||uploading||(!body.trim()&&!files.length)} aria-expanded={menu==='later'} onClick={()=>setMenu(menu==='later'?null:'later')}>⌄</button>}</div>
+    {!reason && !secret && <div className="px-3 pb-2"><VoiceRecorder disabled={disabled||uploading||files.length>0} onError={setError} onReady={async(file,durationMs,waveform)=>{
       setBusy(true);setError('');try{const form=new FormData();form.append('file',file);form.append('kind','audio');form.append('durationMs',String(durationMs));form.append('waveform',JSON.stringify(waveform));const attachment=await responseData<Attachment>(await apiFetch(`/api/channels/${channelId}/uploads`,{method:'POST',body:form}));if(await onSend(body,[attachment],{kind:'voice'})===false)throw new Error('Voice message was not sent. Retry the message.');clear();}catch(cause){setError(requestError(cause));}finally{setBusy(false);}
     }}/></div>}
     {error&&<p role="alert" className="px-4 pb-2 text-sm text-rose-500">{error}</p>}{notice&&<p role="status" className="px-4 pb-2 text-sm text-brand">{notice}</p>}

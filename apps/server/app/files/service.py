@@ -6,6 +6,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.access import (
+    message_live,
     not_blocked_author,
     post_readable,
     readable_channel_ids,
@@ -27,6 +28,8 @@ def _scope(user_id: str, channel_id: str | None, with_posts: bool):
     visible_message = and_(
         Attachment.message_id.is_not(None),
         Message.deleted_at.is_(None),
+        message_live(),
+        Attachment.view_once.is_(False),
         Message.channel_id.in_(readable_channel_ids(user_id)),
     )
     if channel_id is not None:

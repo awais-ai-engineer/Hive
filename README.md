@@ -369,3 +369,42 @@ readable only to the server (signing secrets); members never see them.
   weekly schedule in a time zone. Actions post a message (as Hive or a bot, in a channel or as a direct
   message), create a to-do, or add the person to a private channel. Each workflow keeps its last 50 runs,
   never starts from messages that workflows post, and is limited to 20 runs per minute.
+
+## Privacy extras and installable app
+
+**Disappearing messages.** Any DM or group DM (and, for owners and admins, any text channel) can
+be set to Off, 24 hours, 7 days or 30 days from the clock button in the chat header
+(`PUT /api/channels/{id}/disappearing`). The timer applies to messages sent afterwards and leaves
+a system line in the chat. Each message gets an `expires_at`; every read path (history, threads,
+unread counts, search, saved items, notifications, files, AI context) hides it as soon as it
+passes, and the scheduler (`app/disappearing/service.py: expire_due`) erases the rows together with
+their replies, reactions and stored files.
+
+**View once.** In a direct message, photos and videos can be sent as "View once". Recipients see a
+blurred card; opening it (`POST /api/attachments/{id}/view-once`) returns a 30 second link exactly
+once per person. The sender sees "Opened" or "Not opened yet" (in a group, "Opened" once everyone
+has). View-once media has no address in normal payloads and is left out of Files, search and saved
+items.
+
+**Secret conversations.** "Start a secret conversation" opens a separate, end-to-end encrypted DM.
+Every browser creates an ECDH P-256 key pair with WebCrypto (the private key is a non-extractable
+key in IndexedDB) and uploads the public key (`/api/me/devices`). Text is encrypted per target
+device with AES-GCM using a key from ECDH + HKDF (`packages/shared/src/secret.ts`); the server
+stores and relays only ciphertext, and never searches, previews, summarizes or notifies with it
+(notifications say "New secret message"). Both people can compare a safety number. Limits: text
+only, no editing or threads, and a new device cannot read older messages.
+
+**Installable app and push notifications.** Hive ships a web app manifest, icons, a service worker
+(`public/sw.js`) with an offline page, and Web Push. Browsers offering it show "Install Hive" in the
+account menu. Push is off until VAPID keys are set:
+
+```bash
+cd apps/server
+python -m uv run python -m app.push.keys     # prints VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY
+```
+
+Put the output (and `VAPID_SUBJECT=mailto:you@example.com`) in `apps/server/.env`. People then
+turn on "Push notifications on this device" and optional quiet hours under Settings, Notifications.
+Pushes are sent for new inbox notifications when the person has no open connection, respecting their
+notification settings and quiet hours. Payloads are encrypted (RFC 8291) and signed (VAPID, ES256)
+with the `cryptography` package.

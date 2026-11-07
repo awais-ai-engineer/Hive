@@ -24,6 +24,12 @@ async def post_conversation(data: DirectCreate, session: Session, user: CurrentU
     return await open_conversation(session, user, data)
 
 
+@router.post("/dms/secret", response_model=DirectOut)
+async def post_secret_conversation(data: DirectCreate, session: Session, user: CurrentUser):
+    """Open (or find) the end-to-end encrypted conversation with one person."""
+    return await open_conversation(session, user, data, secret=True)
+
+
 @router.get("/dms/{channel_id}", response_model=DirectOut)
 async def get_one(channel_id: str, session: Session, user: CurrentUser):
     return await get_conversation(session, user, channel_id)
