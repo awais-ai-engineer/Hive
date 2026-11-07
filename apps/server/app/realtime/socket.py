@@ -421,14 +421,11 @@ async def announce_participants(channel_id: str) -> None:
             await sio.emit("call:participants", summary, room=room)
 
 
-MIN_SOLO_HUDDLE_SECONDS = 15
-
-
 async def post_huddle_summary(channel_id: str, author_id: str, huddle: dict) -> None:
     """Posts "A huddle happened..." into a text channel or conversation once it has ended."""
     names = huddle["names"]
-    if not names or (len(names) == 1 and huddle["seconds"] < MIN_SOLO_HUDDLE_SECONDS):
-        return  # an accidental click is not worth a message
+    if len(names) < 2:
+        return  # nobody joined, so there was no conversation worth a line in the chat
     async with SessionLocal() as session:
         channel = await session.get(Channel, channel_id)
         if channel is None or channel.type == ChannelType.voice:

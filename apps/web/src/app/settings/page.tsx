@@ -1,5 +1,6 @@
 'use client';
 
+import { playMessageSound, setSoundsEnabled, soundsEnabled } from '../../lib/sounds';
 import Link from 'next/link';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Avatar } from '../../components/ui/avatar';
@@ -201,6 +202,23 @@ function TranslateCard({ user, updateUser }: { user: User; updateUser: (user: Us
   </section>;
 }
 
+function SoundCard() {
+  const [on, setOn] = useState(true);
+  useEffect(() => setOn(soundsEnabled()), []);
+  function toggle() {
+    const next = !on;
+    setOn(next); setSoundsEnabled(next);
+    if (next) playMessageSound();
+  }
+  return <section className="card mb-5 flex items-start justify-between gap-4 p-5 sm:p-6">
+    <div><h2 className="text-lg font-bold">Sounds</h2>
+      <p className="mt-1 text-sm text-white/60">Play a chime for new messages in conversations you aren&apos;t looking at, and a ringtone when someone calls you. Quiet conversations stay silent.</p></div>
+    <button type="button" role="switch" aria-checked={on} aria-label="Notification sounds" onClick={toggle}
+      className={`relative mt-1 h-6 w-11 shrink-0 rounded-full transition ${on ? 'bg-brand' : 'bg-white/20'}`}>
+      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-[#fff] shadow transition-all ${on ? 'left-[22px]' : 'left-0.5'}`} /></button>
+  </section>;
+}
+
 function NotificationsCard() {
   const [prefs, setPrefs] = useState<Record<string, boolean> | null>(null);
   const [error, setError] = useState('');
@@ -274,7 +292,7 @@ export default function SettingsPage() {
       </nav>
       <div className="min-w-0">
         {section === 'profile' && <><ProfileCard user={user} updateUser={updateUser} /><TranslateCard user={user} updateUser={updateUser} /></>}
-        {section === 'notifications' && <><NotificationsCard /><PushCard /></>}
+        {section === 'notifications' && <><SoundCard /><NotificationsCard /><PushCard /></>}
         {section === 'privacy' && <><PrivacyCard user={user} updateUser={updateUser} /><DevicesCard /></>}
         {section === 'blocked' && <BlockedCard />}
         {section === 'interests' && <InterestsSettings />}

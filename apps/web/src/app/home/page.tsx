@@ -1,5 +1,6 @@
 'use client';
 
+import { playMessageSound } from '../../lib/sounds';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
@@ -179,13 +180,19 @@ function Home() {
     if (!user) return;
     const onChannelActivity = (data: { channelId: string; authorId: string }) => {
       if (data.authorId === user.id) return;
+      // Chime for conversations you aren't looking at, unless they are set to quiet.
+      if ((data.channelId !== selected || document.hidden) && !prefs.current[data.channelId]) playMessageSound();
       if (data.channelId !== selected && prefs.current[data.channelId]) refreshChannels();
       else if (data.channelId !== selected) {
         setChannels(list => list.map(item => item.id === data.channelId ? { ...item, unread: item.unread + 1 } : item));
       }
       refreshUnreads();
     };
-    const onDm = () => { refreshConversations(); refreshUnreads(); };
+    const onDm = (data: { channelId?: string; authorId?: string; parentId?: string }) => {
+      if (!data.parentId && data.authorId && data.authorId !== user.id && data.channelId
+        && (data.channelId !== selected || document.hidden) && !prefs.current[data.channelId]) playMessageSound();
+      refreshConversations(); refreshUnreads();
+    };
     const onRead = (data: { channelId: string }) => {
       setChannels(list => list.map(item => item.id === data.channelId ? { ...item, unread: 0 } : item));
       refreshConversations(); refreshUnreads();

@@ -1,5 +1,7 @@
 'use client';
 
+import { playMessageSound } from '../lib/sounds';
+import { currentUserId } from '../lib/api';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -39,10 +41,16 @@ export default function Nav() {
       }, 400);
     };
     refresh();
+    // On pages other than Home (which plays its own), chime for new direct messages.
+    const chime = (data: { authorId?: string; parentId?: string }) => {
+      if (!location.pathname.startsWith('/home') && data.authorId && data.authorId !== currentUserId() && !data.parentId) playMessageSound();
+    };
+    socket.on('dm:activity', chime);
     socket.on('dm:activity', refresh).on('space:activity', refresh).on('spaces:updated', refresh).on('read:updated', refresh).on('connect', refresh);
     window.addEventListener(DMS_CHANGED, refresh);
     return () => {
       active = false; clearTimeout(timer);
+      socket.off('dm:activity', chime);
       socket.off('dm:activity', refresh).off('space:activity', refresh).off('spaces:updated', refresh).off('read:updated', refresh).off('connect', refresh);
       window.removeEventListener(DMS_CHANGED, refresh);
     };
