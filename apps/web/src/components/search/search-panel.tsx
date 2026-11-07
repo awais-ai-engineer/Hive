@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { conversationTitle, type Conversation, type UserResult } from '../../lib/dms';
+import { conversationTitle, DM_OPENED, type Conversation, type UserResult } from '../../lib/dms';
 import {
   clearRecentSearches, GROUP_LABELS, hitHref, hitPlace, NO_FILTERS, recentSearches, rememberSearch, runSearch, TYPE_TABS,
   type Hit, type SearchFilters, type SearchResponse, type SearchType, type Segment,
@@ -110,7 +110,8 @@ export function SearchPanel({ variant, initialQuery = '', onDone }: { variant: '
     if (row.kind === 'dm') router.push(`/home?c=${row.id}`);
     else if (row.kind === 'person') {
       try {
-        const conversation = await apiData<{ id: string }>('/api/dms', { method: 'POST', body: JSON.stringify({ usernames: [row.username] }) });
+        const conversation = await apiData<Conversation>('/api/dms', { method: 'POST', body: JSON.stringify({ usernames: [row.username] }) });
+        window.dispatchEvent(new CustomEvent(DM_OPENED, { detail: conversation }));
         router.push(`/home?c=${conversation.id}`);
       } catch (cause) { setError(requestError(cause)); return; }
     } else {

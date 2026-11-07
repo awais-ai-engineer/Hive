@@ -5,7 +5,7 @@ import type { Conversation, UserResult } from '../../lib/dms';
 import { apiData, requestError } from '../../lib/spaces';
 
 /** Pick people (who share a space with you) and open the conversation with exactly them. */
-export function NewConversation({ onOpened, onCancel }: { onOpened: (id: string) => void; onCancel: () => void }) {
+export function NewConversation({ onOpened, onCancel }: { onOpened: (id: string, conversation: Conversation) => void; onCancel: () => void }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UserResult[]>([]);
   const [chosen, setChosen] = useState<UserResult[]>([]);
@@ -32,7 +32,7 @@ export function NewConversation({ onOpened, onCancel }: { onOpened: (id: string)
       const conversation = await apiData<Conversation>(secret && chosen.length === 1 ? '/api/dms/secret' : '/api/dms', {
         method: 'POST', body: JSON.stringify({ usernames: chosen.map(person => person.username) }),
       });
-      onOpened(conversation.id);
+      onOpened(conversation.id, conversation);
     } catch (cause) { setError(requestError(cause)); }
     finally { setBusy(false); }
   }

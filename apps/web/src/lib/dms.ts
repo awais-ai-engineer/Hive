@@ -20,6 +20,8 @@ export type UserResult = { id: string; username: string; avatar_url: string | nu
 
 /** Fired after the viewer reads or opens conversations, so the nav badge can refresh. */
 export const DMS_CHANGED = 'hive:dms-changed';
+/** Fired with the conversation as `detail` right after one is opened anywhere in the app. */
+export const DM_OPENED = 'hive:dm-opened';
 
 export function conversationTitle(conversation: Conversation) {
   const names = conversation.participants.map(person => person.username);

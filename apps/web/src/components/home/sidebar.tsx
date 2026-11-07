@@ -36,6 +36,8 @@ type Props = {
   onChanged: () => void;
   onSwitchSpace: (slug: string) => void;
   onOpen: (id: string) => void;
+  /** A conversation was just started: show it right away, before any list refresh. */
+  onConversation?: (conversation: Conversation) => void;
   onView: (view: 'unreads' | 'threads' | 'directory' | 'drafts' | 'saved' | 'files') => void;
   onBrowseChannels: () => void;
   onChannelCreated: (channel: Channel) => void;
@@ -213,7 +215,7 @@ export function Sidebar(props: Props) {
       {add && <button type="button" onClick={add} aria-haspopup={key === 'channels' ? 'menu' : undefined} aria-label={addLabel} title={addLabel} className="rounded p-0.5 text-white/60 hover:bg-white/10 hover:text-white"><Icon name="plus" size={16} /></button>}
     </div>;
   const newForm = (kind: 'group' | 'direct') => composing === kind && <div className="on-surface mt-2">
-    <NewConversation onOpened={id => { setComposing(null); props.onOpen(id); }} onCancel={() => setComposing(null)} />
+    <NewConversation onOpened={(id, conversation) => { setComposing(null); props.onConversation?.(conversation); props.onOpen(id); }} onCancel={() => setComposing(null)} />
   </div>;
   const quickAction = (label: string, onClick: (event: ReactMouseEvent<HTMLElement>) => void) =>
     <li><button type="button" onClick={onClick} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-white/60 hover:bg-white/10 hover:text-white">

@@ -23,7 +23,7 @@ import { TodoList } from '../../components/todos/todo-list';
 import { TodosView } from '../../components/todos/todos-view';
 import { DraftsView } from '../../components/home/drafts-view';
 import { useAuth } from '../../lib/auth';
-import { conversationTitle, DMS_CHANGED, type Conversation } from '../../lib/dms';
+import { conversationTitle, DM_OPENED, DMS_CHANGED, type Conversation } from '../../lib/dms';
 import { sidebarApi, useSidebarData, type NotifyLevel } from '../../lib/sidebar';
 import { loadSetting, placeHref, saveSetting, type Place, type ThreadItem, type UnreadItem } from '../../lib/home';
 import { socket } from '../../lib/socket';
@@ -67,6 +67,8 @@ function Home() {
   const [spacesReady, setSpacesReady] = useState(false);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversationsReady, setConversationsReady] = useState(false);
+  const [channelsFor, setChannelsFor] = useState<string | null>(null);
   const [unreads, setUnreads] = useState<UnreadItem[]>([]);
   const [unreadsReady, setUnreadsReady] = useState(false);
   const [threadsUnread, setThreadsUnread] = useState(0);
@@ -90,6 +92,21 @@ function Home() {
     setDrawer(false);
   }, [router, slug]);
 
+  // Opening Hive returns you to the last channel or conversation you had open in this space
+  // (or #general the first time) instead of always starting on Unreads.
+  useEffect(() => {
+    if (!slug || !selected) return;
+    if (channels.some(item => item.id === selected) || conversations.some(item => item.id === selected)) saveSetting(`hive:last-open:${slug}`, selected);
+  }, [slug, selected, channels, conversations]);
+  useEffect(() => {
+    if (selected || view || !slug || channelsFor !== slug || !conversationsReady) return;
+    const last = loadSetting<string | null>(`hive:last-open:${slug}`, null);
+    const known = (id: string | null) => !!id && (channels.some(item => item.id === id) || conversations.some(item => item.id === id));
+    const fallback = channels.find(item => item.name === 'general' && item.type !== 'voice') ?? channels.find(item => item.type !== 'voice');
+    const target = known(last) ? last : fallback?.id ?? null;
+    if (target) router.replace(`/home?${new URLSearchParams({ s: slug, c: target })}`);
+  }, [selected, view, slug, channelsFor, conversationsReady, channels, conversations, router]);
+
   // Data loading -------------------------------------------------------------------------
   useEffect(() => {
     if (loading || !user) return;
@@ -105,7 +122,7 @@ function Home() {
   const loadChannels = useCallback(async () => {
     if (!spaceSlug) return [];
     const list = await apiData<Channel[]>(`/api/spaces/${encodeURIComponent(spaceSlug)}/channels`);
-    setChannels(list);
+    setChannels(list); setChannelsFor(spaceSlug);
     return list;
   }, [spaceSlug]);
   useEffect(() => {
@@ -115,7 +132,8 @@ function Home() {
   }, [spaceSlug, loadChannels]);
 
   const loadConversations = useCallback(() => {
-    apiData<Conversation[]>('/api/dms').then(setConversations).catch(() => {});
+    apiData<Conversation[]>('/api/dms').then(list => { setConversations(list); setConversationsReady(true); })
+      .catch(() => setConversationsReady(true));
   }, []);
   const loadUnreads = useCallback(() => {
     apiData<{ items: UnreadItem[] }>('/api/me/unreads')
@@ -138,6 +156,13 @@ function Home() {
     if (loading || !user) return;
     loadConversations(); loadUnreads(); loadThreads(); loadTodoCount();
   }, [loading, user, loadConversations, loadUnreads, loadThreads, loadTodoCount]);
+
+  // A conversation opened elsewhere (search, profiles) shows up without waiting for a refresh.
+  useEffect(() => {
+    const onOpened = (event: Event) => addConversation((event as CustomEvent<Conversation>).detail);
+    window.addEventListener(DM_OPENED, onOpened);
+    return () => window.removeEventListener(DM_OPENED, onOpened);
+  });
 
   // The rail badge follows to-dos assigned to or finished by the viewer, here or in another tab.
   useEffect(() => {
@@ -277,10 +302,15 @@ function Home() {
   });
 
   // Actions ------------------------------------------------------------------------------
+  /** Shows a just-opened conversation immediately; the full list refreshes in the background. */
+  function addConversation(conversation: Conversation) {
+    setConversations(list => list.some(item => item.id === conversation.id) ? list : [conversation, ...list]);
+    refreshConversations();
+  }
   async function openPerson(username: string) {
     try {
       const conversation = await apiData<Conversation>('/api/dms', { method: 'POST', body: JSON.stringify({ usernames: [username] }) });
-      loadConversations();
+      addConversation(conversation);
       go({ c: conversation.id });
     } catch (cause) { setError(requestError(cause)); }
   }
@@ -403,7 +433,7 @@ function Home() {
           unreadTotal={unreadTotal} threadsUnread={threadsUnread}
           data={sidebar.data} update={sidebar.setData} onChanged={sidebar.reload}
           onBrowseChannels={() => go({ view: 'directory', dir: 'channels' })}
-          onSwitchSpace={next => go({ s: next })} onOpen={id => go({ c: id })} onView={next => go({ view: next })}
+          onSwitchSpace={next => go({ s: next })} onOpen={id => go({ c: id })} onConversation={addConversation} onView={next => go({ view: next })}
           onChannelCreated={channel => void channelCreated(channel)} />
       </aside>
     </div>
