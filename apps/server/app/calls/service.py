@@ -32,6 +32,19 @@ MAX_PARTICIPANTS = 6
 MAX_SIGNAL_BYTES = 64 * 1024
 
 
+async def clear_stale_calls() -> int:
+    """Forget every live call when the API starts.
+
+    Calls only exist while sockets are connected to this server; after a restart those sockets
+    are gone, so any participants still listed in Redis are ghosts. (Hive runs one API process.)"""
+    removed = 0
+    for pattern in ("call:*", "call-meta:*", "call-who:*", "call-sid:*"):
+        keys = [key async for key in redis.scan_iter(f"{settings.socketio_channel}:{pattern}")]
+        if keys:
+            removed += await redis.delete(*keys)
+    return removed
+
+
 def room_key(channel_id: str) -> str:
     return f"{settings.socketio_channel}:call:{channel_id}"
 

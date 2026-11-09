@@ -20,7 +20,7 @@ from sqlalchemy import select
 
 from app.auth.security import decode_access_token
 from app.calls import service as calls
-from app.calls.schemas import CallIn, SignalIn, StateIn
+from app.calls.schemas import CallIn, CaptionIn, ReactIn, SignalIn, StateIn
 from app.core.config import settings
 from app.db.models import (
     Channel,
@@ -508,6 +508,39 @@ async def call_state(sid, data, session, user):
         raise HTTPException(403, "You are not in this call")
     await sio.emit("call:state", {"channelId": data.channelId, "sid": sid, **entry},
                    room=f"call:{data.channelId}")
+
+
+def _call_limited(sid: str, kind: str, per_window: int) -> bool:
+    """True when this socket sent too many `kind` events in the signalling window."""
+    key = f"{sid}:{kind}"
+    started, count = signal_counts.get(key, (time.monotonic(), 0))
+    if time.monotonic() - started > SIGNAL_WINDOW:
+        started, count = time.monotonic(), 0
+    signal_counts[key] = (started, count + 1)
+    return count >= per_window
+
+
+@chat_event("call:react", ReactIn)
+async def call_react(sid, data, session, user):
+    """A quick emoji reaction shown over the sender's tile to everyone in the call."""
+    if sid not in await calls.participants(data.channelId):
+        raise HTTPException(403, "You are not in this call")
+    if _call_limited(sid, "react", 20):
+        raise HTTPException(429, "Too many reactions")
+    await sio.emit("call:react", {"channelId": data.channelId, "sid": sid, "userId": user.id,
+                                  "username": user.username, "emoji": data.emoji}, room=f"call:{data.channelId}")
+
+
+@chat_event("call:caption", CaptionIn)
+async def call_caption(sid, data, session, user):
+    """Live captions: each browser transcribes its own speaker and shares the text with the call only."""
+    if sid not in await calls.participants(data.channelId):
+        raise HTTPException(403, "You are not in this call")
+    if _call_limited(sid, "caption", 120):
+        raise HTTPException(429, "Too many captions")
+    await sio.emit("call:caption", {"channelId": data.channelId, "sid": sid, "userId": user.id,
+                                    "username": user.username, "text": data.text.strip(), "final": data.final},
+                   room=f"call:{data.channelId}", skip_sid=sid)
 
 
 @chat_event("call:ring", CallIn)

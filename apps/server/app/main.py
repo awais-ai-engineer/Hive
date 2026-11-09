@@ -13,6 +13,7 @@ from app.api import health
 from app.apps.router import public_router as apps_public_router
 from app.apps.router import router as apps_router
 from app.auth.router import router as auth_router
+from app.calls import service as calls_service
 from app.calls.router import router as calls_router
 from app.channels.router import router as channels_router
 from app.comments.router import router as comments_router
@@ -55,6 +56,7 @@ logging.basicConfig(level=logging.INFO)
 async def lifespan(_: FastAPI):
     settings.validate_storage()
     vapid.startup_notice()
+    await calls_service.clear_stale_calls()
     scheduler.start()
     try:
         yield
