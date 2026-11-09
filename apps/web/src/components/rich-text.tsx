@@ -59,7 +59,10 @@ export function RichText({ source, mentions = [], channels = [] }: Props) {
         case 'strike': return <s key={index}>{render(node.children, inLink)}</s>;
         case 'quote': return <blockquote key={index} className="my-1 border-s-2 border-brand/40 ps-3 text-white/65">{render(node.children, inLink)}</blockquote>;
         case 'link': return inLink ? <Fragment key={index}>{render(node.children, true)}</Fragment>
-          : <a key={index} href={node.href} target="_blank" rel="noopener noreferrer nofollow ugc" className="text-brand underline underline-offset-2">{render(node.children, true)}</a>;
+          : typeof window !== 'undefined' && node.href.startsWith(`${window.location.origin}/`)
+            // Links to Hive itself (like saved huddle notes) stay in the same tab.
+            ? <Link key={index} href={node.href.slice(window.location.origin.length)} className="text-brand underline underline-offset-2">{render(node.children, true)}</Link>
+            : <a key={index} href={node.href} target="_blank" rel="noopener noreferrer nofollow ugc" className="text-brand underline underline-offset-2">{render(node.children, true)}</a>;
         case 'list': {
           const List = node.ordered ? 'ol' : 'ul';
           return <List key={index} className={`my-1 ps-6 ${node.ordered ? 'list-decimal' : 'list-disc'}`}>

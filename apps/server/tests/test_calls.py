@@ -324,3 +324,25 @@ async def test_stale_calls_are_cleared_on_startup(client, setup_chat):
     await redis.set(calls.sid_key("old-sid"), "ghost-channel")
     assert await calls.clear_stale_calls() >= 1
     assert await redis.hgetall(calls.room_key("ghost-channel")) == {}
+
+
+async def test_huddle_notes_become_a_doc_for_the_channel(client, setup_chat, live_server):
+    alice, bob, _, _ah, bh, _, _, channel = setup_chat
+    async with connected(live_server, alice) as (a, aq), connected(live_server, bob) as (b, _):
+        await call(a, "channel:join", {"channelId": channel})
+        for peer in (a, b):
+            assert (await call(peer, "call:join", {"channelId": channel}))["ok"]
+        await call(a, "call:caption", {"channelId": channel, "text": "Launch moves to Tuesday", "final": False})
+        await call(a, "call:caption", {"channelId": channel, "text": "Launch moves to Tuesday", "final": True})
+        await call(b, "call:caption", {"channelId": channel, "text": "I will update the release notes", "final": True})
+        await call(b, "call:leave", {"channelId": channel})
+        await call(a, "call:leave", {"channelId": channel})
+        posted = await event(aq["message:new"])
+        assert posted["kind"] == "huddle" and "Open the meeting notes" in posted["body"] and "&doc=" in posted["body"]
+    docs = (await client.get(f"/api/channels/{channel}/docs", headers=bh)).json()
+    notes = [doc for doc in docs if doc["title"].startswith("Huddle notes")]
+    assert len(notes) == 1
+    full = (await client.get(f"/api/docs/{notes[0]['id']}", headers=bh)).json()
+    texts = [block["text"] for block in full["body"]]
+    assert "alice: Launch moves to Tuesday" in texts and "bob: I will update the release notes" in texts
+    assert sum("Launch moves" in text for text in texts) == 1  # interim captions are not saved

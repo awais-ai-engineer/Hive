@@ -38,7 +38,7 @@ async def clear_stale_calls() -> int:
     Calls only exist while sockets are connected to this server; after a restart those sockets
     are gone, so any participants still listed in Redis are ghosts. (Hive runs one API process.)"""
     removed = 0
-    for pattern in ("call:*", "call-meta:*", "call-who:*", "call-sid:*"):
+    for pattern in ("call:*", "call-meta:*", "call-who:*", "call-sid:*", "call-notes:*"):
         keys = [key async for key in redis.scan_iter(f"{settings.socketio_channel}:{pattern}")]
         if keys:
             removed += await redis.delete(*keys)
@@ -127,6 +127,21 @@ async def remove(sid: str) -> tuple[str, dict, dict | None] | None:
     return channel_id, entry, await finish_if_empty(channel_id)
 
 
+def notes_key(channel_id: str) -> str:
+    return f"{settings.socketio_channel}:call-notes:{channel_id}"
+
+
+MAX_NOTE_LINES = 450
+
+
+async def add_note(channel_id: str, username: str, text: str) -> None:
+    """Keeps a finished caption line for the notes saved when the huddle ends."""
+    key = notes_key(channel_id)
+    await redis.rpush(key, json.dumps({"who": username, "text": text, "at": int(time.time())}))
+    await redis.ltrim(key, -MAX_NOTE_LINES, -1)
+    await redis.expire(key, 12 * 3600)
+
+
 async def finish_if_empty(channel_id: str) -> dict | None:
     """When nobody is left, takes the huddle record (once: concurrent leavers can't both get it)."""
     if await redis.hlen(room_key(channel_id)) > 0:
@@ -134,11 +149,13 @@ async def finish_if_empty(channel_id: str) -> dict | None:
     async with redis.pipeline(transaction=True) as pipe:
         pipe.hget(meta_key(channel_id), "start")
         pipe.zrange(who_key(channel_id), 0, -1)
-        pipe.delete(meta_key(channel_id), who_key(channel_id))
-        start, names, _ = await pipe.execute()
+        pipe.lrange(notes_key(channel_id), 0, -1)
+        pipe.delete(meta_key(channel_id), who_key(channel_id), notes_key(channel_id))
+        start, names, notes, _ = await pipe.execute()
     if start is None:
         return None
-    return {"seconds": max(0, int((time.time() * 1000 - int(start)) / 1000)), "names": list(names)}
+    return {"seconds": max(0, int((time.time() * 1000 - int(start)) / 1000)), "names": list(names),
+            "notes": [json.loads(line) for line in notes]}
 
 
 def format_duration(seconds: int) -> str:
