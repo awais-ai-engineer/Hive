@@ -344,7 +344,7 @@ function Home() {
   let main;
   if (view === 'todos' && user) {
     main = <>
-      <ChatHeader title="To-dos" onMenu={() => setDrawer(true)} />
+      <ChatHeader title="Tasks" onMenu={() => setDrawer(true)} />
       <TodosView userId={user.id} />
     </>;
   } else if (view === 'inbox') {

@@ -17,6 +17,7 @@ class TaskCreate(BaseModel):
     channel_id: str | None = None
     source_message_id: str | None = None
     due_at: datetime | None = None
+    priority: Literal["low", "medium", "high"] | None = None
 
 
 class TaskPatch(BaseModel):
@@ -24,7 +25,8 @@ class TaskPatch(BaseModel):
     notes: Notes | None = None
     assignee_id: str | None = None
     due_at: datetime | None = None
-    status: Literal["open", "done"] | None = None
+    status: Literal["open", "doing", "done"] | None = None
+    priority: Literal["low", "medium", "high"] | None = None
 
     @field_validator("title", "notes", "status")
     @classmethod
@@ -39,6 +41,7 @@ class TaskOut(BaseModel):
     title: str
     notes: str
     status: str
+    priority: str | None = None
     due_at: datetime | None
     completed_at: datetime | None
     created_by: PersonOut | None

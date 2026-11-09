@@ -6,7 +6,8 @@ export type Task = {
   id: string;
   title: string;
   notes: string;
-  status: 'open' | 'done';
+  status: 'open' | 'doing' | 'done';
+  priority: 'low' | 'medium' | 'high' | null;
   due_at: string | null;
   completed_at: string | null;
   created_by: Person | null;
@@ -64,9 +65,9 @@ export const QUICK_DUES: { label: string; days: number }[] = [
 export const tasksApi = {
   list: (scope: TaskScope, channelId?: string) =>
     apiData<Task[]>(`/api/tasks?scope=${scope}${channelId ? `&channel_id=${channelId}` : ''}`),
-  create: (body: { title: string; notes?: string; assignee_id?: string | null; channel_id?: string | null; source_message_id?: string | null; due_at?: string | null }) =>
+  create: (body: { title: string; notes?: string; assignee_id?: string | null; channel_id?: string | null; source_message_id?: string | null; due_at?: string | null; priority?: Task['priority'] }) =>
     apiData<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(body) }),
-  patch: (id: string, body: Partial<{ title: string; notes: string; assignee_id: string | null; due_at: string | null; status: 'open' | 'done' }>) =>
+  patch: (id: string, body: Partial<{ title: string; notes: string; assignee_id: string | null; due_at: string | null; status: Task['status']; priority: Task['priority'] }>) =>
     apiData<Task>(`/api/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   remove: (id: string) => apiData<void>(`/api/tasks/${id}`, { method: 'DELETE' }),
   assignees: (channelId: string | null) => apiData<Person[]>(`/api/tasks/assignees${channelId ? `?channel_id=${channelId}` : ''}`),

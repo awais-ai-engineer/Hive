@@ -39,7 +39,7 @@ async def serialize(session: AsyncSession, tasks: list[Task], viewer: User) -> l
     where = await places(session, viewer.id, list({t.channel_id for t in tasks if t.channel_id}))
     return [
         TaskOut(
-            id=t.id, title=t.title, notes=t.notes, status=t.status, due_at=t.due_at,
+            id=t.id, title=t.title, notes=t.notes, status=t.status, priority=t.priority, due_at=t.due_at,
             completed_at=t.completed_at, created_by=who.get(t.created_by),
             assignee=who.get(t.assignee_id) if t.assignee_id else None, channel_id=t.channel_id,
             place=where.get(t.channel_id), source_message_id=t.source_message_id,
@@ -87,7 +87,7 @@ async def create_task(session: AsyncSession, data: TaskCreate, user: User) -> Ta
     task = Task(
         id=new_id(), title=data.title, notes=data.notes, created_by=user.id,
         assignee_id=data.assignee_id, channel_id=data.channel_id,
-        source_message_id=data.source_message_id, due_at=data.due_at, status="open",
+        source_message_id=data.source_message_id, due_at=data.due_at, status="open", priority=data.priority,
         updated_at=datetime.now(UTC),
     )
     session.add(task)
@@ -114,6 +114,8 @@ async def update_task(
         task.title = data.title
     if data.notes is not None:
         task.notes = data.notes
+    if "priority" in fields:
+        task.priority = data.priority
     if data.status is not None and data.status != task.status:
         task.status = data.status
         task.completed_at = datetime.now(UTC) if data.status == "done" else None
@@ -156,10 +158,10 @@ async def list_tasks(
         await read_channel(session, channel_id, user.id)
         query = query.where(Task.channel_id == channel_id)
     elif scope == "mine":
-        query = query.where(Task.status == "open", _yours(user), _in_reach(user))
+        query = query.where(Task.status != "done", _yours(user), _in_reach(user))
     elif scope == "assigned_by_me":
         query = query.where(
-            Task.status == "open", Task.created_by == user.id, Task.assignee_id.is_not(None),
+            Task.status != "done", Task.created_by == user.id, Task.assignee_id.is_not(None),
             Task.assignee_id != user.id, _in_reach(user))
     elif scope == "done":
         query = query.where(
@@ -177,7 +179,7 @@ async def list_tasks(
 async def due_count(session: AsyncSession, user: User, until: datetime) -> int:
     return await session.scalar(
         select(func.count()).select_from(Task).where(
-            Task.status == "open", _yours(user), _in_reach(user),
+            Task.status != "done", _yours(user), _in_reach(user),
             Task.due_at.is_not(None), Task.due_at <= until)
     ) or 0
 
