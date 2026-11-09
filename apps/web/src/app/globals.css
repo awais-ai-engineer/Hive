@@ -35,43 +35,51 @@
 
 :root {
   color-scheme: light;
-  --canvas: #f6f5fb;          /* page background */
+  --canvas: #ffffff;          /* page background */
   --surface: #ffffff;         /* cards, panels */
-  --surface-2: #f1effa;       /* hover, subtle fills */
-  --fg: #1c1631;              /* main text (also the "white" utilities) */
-  --fg-base: #1c1631;
-  --muted: #6b6585;
-  --brand: #6d4aff;           /* Hive purple */
-  --brand-strong: #5a36f0;
-  --brand-soft: #efeaff;
-  --brand-soft-fg: #5b3be8;
-  --on-brand: #ffffff;
-  --ring: #8b6dff;
-  /* Sidebar: deep purple in light mode, like the product mockup. */
-  --sidebar-from: #2b1d63;
-  --sidebar-to: #3a2585;
-  --sidebar-fg: #ffffff;
-  --rail: #1d1446;
+  --surface-2: #f3f4f6;       /* hover, subtle fills */
+  --fg: #15171c;              /* main text (also the "white" utilities) */
+  --fg-base: #15171c;
+  --muted: #5b6170;
+  --brand: #f2a516;           /* Hive amber */
+  --brand-strong: #d98e08;
+  --brand-soft: #fdf1dc;
+  --brand-soft-fg: #744f0b;
+  --on-brand: #15171c;
+  --ring: #f2a516;
+  --border: #e3e5e9;
+  /* Light sidebar next to a dark rail. */
+  --sidebar: #f3f4f6;
+  --sidebar-from: #f3f4f6;
+  --sidebar-to: #f3f4f6;
+  --sidebar-fg: #15171c;
+  --sidebar-active: #e3e5e9;
+  --rail: #15171c;
+  --rail-fg: #ffffff;
 }
 
 .dark {
   color-scheme: dark;
-  --canvas: #0d0b17;
-  --surface: #15121f;
-  --surface-2: #1e1a2d;
-  --fg: #ece9f7;
-  --fg-base: #ece9f7;
-  --muted: #9a94b3;
-  --brand: #8b6dff;
-  --brand-strong: #a088ff;
-  --brand-soft: #241d42;
-  --brand-soft-fg: #c3b4ff;
-  --on-brand: #ffffff;
-  --ring: #a088ff;
-  --sidebar-from: #120e22;
-  --sidebar-to: #171230;
-  --sidebar-fg: #ece9f7;
-  --rail: #0a0814;
+  --canvas: #0f1115;
+  --surface: #16181d;
+  --surface-2: #1e2128;
+  --fg: #e8eaee;
+  --fg-base: #e8eaee;
+  --muted: #9aa0ac;
+  --brand: #f2a516;
+  --brand-strong: #f6b93b;
+  --brand-soft: #33270f;
+  --brand-soft-fg: #f8cc74;
+  --on-brand: #15171c;
+  --ring: #f6b93b;
+  --border: #2a2e36;
+  --sidebar: #121418;
+  --sidebar-from: #121418;
+  --sidebar-to: #121418;
+  --sidebar-fg: #e8eaee;
+  --sidebar-active: #23262e;
+  --rail: #0a0b0e;
+  --rail-fg: #ffffff;
 }
 
 html { background: var(--canvas); }
@@ -87,10 +95,16 @@ body {
 /* Pop-ups and forms rendered inside the sidebar go back to normal page colours. */
 .on-surface { --fg: var(--fg-base); color: var(--fg-base); }
 
-/* Inside the purple sidebar and rail, "white" utilities really are white. */
+/* Inside the dark rail, "white" utilities really are white. */
 .on-dark {
+  --fg: var(--rail-fg);
+  --brand-soft-fg: #f8cc74;
+  color: var(--rail-fg);
+}
+
+/* The sidebar follows the theme: dark text on light grey, light text on near-black. */
+.on-sidebar {
   --fg: var(--sidebar-fg);
-  --brand-soft-fg: #d8ccff;
   color: var(--sidebar-fg);
 }
 

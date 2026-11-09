@@ -73,7 +73,7 @@ export function Rail({ spaces, current, onSwitch, unread, todos = 0 }: {
     </Link>
     <Link href="/home?view=todos" title="To-dos" aria-label={todos ? `To-dos, ${todos} due` : 'To-dos'} className={`${tile} relative text-white/70 hover:bg-white/10 hover:text-white`}>
       <Icon name="checkSquare" size={20} />
-      {todos > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full bg-brand px-1 text-center text-[10px] font-semibold" style={{ color: '#fff' }}>{todos > 99 ? '99+' : todos}</span>}
+      {todos > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full bg-brand px-1 text-center text-[10px] font-semibold" style={{ color: 'var(--on-brand)' }}>{todos > 99 ? '99+' : todos}</span>}
     </Link>
     <Link href="/games" title="Games" aria-label="Games" className={`${tile} text-white/70 hover:bg-white/10 hover:text-white`}><Icon name="gaming" size={20} /></Link>
     <AskHive />

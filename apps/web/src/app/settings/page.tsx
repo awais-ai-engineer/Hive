@@ -93,7 +93,7 @@ function ProfileCard({ user, updateUser }: { user: User; updateUser: (user: User
 
     <div>
       <h2 className="text-lg font-bold">Cover image</h2>
-      <div className="mt-3 h-24 overflow-hidden rounded-xl bg-gradient-to-br from-[#a78bfa] via-[#6d4aff] to-[#2b1d63]">
+      <div className="mt-3 h-24 overflow-hidden rounded-xl bg-gradient-to-br from-[#fcd77f] via-[#f2a516] to-[#15171c]">
         {user.cover_url && <img src={user.cover_url.startsWith('/') ? `${API_URL}${user.cover_url}` : user.cover_url} alt="" className="h-full w-full object-cover" />}
       </div>
       <div className="mt-2 flex flex-wrap gap-2">
