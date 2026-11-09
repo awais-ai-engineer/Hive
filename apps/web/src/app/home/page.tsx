@@ -349,7 +349,7 @@ function Home() {
     </>;
   } else if (view === 'inbox') {
     main = <>
-      <ChatHeader title="Notifications" onMenu={() => setDrawer(true)} />
+      <ChatHeader title="Activity" onMenu={() => setDrawer(true)} />
       <InboxView />
     </>;
   } else if (view === 'saved') {
