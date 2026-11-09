@@ -19,7 +19,12 @@ export type Peer = {
   screen: boolean;
   stream: MediaStream | null;
   speaking: boolean;
+  hand?: boolean;
 };
+
+export type Caption = { id: string; sid: string; username: string; text: string; final: boolean };
+export type Reaction = { id: string; sid: string; emoji: string };
+export const REACTIONS = ['👍', '👏', '😂', '🎉', '❤️', '🤔'] as const;
 
 export type CallState = {
   channelId: string | null;
@@ -35,6 +40,13 @@ export type CallState = {
   localStream: MediaStream | null;
   speaking: boolean;
   peers: Peer[];
+  hand: boolean;
+  /** This browser transcribes your speech and shares it with the call. */
+  captionsOn: boolean;
+  /** Recent caption lines from everyone (including you), newest last. */
+  captions: Caption[];
+  /** Emoji reactions floating over tiles for a few seconds. */
+  reactions: Reaction[];
 };
 
 type Signal = { description?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit };
@@ -55,8 +67,16 @@ export function deviceMessage(device: 'microphone' | 'camera', cause: unknown): 
 
 const idle: CallState = {
   channelId: null, title: '', stageOpen: false, status: 'idle', error: '', muted: false, camera: false, screen: false,
-  localStream: null, speaking: false, peers: [],
+  localStream: null, speaking: false, peers: [], hand: false, captionsOn: false, captions: [], reactions: [],
 };
+
+type Recognition = { lang: string; continuous: boolean; interimResults: boolean; start(): void; stop(): void;
+  onresult: ((event: { resultIndex: number; results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
+  onend: (() => void) | null; onerror: ((event: { error: string }) => void) | null };
+const recognitionClass = () => typeof window === 'undefined' ? null
+  : ((window as unknown as { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition }).SpeechRecognition
+    ?? (window as unknown as { webkitSpeechRecognition?: new () => Recognition }).webkitSpeechRecognition ?? null);
+export const captionsSupported = () => !!recognitionClass();
 
 class CallManager {
   state: CallState = idle;
@@ -71,6 +91,8 @@ class CallManager {
   private audioContext: AudioContext | null = null;
   /** Signals that arrive before the join is acknowledged (we don't have ICE servers yet). */
   private queued: [string, Signal][] = [];
+  private recognition: Recognition | null = null;
+  private lastInterim = 0;
 
   constructor() {
     if (typeof window === 'undefined') return;
@@ -83,12 +105,18 @@ class CallManager {
     socket.on('call:peer-left', (data: { channelId: string; sid: string }) => {
       if (data.channelId === this.state.channelId) this.drop(data.sid);
     });
-    socket.on('call:state', (data: { channelId: string; sid: string; muted: boolean; camera: boolean; screen: boolean }) => {
+    socket.on('call:state', (data: { channelId: string; sid: string; muted: boolean; camera: boolean; screen: boolean; hand?: boolean }) => {
       const peer = this.peers.get(data.sid);
       if (!peer || data.channelId !== this.state.channelId) return;
-      this.peers.set(data.sid, { ...peer, muted: data.muted, camera: data.camera, screen: data.screen });
+      this.peers.set(data.sid, { ...peer, muted: data.muted, camera: data.camera, screen: data.screen, hand: !!data.hand });
       // Someone started sharing their screen: show it right away instead of waiting for a click.
       this.emit(data.screen && !peer.screen ? { stageOpen: true } : {});
+    });
+    socket.on('call:react', (data: { channelId: string; sid: string; emoji: string }) => {
+      if (data.channelId === this.state.channelId) this.showReaction(data.sid, data.emoji);
+    });
+    socket.on('call:caption', (data: { channelId: string; sid: string; username: string; text: string; final: boolean }) => {
+      if (data.channelId === this.state.channelId) this.addCaption(data.sid, data.username, data.text, data.final);
     });
     socket.on('call:signal', (data: { channelId: string; from: string; data: Signal }) => {
       if (data.channelId === this.state.channelId) void this.onSignal(data.from, data.data);
@@ -138,7 +166,7 @@ class CallManager {
       for (const peer of result.peers) this.connect(peer.sid);
       this.emit({ status: 'connected' });
       for (const [from, signal] of this.queued.splice(0)) void this.onSignal(from, signal);
-      void chatRequest('call:state', { channelId, muted: this.state.muted || !this.audio, camera: this.state.camera, screen: this.state.screen }).catch(() => {});
+      void chatRequest('call:state', { channelId, muted: this.state.muted || !this.audio, camera: this.state.camera, screen: this.state.screen, hand: this.state.hand }).catch(() => {});
     } catch (cause) {
       this.hangUp();
       this.emit({ ...idle, status: 'error', error: cause instanceof Error ? cause.message : 'Could not join the huddle.' });
@@ -153,7 +181,67 @@ class CallManager {
   }
 
   /** Closes every connection and releases the microphone, camera and screen. */
+  toggleHand() {
+    this.emit({ hand: !this.state.hand });
+    this.sendState();
+  }
+
+  react(emoji: string) {
+    const channelId = this.state.channelId;
+    if (!channelId) return;
+    this.showReaction(socket.id ?? 'me', emoji);
+    void chatRequest('call:react', { channelId, emoji }).catch(() => {});
+  }
+
+  private showReaction(sid: string, emoji: string) {
+    const id = `${sid}-${Date.now()}-${Math.random()}`;
+    this.emit({ reactions: [...this.state.reactions, { id, sid, emoji }].slice(-12) });
+    setTimeout(() => this.emit({ reactions: this.state.reactions.filter(item => item.id !== id) }), 3500);
+  }
+
+  private addCaption(sid: string, username: string, text: string, final: boolean) {
+    const captions = [...this.state.captions];
+    const last = captions.findLastIndex(item => item.sid === sid);
+    if (last >= 0 && !captions[last].final) captions[last] = { ...captions[last], text, final };
+    else captions.push({ id: `${sid}-${Date.now()}`, sid, username, text, final });
+    this.emit({ captions: captions.slice(-40) });
+  }
+
+  /** Live captions: the browser transcribes your microphone and shares the words with the call. */
+  toggleCaptions(username: string) {
+    if (this.recognition) { this.stopCaptions(); return; }
+    const Speech = recognitionClass();
+    if (!Speech) { this.emit({ error: 'Live captions need Chrome or Edge on a computer.' }); return; }
+    const recognition = new Speech();
+    recognition.lang = typeof navigator !== 'undefined' ? navigator.language : 'en-US';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.onresult = event => {
+      const result = event.results[event.results.length - 1];
+      const text = result[0]?.transcript.trim();
+      const channelId = this.state.channelId;
+      if (!text || !channelId) return;
+      this.addCaption(socket.id ?? 'me', username, text, result.isFinal);
+      if (!result.isFinal && Date.now() - this.lastInterim < 700) return;
+      this.lastInterim = Date.now();
+      void chatRequest('call:caption', { channelId, text: text.slice(-300), final: result.isFinal }).catch(() => {});
+    };
+    recognition.onerror = event => { if (event.error === 'not-allowed') { this.stopCaptions(); this.emit({ error: 'Captions need microphone access.' }); } };
+    // Recognition stops by itself after a pause; keep it going while captions are on.
+    recognition.onend = () => { if (this.recognition === recognition && this.state.channelId) { try { recognition.start(); } catch { this.stopCaptions(); } } };
+    this.recognition = recognition;
+    try { recognition.start(); this.emit({ captionsOn: true }); } catch { this.stopCaptions(); }
+  }
+
+  private stopCaptions() {
+    const recognition = this.recognition;
+    this.recognition = null;
+    try { recognition?.stop(); } catch { /* already stopped */ }
+    this.emit({ captionsOn: false });
+  }
+
   private hangUp() {
+    this.stopCaptions();
     this.resetLinks();
     this.stopTracks();
     this.peers.clear();
@@ -234,7 +322,7 @@ class CallManager {
 
   private sendState() {
     const { channelId, muted, camera, screen } = this.state;
-    if (channelId) void chatRequest('call:state', { channelId, muted, camera, screen }).catch(() => {});
+    if (channelId) void chatRequest('call:state', { channelId, muted, camera, screen, hand: this.state.hand }).catch(() => {});
   }
 
   /** Swap the outgoing video (camera, screen or none) on every connection. */
