@@ -91,7 +91,7 @@ export function Icon({ name, size = 18, ...props }: { name: IconName; size?: num
 export function Logo({ size = 28 }: { size?: number }) {
   return <svg aria-hidden width={size} height={size} viewBox="0 0 32 32">
     <defs><linearGradient id="hive-mark" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stopColor="#a78bfa" /><stop offset="1" stopColor="#6d4aff" /></linearGradient></defs>
+      <stop offset="0" stopColor="#f8cc74" /><stop offset="1" stopColor="#f2a516" /></linearGradient></defs>
     <path fill="url(#hive-mark)" d="M16 2.5 27.7 9.25v13.5L16 29.5 4.3 22.75V9.25Z" />
     <path fill="#fff" fillOpacity=".9" d="m16 9.5 5.6 3.25v6.5L16 22.5l-5.6-3.25v-6.5Z" />
   </svg>;

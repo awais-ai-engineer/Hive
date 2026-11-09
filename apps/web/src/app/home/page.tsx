@@ -427,7 +427,7 @@ function Home() {
     <div className={`${drawer ? 'fixed inset-y-0 left-0 z-40 flex' : 'hidden'} h-full md:static md:z-auto md:flex`}>
       <Rail spaces={spaces} current={space?.slug ?? null} onSwitch={next => go({ s: next })} unread={notifications} todos={todoCount} />
       <aside className="h-full w-[min(80vw,280px)] md:w-[280px]">
-        {spacesReady && !spaces.length && <p className="on-dark bg-[var(--sidebar-from)] px-4 pt-4 text-sm text-white/70">You haven&apos;t joined a space yet. <Link href="/spaces" className="underline">Browse spaces</Link> or <Link href="/spaces/new" className="underline">create one</Link>.</p>}
+        {spacesReady && !spaces.length && <p className="on-sidebar bg-[var(--sidebar)] px-4 pt-4 text-sm text-white/70">You haven&apos;t joined a space yet. <Link href="/spaces" className="underline">Browse spaces</Link> or <Link href="/spaces/new" className="underline">create one</Link>.</p>}
         <Sidebar spaces={spaces} space={space} channels={channels} conversations={conversations}
           selected={selected} view={activeView}
           unreadTotal={unreadTotal} threadsUnread={threadsUnread}

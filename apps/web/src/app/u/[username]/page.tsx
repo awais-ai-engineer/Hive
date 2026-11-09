@@ -78,7 +78,7 @@ export default function ProfilePage() {
   const item = 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--surface-2)]';
   return <main className="mx-auto max-w-2xl px-4 py-6">
     <article className="card overflow-hidden">
-      <div className="relative h-32 overflow-hidden bg-gradient-to-br from-[#a78bfa] via-[#6d4aff] to-[#2b1d63] sm:h-40">
+      <div className="relative h-32 overflow-hidden bg-gradient-to-br from-[#fcd77f] via-[#f2a516] to-[#15171c] sm:h-40">
         {profile.cover_url && <img src={profile.cover_url.startsWith('/') ? `${API_URL}${profile.cover_url}` : profile.cover_url} alt="" className="h-full w-full object-cover" />}
         {own && <Link href="/settings" className="absolute right-3 top-3 rounded-lg bg-[rgb(0_0_0/0.5)] px-3 py-1.5 text-sm font-medium hover:bg-[rgb(0_0_0/0.7)]" style={{ color: '#fff' }}>Edit cover</Link>}
       </div>
