@@ -22,6 +22,7 @@ import pytest
 import pytest_asyncio
 import uvicorn
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
 from app.core.config import settings
 from app.db.models import Base
@@ -51,8 +52,17 @@ async def database():
 
 @pytest_asyncio.fixture(autouse=True)
 async def clean_state(database):
-    async with engine.begin() as connection:
-        await connection.execute(text("TRUNCATE users CASCADE"))
+    # A background task from the previous test (for example the huddle summary posted after
+    # everyone leaves) can still be writing; a deadlock here just means "try again".
+    for attempt in range(5):
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(text("TRUNCATE users CASCADE"))
+            break
+        except DBAPIError as error:
+            if "deadlock" not in str(error).lower() or attempt == 4:
+                raise
+            await asyncio.sleep(0.2 * (attempt + 1))
     keys = [key async for key in redis.scan_iter("rl:*")] + [key async for key in redis.scan_iter("ai:*")]
     if keys:
         await redis.delete(*keys)
