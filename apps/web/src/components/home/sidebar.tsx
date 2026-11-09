@@ -12,6 +12,7 @@ import { Avatar } from '../ui/avatar';
 import { Icon, type IconName } from '../ui/icons';
 import { StatusMark } from '../ui/status-mark';
 import { CallBar } from '../call/call-bar';
+import { HuddlesSection, QuietHoursCard } from './sidebar-extras';
 import { calls } from '../../lib/call';
 import { useHuddles } from '../../lib/huddles';
 import { CreateChannelDialog } from './create-channel-dialog';
@@ -280,11 +281,18 @@ export function Sidebar(props: Props) {
         {space && isAdmin && <li><Link href={`/s/${space.slug}/settings#invites`} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-white/60 hover:bg-white/10 hover:text-white">
           <Icon name="plus" size={15} className="shrink-0" />{t('sidebar.invitePeople')}</Link></li>}
       </ul>}
+      <HuddlesSection huddles={Object.values(huddles).flatMap(huddle => {
+        const entry = byId.get(huddle.channelId);
+        if (!entry) return [];
+        const place = entry.kind === 'channel' ? `#${entry.label}` : entry.label;
+        return [{ id: huddle.channelId, title: entry.kind === 'channel' ? `${entry.label} huddle` : `Huddle with ${entry.label}`, place, count: huddle.count }];
+      })} onJoin={huddle => { props.onOpen(huddle.id); void calls.join(huddle.id, huddle.place).then(() => calls.setStageOpen(true)); }} />
       <div className="mt-4 border-t border-white/10 pt-2"><ul>
         {quickAction(t('sidebar.newSection'), () => setDialog({ mode: 'new' }))}
       </ul></div>
       {error && <p role="alert" className="mt-3 px-2.5 text-xs text-rose-300">{error}</p>}
     </div>
+    <QuietHoursCard />
     <CallBar />
     {menu && <PopupMenu at={menu} label={menu.label} items={menu.items} onClose={() => setMenu(null)} />}
     {dialog && <SectionDialog key={dialog.mode === 'rename' ? dialog.section.id : 'new'}

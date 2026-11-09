@@ -1,5 +1,7 @@
 'use client';
 
+import { AskHive } from '../ai/ask-panel';
+import { LiveHuddleBanner } from '../call/live-huddle-banner';
 import { useT } from '../../lib/i18n';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -115,6 +117,7 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
         <Tab active={tab === 'files'} icon="folder" label={t('tabs.files')} onClick={() => onTab('files')} />
       </div>}
     </header>
+    <LiveHuddleBanner channelId={conversation.id} title={conversationTitle(conversation)} />
     <TimerBanner seconds={conversation.disappear_after} />
     {!conversation.encrypted && <div className="mb-3 flex flex-wrap items-start gap-x-4 gap-y-2"><CatchUp channelId={conversation.id} /><TranslateAllToggle channelId={conversation.id} /></div>}
     {away && <p role="status" className="-mt-1 mb-3 rounded-xl bg-brand-soft px-3 py-2 text-sm">
@@ -131,6 +134,7 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
           <p className="truncate text-sm text-white/55">{channel.is_private && <span className="mr-2 rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand">Private channel</span>}{channel.topic || `${space.name} · ${space.type === 'community' ? 'Community' : 'Workspace'}`}</p>
         </div>
         {channel.type !== 'voice' && <HuddleButton channelId={channel.id} title={`#${channel.name}`} />}
+        {channel.type !== 'voice' && <AskHive spaceId={space.id} inline />}
         {channel.type !== 'voice' && onTimerChanged && (space.my_role === 'owner' || space.my_role === 'admin') && <TimerButton channelId={channel.id} seconds={channel.disappear_after} onChanged={onTimerChanged} onError={onError ?? (() => {})} />}
         <Controls {...controls} />
         {channel.is_private && <div className="relative">
@@ -149,6 +153,7 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
         <Tab active={tab === 'files'} icon="folder" label={t('tabs.files')} onClick={() => onTab('files')} />
       </div>}
     </header>
+    {channel.type !== 'voice' && <LiveHuddleBanner channelId={channel.id} title={`#${channel.name}`} />}
     {channel.type !== 'voice' && <TimerBanner seconds={channel.disappear_after} />}
     {channel.type !== 'voice' && <div className="mb-3 flex flex-wrap items-start gap-x-4 gap-y-2"><CatchUp channelId={channel.id} /><TranslateAllToggle channelId={channel.id} /></div>}</>;
   }

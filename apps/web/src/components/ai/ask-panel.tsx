@@ -9,7 +9,7 @@ import { Icon } from '../ui/icons';
 type Answer = { answer: string; sources: { n: number; type: string; id: string; title: string; url: string; snippet: string }[] };
 
 /** Rail button and dialog (Ctrl+J) for Ask Hive: one question, one answer with sources. */
-export function AskHive({ spaceId }: { spaceId?: string }) {
+export function AskHive({ spaceId, inline = false }: { spaceId?: string; inline?: boolean }) {
   const enabled = useAiStatus();
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState('');
@@ -37,8 +37,11 @@ export function AskHive({ spaceId }: { spaceId?: string }) {
     catch (cause) { setError(requestError(cause)); } finally { setBusy(false); }
   }
   return <>
-    <button type="button" onClick={() => setOpen(true)} title="Ask Hive (Ctrl+J)" aria-label="Ask Hive"
-      className="flex h-11 w-11 items-center justify-center rounded-2xl text-white/70 transition hover:bg-white/10 hover:text-white"><Icon name="sparkles" size={20} /></button>
+    {inline ? <button type="button" onClick={() => setOpen(true)} title="Ask Hive (Ctrl+J)"
+      className="flex shrink-0 items-center gap-1.5 rounded-xl border border-[color-mix(in_srgb,var(--brand)_45%,transparent)] bg-brand-soft px-3 py-1.5 text-sm font-semibold text-[var(--brand-soft-fg)] transition hover:bg-[color-mix(in_srgb,var(--brand)_22%,transparent)]">
+      <Icon name="sparkles" size={15} />Ask Hive</button>
+    : <button type="button" onClick={() => setOpen(true)} title="Ask Hive (Ctrl+J)" aria-label="Ask Hive"
+      className="flex h-9 w-9 items-center justify-center rounded-xl text-white/65 transition hover:bg-white/[0.08] hover:text-white"><Icon name="sparkles" size={18} /></button>}
     {open && <div className="fixed inset-0 z-50 flex items-start justify-center bg-[rgb(0_0_0/0.5)] p-4 pt-[10vh]" onMouseDown={event => { if (event.target === event.currentTarget) setOpen(false); }}>
       <section role="dialog" aria-modal="true" aria-label="Ask Hive" className="on-surface card w-full max-w-xl p-5 text-white">
         <div className="mb-3 flex items-center justify-between"><h2 className="flex items-center gap-2 text-lg font-bold"><Icon name="sparkles" className="text-brand" />Ask Hive</h2>
