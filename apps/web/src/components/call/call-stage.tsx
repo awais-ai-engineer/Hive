@@ -117,7 +117,7 @@ export function CallStage() {
 
   const sidePanel = <aside aria-label="Huddle details" className="hidden w-80 shrink-0 flex-col border-l border-[rgb(255_255_255/0.08)] lg:flex">
     <div role="tablist" className="flex gap-1 border-b border-[rgb(255_255_255/0.08)] px-3 pt-2 text-sm">
-      {([['people', `People · ${count}`], ['captions', 'Captions']] as const).map(([value, label]) => <button key={value} type="button" role="tab" aria-selected={panel === value}
+      {([['people', `People · ${count}`], ['captions', 'Notes']] as const).map(([value, label]) => <button key={value} type="button" role="tab" aria-selected={panel === value}
         onClick={() => setPanel(value)} className={`-mb-px border-b-2 px-3 py-2 font-medium ${panel === value ? 'border-[#f2a516]' : 'border-transparent'}`}
         style={panel === value ? WHITE : MUTED_TEXT}>{label}</button>)}
     </div>
@@ -131,12 +131,15 @@ export function CallStage() {
           {tile.video && <Icon name="video" size={14} className="opacity-60" />}
           <Icon name={tile.muted ? 'micOff' : 'mic'} size={14} className={tile.muted ? 'text-rose-300' : 'opacity-60'} />
         </li>)}
-      </ul> : !call.captions.length ? <p className="mt-6 text-center text-sm" style={MUTED_TEXT}>
-        {captionsSupported() ? 'Turn on Captions to show what you say as text to everyone. Each person turns captions on for their own voice.' : 'Live captions need Chrome or Edge on a computer.'}</p>
+      </ul> : !call.captions.length ? <div className="mt-6 text-center text-sm" style={MUTED_TEXT}>
+        <p>{captionsSupported() ? 'Notes are built from live captions. Turn captions on to add what you say. When the huddle ends, the notes are saved as a Doc in this conversation for everyone in it.' : 'Notes need live captions, which work in Chrome or Edge on a computer.'}</p>
+        {captionsSupported() && !call.captionsOn && <button type="button" onClick={() => calls.toggleCaptions(user?.username ?? 'You')}
+          className="mt-3 rounded-lg bg-[#f2a516] px-3 py-1.5 text-sm font-semibold text-[#15171c]">Take notes</button>}
+      </div>
         : <ol className="space-y-2 text-sm">{call.captions.map(caption => <li key={caption.id}>
           <span className="font-semibold">{caption.username}: </span><span style={caption.final ? undefined : MUTED_TEXT}>{caption.text}</span></li>)}</ol>}
     </div>
-    <p className="border-t border-[rgb(255_255_255/0.08)] p-3 text-xs" style={MUTED_TEXT}>Everyone in this huddle sees captions as they are spoken. They are not saved.</p>
+    <p className="border-t border-[rgb(255_255_255/0.08)] p-3 text-xs" style={MUTED_TEXT}>Everyone in this huddle sees captions as they are spoken. Finished lines are saved as meeting notes in this conversation when the huddle ends.</p>
   </aside>;
 
   return <div className={`fixed inset-0 z-50 flex items-center justify-center ${full ? '' : 'bg-[rgb(8_6_14/0.62)] p-3 backdrop-blur-sm sm:p-6'}`}
@@ -154,7 +157,7 @@ export function CallStage() {
         <p className="text-xs" style={MUTED_TEXT}>{t('huddle.people', { count })}</p>
       </div>
       {timer && <span className="flex items-center gap-1.5 rounded-full bg-[rgb(255_255_255/0.1)] px-2.5 py-1 text-xs font-semibold"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{timer}</span>}
-      {call.captionsOn && <span className="hidden rounded-full bg-[rgb(242_165_22/0.18)] px-2.5 py-1 text-xs font-semibold text-[#f8cc74] sm:inline">Captions on</span>}
+      {(call.captionsOn || call.captions.length > 0) && <span className="hidden items-center gap-1 rounded-full bg-[rgb(242_165_22/0.18)] px-2.5 py-1 text-xs font-semibold text-[#f8cc74] sm:flex"><Icon name="file" size={12} />Taking notes</span>}
       <span className="ml-auto" />
       <RoundControl size="sm" icon={full ? 'shrink' : 'expand'} label={full ? t('huddle.exitFullScreen') : t('huddle.fullScreen')} onClick={() => setFull(value => !value)} />
     </header>

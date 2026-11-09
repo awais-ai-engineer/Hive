@@ -26,12 +26,15 @@ from app.db.models import (
     Channel,
     ChannelMember,
     ChannelType,
+    Doc,
+    DocVersion,
     Message,
     Post,
     Space,
     SpaceMember,
     SpaceType,
     User,
+    new_id,
 )
 from app.db.session import SessionLocal, redis
 from app.dms.service import participant_ids, partner_ids
@@ -431,12 +434,45 @@ async def post_huddle_summary(channel_id: str, author_id: str, huddle: dict) -> 
         if channel is None or channel.type == ChannelType.voice:
             return
         started = datetime.now(UTC) - timedelta(seconds=huddle["seconds"])
+        body = calls.huddle_text(names, huddle["seconds"])
+        doc = await save_huddle_notes(session, channel, author_id, names, huddle, started)
+        if doc is not None:
+            body += f" [Open the meeting notes]({settings.web_origin}/home?c={channel_id}&doc={doc.id})"
         message = Message(channel_id=channel_id, author_id=author_id, kind="huddle",
-                          body=calls.huddle_text(names, huddle["seconds"]), huddle_started_at=started)
+                          body=body, huddle_started_at=started)
         session.add(message)
         await session.commit()
         out = await service.message_out(session, message, author_id)
+        if doc is not None:
+            event = {"action": "created", "docId": doc.id, "channelId": channel_id, "version": doc.version,
+                     "updatedBy": {"id": author_id, "username": names[-1]}}
+            for room in await call_audience(session, channel):
+                await sio.emit("doc:updated", event, room=room)
     await sio.emit("message:new", out, room=f"channel:{channel_id}")
+
+
+async def save_huddle_notes(session, channel: Channel, author_id: str, names: list[str], huddle: dict,
+                            started: datetime) -> Doc | None:
+    """Turns the huddle's captions into a Doc in the same channel, so everyone there can read them."""
+    lines = huddle.get("notes") or []
+    if not lines:
+        return None
+    when = started.strftime("%d %b %Y, %H:%M UTC")
+    blocks = [
+        {"id": "b0", "type": "callout", "emoji": "🎧",
+         "text": "Notes taken from live captions during the huddle. Only what people said with captions on is included."},
+        {"id": "b1", "type": "paragraph", "text": f"When: {when} · Length: {calls.format_duration(huddle['seconds'])}"},
+        {"id": "b2", "type": "paragraph", "text": f"People: {', '.join(names)}"},
+        {"id": "b3", "type": "heading", "level": 2, "text": "Transcript"},
+    ] + [{"id": f"t{index}", "type": "paragraph", "text": f"{line['who']}: {line['text']}"[:4000]}
+         for index, line in enumerate(lines)]
+    now = datetime.now(UTC)
+    doc = Doc(id=new_id(), channel_id=channel.id, title=f"Huddle notes · {started.strftime('%d %b %Y')}",
+              emoji="🎧", body=blocks, version=1, created_by=author_id, updated_by=author_id, updated_at=now)
+    session.add(doc)
+    session.add(DocVersion(id=new_id(), doc_id=doc.id, version=1, title=doc.title, emoji=doc.emoji,
+                           body=blocks, saved_by=author_id))
+    return doc
 
 
 async def leave_call(sid: str) -> None:
@@ -538,6 +574,8 @@ async def call_caption(sid, data, session, user):
         raise HTTPException(403, "You are not in this call")
     if _call_limited(sid, "caption", 120):
         raise HTTPException(429, "Too many captions")
+    if data.final:
+        await calls.add_note(data.channelId, user.username, data.text.strip())
     await sio.emit("call:caption", {"channelId": data.channelId, "sid": sid, "userId": user.id,
                                     "username": user.username, "text": data.text.strip(), "final": data.final},
                    room=f"call:{data.channelId}", skip_sid=sid)
