@@ -131,9 +131,9 @@ export function CallStage() {
       <RoundControl icon={call.camera ? 'video' : 'videoOff'} label={call.camera ? t('huddle.cameraOff') : t('huddle.cameraOn')} active={call.camera} onClick={() => void calls.toggleCamera()} />
       {canShare && <RoundControl icon="screen" label={call.screen ? t('huddle.stopShare') : t('huddle.share')} active={call.screen} onClick={() => void calls.toggleScreen()} />}
       <RoundControl icon="settings" label="Audio settings" active={settings} onClick={() => setSettings(value => !value)} />
-      <button type="button" onClick={() => void calls.leave()}
-        className="ml-2 flex h-11 items-center gap-2 rounded-full bg-rose-600 px-5 text-sm font-semibold transition hover:bg-rose-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fff]" style={WHITE}>
-        <Icon name="phoneOff" size={18} />{t('huddle.leave')}
+      <button type="button" onClick={() => void calls.leave()} aria-label={t('huddle.leave')} title={t('huddle.leave')}
+        className="ml-2 flex h-11 w-14 items-center justify-center rounded-full bg-rose-600 transition hover:bg-rose-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fff]" style={WHITE}>
+        <Icon name="phone" size={20} className="rotate-[135deg]" />
       </button>
       {settings && <div className="absolute bottom-full left-1/2 mb-2 w-72 -translate-x-1/2 rounded-xl bg-[#26222f] p-3 shadow-xl">
         <label className="block text-xs font-medium" style={{ color: 'rgb(255 255 255 / 0.7)' }}>Microphone

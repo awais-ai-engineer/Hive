@@ -5,6 +5,7 @@ import { calls } from '../../lib/call';
 import { useCall } from '../../lib/use-call';
 import { useAuth } from '../../lib/auth';
 import { Avatar } from '../ui/avatar';
+import { Icon } from '../ui/icons';
 import { RoundControl } from './call-stage';
 import { useCallTimer } from './call-timer';
 
@@ -39,8 +40,9 @@ export function CallBar() {
       {canShare && <RoundControl size="sm" icon="screen" label={call.screen ? t('huddle.stopShare') : t('huddle.share')} active={call.screen}
         onClick={() => { void calls.toggleScreen().then(() => { if (calls.getState().screen) calls.setStageOpen(true); }); }} />}
       <RoundControl size="sm" icon="popout" label="Open the huddle window" active={call.stageOpen} onClick={() => calls.setStageOpen(!call.stageOpen)} />
-      <button type="button" onClick={() => void calls.leave()} title="Leave huddle"
-        className="ml-auto flex h-8 items-center gap-1.5 rounded-full bg-rose-600 px-3 text-xs font-semibold transition hover:bg-rose-500" style={{ color: '#fff' }}>{t('huddle.leave')}</button>
+      <button type="button" onClick={() => void calls.leave()} aria-label={t('huddle.leave')} title={t('huddle.leave')}
+        className="ml-auto flex h-8 w-11 items-center justify-center rounded-full bg-rose-600 transition hover:bg-rose-500" style={{ color: '#fff' }}>
+        <Icon name="phone" size={16} className="rotate-[135deg]" /></button>
     </div>
   </section>;
 }
