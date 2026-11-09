@@ -1,5 +1,8 @@
 'use client';
 
+import { Avatar, colourFor } from '../../../components/ui/avatar';
+import { Icon, type IconName } from '../../../components/ui/icons';
+import { CommunityGames } from '../../../components/communities/community-side';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -89,57 +92,69 @@ export default function SpacePage() {
   const online = members.filter(item => item.online);
   const canAdmin = space?.my_role && rank[space.my_role] >= rank.admin;
   const canLeave = space?.my_role && space.my_role !== 'owner';
-  return <main className="mx-auto grid max-w-6xl gap-6 px-4 py-8 md:grid-cols-[240px_1fr]">
-    <aside className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
-      <h1 className="text-xl font-bold">{space?.name ?? (error === 'Space not found' ? 'Space not found' : 'Space')}</h1>
-      {space && <>
-        <p className="mt-1 flex items-center gap-1.5 text-sm text-white/50"><SpaceKind space={space} />{spaceKindLabel(space)} · {space.member_count} members</p>
-        <CategoryChips space={space} />
-        {space.type === 'community' && <RulesCard slug={slug} />}
-        <Link className="mt-3 inline-block text-sm text-amber-400" href={`/s/${slug}/members`}>View members</Link>
-        {space.type === 'community' && !!space.my_role && space.my_role !== 'guest' && <Link className="ml-3 mt-3 inline-block text-sm text-amber-400" href={`/s/${slug}/games`}>Games</Link>}
-        {canAdmin && <Link className="ml-3 inline-block text-sm text-amber-400" href={`/s/${slug}/settings`}>Settings</Link>}
-        <h2 className="mb-2 mt-6 text-sm font-semibold uppercase text-white/50">Channels</h2>
-        <ul className="space-y-1">{channels.map(item => <li key={item.id}>
-          <button onClick={() => router.replace(`/s/${slug}?tab=chat&c=${item.id}`)}
-            className={`w-full rounded px-2 py-1 text-left ${item.id === channel?.id ? 'bg-white/10 text-amber-400' : 'text-white/70'}`}>
-            <span className="flex items-center justify-between gap-2">
-              <span className={`truncate ${item.unread && item.id !== channel?.id ? 'font-semibold text-white' : ''}`}>{item.type === 'voice' ? '🔊' : item.is_private ? '🔒' : '#'} {item.name}</span>
-              {item.unread > 0 && item.id !== channel?.id && <span aria-label={`${item.unread} unread`}
-                className="rounded-full bg-amber-400 px-1.5 text-xs font-semibold text-black">{item.unread > 99 ? '99+' : item.unread}</span>}
-            </span>
-          </button>
-        </li>)}</ul>
-        <h2 className="mb-2 mt-6 text-sm font-semibold uppercase text-white/50">Online — {online.length}</h2>
-        <ul className="space-y-1 text-sm">{online.slice(0, 15).map(item => <li key={item.user.id} className="flex items-center gap-2 text-white/70">
-          <span aria-hidden className="h-2 w-2 rounded-full bg-emerald-400" />
-          <span className="truncate">{item.user.username}</span>
-        </li>)}</ul>
-      </>}
-    </aside>
-    <section className="min-h-80 min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-3 sm:p-6">
-      {space && <div className="mb-5 flex gap-4">
-        {['posts', 'chat'].map(value => <Link key={value} href={`/s/${slug}?tab=${value}${selected ? `&c=${selected}` : ''}`} className={`rounded px-3 py-2 capitalize ${tab === value ? 'bg-white/10 text-amber-400' : 'text-white/50'}`}>{value}</Link>)}
-      </div>}
-      {space && <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div><p className="text-sm uppercase text-white/50">{space.type}</p>
-          <h2 className="text-2xl font-semibold">{tab === 'posts' ? space.name : channel?.name ?? space.name}</h2>
-          {tab === 'chat' && channel?.topic && <p className="mt-1 text-white/60">{channel.topic}</p>}
+  const isMember = !!space?.my_role && space.my_role !== 'guest';
+  const navLink = (href: string, icon: IconName, label: string, active = false) => <li><Link href={href} aria-current={active ? 'page' : undefined}
+    className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[14px] transition ${active ? 'bg-[var(--sidebar-active)] font-semibold' : 'text-white/75 hover:bg-white/[0.06]'}`}>
+    <Icon name={icon} size={16} className="shrink-0 opacity-75" />{label}</Link></li>;
+  return <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 md:grid-cols-[250px_1fr] xl:grid-cols-[250px_1fr_300px]">
+    <aside className="on-sidebar flex flex-col gap-4 rounded-2xl border border-[var(--border)] bg-[var(--sidebar)] p-4 md:sticky md:top-20 md:max-h-[calc(100dvh-6rem)] md:overflow-y-auto">
+      <div className="flex items-center gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-bold" style={{ background: space ? colourFor(space.slug) : 'var(--surface-2)', color: '#fff' }}>
+          {space?.name.split(/\s+/).slice(0, 2).map(word => word[0]?.toUpperCase()).join('') ?? '?'}</span>
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-bold">{space?.name ?? (error === 'Space not found' ? 'Space not found' : 'Space')}</h1>
+          {space && <p className="flex items-center gap-1 text-xs text-white/55"><SpaceKind space={space} />{spaceKindLabel(space)} · {space.member_count} members · {online.length} online</p>}
         </div>
+      </div>
+      {space && <>
         <div className="flex gap-2">
           {!space.my_role && space.type === 'community' && <JoinCommunity space={space} onJoined={() => void load()} />}
-          {canLeave && <button disabled={busy} onClick={() => changeMembership('leave')} className="auth-button">Leave</button>}
+          {canLeave && <button disabled={busy} onClick={() => { if (window.confirm(`Leave ${space.name}? You can join again later if it is public.`)) void changeMembership('leave'); }} title="You are a member. Click to leave."
+            className="btn-ghost flex-1 justify-center"><Icon name="check" size={15} />Joined</button>}
         </div>
+        <CategoryChips space={space} />
+        <ul className="space-y-0.5">
+          {navLink(`/s/${slug}?tab=posts${selected ? `&c=${selected}` : ''}`, 'home', 'Home feed', tab === 'posts')}
+          {navLink(`/s/${slug}/members`, 'users', 'Members')}
+          {space.type === 'community' && isMember && navLink(`/s/${slug}/games`, 'gaming', 'Games')}
+          {canAdmin && navLink(`/s/${slug}/settings`, 'settings', 'Settings')}
+        </ul>
+        <div>
+          <p className="mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-white/50">Chat rooms</p>
+          <ul className="space-y-0.5">{channels.map(item => <li key={item.id}>
+            <button onClick={() => router.replace(`/s/${slug}?tab=chat&c=${item.id}`)}
+              className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[14px] ${tab === 'chat' && item.id === channel?.id ? 'bg-[var(--sidebar-active)] font-semibold' : 'text-white/75 hover:bg-white/[0.06]'}`}>
+              <Icon name={item.type === 'voice' ? 'volume' : item.is_private ? 'lock' : 'hash'} size={15} className="shrink-0 opacity-60" />
+              <span className={`truncate ${item.unread && item.id !== channel?.id ? 'font-semibold' : ''}`}>{item.name}</span>
+              {item.unread > 0 && item.id !== channel?.id && <span aria-label={`${item.unread} unread`}
+                className="ml-auto rounded-full bg-brand px-1.5 text-xs font-semibold" style={{ color: 'var(--on-brand)' }}>{item.unread > 99 ? '99+' : item.unread}</span>}
+            </button>
+          </li>)}</ul>
+        </div>
+        {space.type === 'community' && <div className="mt-auto"><RulesCard slug={slug} /></div>}
+      </>}
+    </aside>
+    <section className="min-h-80 min-w-0">
+      {space && <div className="mb-4">
+        <h2 className="text-2xl font-bold">{tab === 'posts' ? 'Home feed' : `#${channel?.name ?? ''}`}</h2>
+        <p className="text-sm text-white/55">{tab === 'posts' ? `Posts from ${space.name}, ranked by what’s active right now.` : channel?.topic || `Chat with the ${space.name} community.`}</p>
       </div>}
       {error && <p role="alert" className={error === 'Loading space…' ? 'text-white/50' : 'text-rose-400'}>{error}</p>}
       {space && tab === 'posts' && <>
-        {space.my_role && rank[space.my_role] >= rank.member && <Link href={`/s/${slug}/submit`} className="auth-button mb-5 inline-block">Create post</Link>}
+        {space.my_role && rank[space.my_role] >= rank.member && <Link href={`/s/${slug}/submit`}
+          className="card mb-4 flex items-center gap-3 p-3 transition hover:border-[var(--brand)]">
+          {user && <Avatar name={user.username} src={user.avatar_url} size={32} />}
+          <span className="flex-1 rounded-xl border border-[var(--border)] px-3 py-2 text-sm text-white/50">Share something with {space.name}</span>
+          <span className="hidden items-center gap-3 text-sm text-white/60 sm:flex"><Icon name="image" size={16} /><Icon name="video" size={16} /><Icon name="share" size={16} /></span>
+          <span className="rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white">Post</span>
+        </Link>}
         <PostFeed space={space} />
       </>}
-      {space && tab === 'chat' && channel && <ChannelChat key={`${channel.id}:${user?.id ?? 'anonymous'}`} channel={channel} channels={channels} space={space} placeholder={`Message #${channel.name}`}
+      {space && tab === 'chat' && channel && <div className="card p-3 sm:p-5"><ChannelChat key={`${channel.id}:${user?.id ?? 'anonymous'}`} channel={channel} channels={channels} space={space} placeholder={`Message #${channel.name}`}
         reason={channel.type === 'voice' ? 'Voice rooms coming soon' : !user ? 'Log in to chat'
           : !space.my_role ? 'Join this space to chat' : space.my_role === 'guest' ? 'You have read-only access' : ''}
-        canModerate={!!space.my_role && rank[space.my_role] >= rank.moderator} tracksReads={!!space.my_role} onRead={clearUnread} />}
+        canModerate={!!space.my_role && rank[space.my_role] >= rank.moderator} tracksReads={!!space.my_role} onRead={clearUnread} /></div>}
     </section>
+    <aside className="hidden xl:block">{space?.type === 'community' && isMember && <div className="sticky top-20"><CommunityGames slug={slug} /></div>}</aside>
   </main>;
 }
