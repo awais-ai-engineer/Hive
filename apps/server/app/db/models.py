@@ -702,7 +702,8 @@ class Task(Base):
 
     __tablename__ = "tasks"
     __table_args__ = (
-        CheckConstraint("status IN ('open', 'done')", name="tasks_status_check"),
+        CheckConstraint("status IN ('open', 'doing', 'done')", name="tasks_status_check"),
+        CheckConstraint("priority IS NULL OR priority IN ('low', 'medium', 'high')", name="tasks_priority_check"),
         Index("ix_tasks_created_by", "created_by"),
         Index("ix_tasks_assignee_id", "assignee_id"),
         Index("ix_tasks_channel_id", "channel_id"),
@@ -719,6 +720,7 @@ class Task(Base):
     )
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(8), default="open", server_default="open")
+    priority: Mapped[str | None] = mapped_column(String(8))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = created_at()

@@ -203,3 +203,19 @@ async def test_task_events_route_privately(client, setup_chat, live_server):
         public = await add(client, ah, title="open", channel_id=(await client.get(CHANNELS)).json()[0]["id"])
         for queue in (aq, bq, cq):
             assert (await event(queue["task:updated"]))["taskId"] == public["id"]
+
+
+async def test_in_progress_status_and_priority(client, setup_chat):
+    _alice, _, _, ah, _bh, _, _, _ = setup_chat
+    task = await add(client, ah, title="Ship the board", priority="high")
+    assert task["priority"] == "high" and task["status"] == "open"
+    doing = await client.patch(f"/api/tasks/{task['id']}", headers=ah, json={"status": "doing", "priority": "low"})
+    assert doing.status_code == 200
+    assert doing.json()["status"] == "doing" and doing.json()["priority"] == "low" and doing.json()["completed_at"] is None
+    # In progress still counts as yours and as due work; only done leaves the list.
+    assert await titles(client, ah) == ["Ship the board"]
+    cleared = await client.patch(f"/api/tasks/{task['id']}", headers=ah, json={"priority": None})
+    assert cleared.json()["priority"] is None
+    bad = await client.patch(f"/api/tasks/{task['id']}", headers=ah, json={"status": "paused"})
+    assert bad.status_code == 422
+    assert (await client.post("/api/tasks", headers=ah, json={"title": "x", "priority": "urgent"})).status_code == 422

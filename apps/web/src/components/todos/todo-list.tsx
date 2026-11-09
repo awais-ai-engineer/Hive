@@ -158,7 +158,7 @@ export function TodoList({ scope, channelId, userId, canWrite = true, emptyTitle
   const row = (task: Task) => <Row key={task.id} task={task} userId={userId} onPatch={(t, b) => void patch(t, b)} onDelete={t => void remove(t)}
     onError={setError} editable={canWrite} />;
   // In the open lists a finished to-do stays visible until the next refresh, so Undo has something to act on.
-  const open = (tasks ?? []).filter(task => task.status === 'open' || (scope !== 'channel' && scope !== 'done' && undo?.id === task.id));
+  const open = (tasks ?? []).filter(task => task.status !== 'done' || (scope !== 'channel' && scope !== 'done' && undo?.id === task.id));
   const finished = (tasks ?? []).filter(task => task.status === 'done');
   const now = new Date();
   const grouped = scope === 'mine' || scope === 'assigned_by_me';
