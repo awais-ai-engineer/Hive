@@ -56,7 +56,10 @@ logging.basicConfig(level=logging.INFO)
 async def lifespan(_: FastAPI):
     settings.validate_storage()
     vapid.startup_notice()
-    await calls_service.clear_stale_calls()
+    try:
+        await calls_service.clear_stale_calls()
+    except Exception:  # Redis briefly unavailable: start anyway, ghosts expire with their sockets
+        logging.getLogger("hive").warning("Could not clear stale calls at startup", exc_info=True)
     scheduler.start()
     try:
         yield
