@@ -5,6 +5,7 @@ import './globals.css';
 import { AuthProvider } from '../lib/auth';
 import Nav from '../components/nav';
 import { SearchPalette } from '../components/search/search-palette';
+import { AuthGate } from '../components/auth-gate';
 import { PwaSetup } from '../components/pwa-setup';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
@@ -32,7 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body className="min-h-screen font-sans antialiased">
-        <I18nProvider><AuthProvider><PwaSetup /><Nav /><SearchPalette />{children}</AuthProvider></I18nProvider>
+        <I18nProvider><AuthProvider><PwaSetup /><Nav /><SearchPalette /><AuthGate>{children}</AuthGate></AuthProvider></I18nProvider>
       </body>
     </html>
   );
