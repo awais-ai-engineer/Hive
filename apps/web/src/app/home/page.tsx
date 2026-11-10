@@ -81,7 +81,8 @@ function Home() {
   const prefs = useRef(sidebar.data.prefs);
   prefs.current = sidebar.data.prefs;
 
-  const slug = slugParam ?? (spacesReady ? loadSetting<string | null>(LAST_SPACE, null) ?? spaces[0]?.slug ?? null : null);
+  const preferredSlug = slugParam ?? (spacesReady ? loadSetting<string | null>(LAST_SPACE, null) : null);
+  const slug = spacesReady && !spaces.some(item => item.slug === preferredSlug) ? spaces[0]?.slug ?? null : preferredSlug;
   const space = spaces.find(item => item.slug === slug) ?? null;
 
   const go = useCallback((params: Record<string, string | null | undefined>) => {
@@ -422,12 +423,11 @@ function Home() {
   }
 
   // Full-screen app shell: workspace rail, purple sidebar, then the open conversation.
-  return <main className="flex h-dvh overflow-hidden bg-canvas">
-    {drawer && <button type="button" aria-label="Close sidebar" onClick={() => setDrawer(false)} className="fixed inset-0 z-30 bg-[rgb(0_0_0/0.5)] md:hidden" />}
-    <div className={`${drawer ? 'fixed inset-y-0 left-0 z-40 flex' : 'hidden'} h-full md:static md:z-auto md:flex`}>
-      <Rail spaces={spaces} current={space?.slug ?? null} onSwitch={next => go({ s: next })} unread={notifications} todos={todoCount} />
-      <aside className="h-full w-[min(80vw,280px)] md:w-[280px]">
-        {spacesReady && !spaces.length && <p className="on-sidebar bg-[var(--sidebar)] px-4 pt-4 text-sm text-white/70">You haven&apos;t joined a space yet. <Link href="/spaces" className="underline">Browse spaces</Link> or <Link href="/spaces/new" className="underline">create one</Link>.</p>}
+  return <main className="hive-home flex h-dvh overflow-hidden bg-canvas">
+    {drawer && <button type="button" aria-label="Close sidebar" onClick={() => setDrawer(false)} className="sidebar-backdrop fixed inset-0 z-30 bg-[rgb(0_0_0/0.5)]" />}
+    <Rail spaces={spaces} current={space?.slug ?? null} onSwitch={next => go({ s: next })} unread={notifications} todos={todoCount} />
+    <div className={`home-sidebar ${drawer ? 'home-sidebar-open' : ''}`}>
+      <aside className="h-full w-[min(80vw,280px)] min-[760px]:w-[280px]">
         <Sidebar spaces={spaces} space={space} channels={channels} conversations={conversations}
           selected={selected} view={activeView}
           unreadTotal={unreadTotal} threadsUnread={threadsUnread}

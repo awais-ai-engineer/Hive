@@ -89,7 +89,7 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
     return () => { active = false; };
   }, [space?.slug, channel?.id]);
 
-  const menu = <button type="button" onClick={onMenu} aria-label="Open sidebar" className="rounded-lg p-1 text-white/70 hover:bg-[var(--surface-2)] md:hidden"><Icon name="menu" size={22} /></button>;
+  const menu = <button type="button" onClick={onMenu} aria-label="Open sidebar" className="rounded-lg p-1 text-white/70 hover:bg-[var(--surface-2)] min-[760px]:hidden"><Icon name="menu" size={22} /></button>;
   const shell = 'mb-3 border-b border-white/10';
 
   if (conversation) {

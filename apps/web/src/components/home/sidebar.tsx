@@ -223,7 +223,12 @@ export function Sidebar(props: Props) {
       <Icon name="plus" size={15} className="shrink-0" /><span className="truncate">{label}</span></button></li>;
 
   return <nav aria-label="Conversations" className="on-sidebar flex h-full min-h-0 flex-col border-r border-[var(--border)] bg-[var(--sidebar)] px-3 py-4">
-    <SpaceSwitcher spaces={props.spaces} current={space} onSwitch={props.onSwitchSpace} />
+    <SpaceSwitcher current={space} />
+    {!space && <div className="my-4 rounded-xl border border-white/15 p-4">
+      <p className="mb-3 text-sm text-white/70">Bring your team together or find a community.</p>
+      <Link href="/spaces/new" className="auth-button mb-2 min-h-11 w-full justify-center">Create a space</Link>
+      <Link href="/spaces" className="btn-ghost min-h-11 w-full justify-center">Browse communities</Link>
+    </div>}
     <div className="mt-3"><FindConversation /></div>
     <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
       <ul className="space-y-0.5">

@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { I18nProvider } from '../lib/i18n';
-import { Inter } from 'next/font/google';
+import { Inter, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '../lib/auth';
 import Nav from '../components/nav';
@@ -9,6 +9,8 @@ import { AuthGate } from '../components/auth-gate';
 import { PwaSetup } from '../components/pwa-setup';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
+
+const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-space-grotesk', display: 'swap' });
 
 export const metadata: Metadata = {
   title: 'Hive',
@@ -30,7 +32,7 @@ const themeScript = `try{var t=localStorage.getItem('hive:theme')||'system';var 
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`} suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body className="min-h-screen font-sans antialiased">
         <I18nProvider><AuthProvider><PwaSetup /><Nav /><SearchPalette /><AuthGate>{children}</AuthGate></AuthProvider></I18nProvider>

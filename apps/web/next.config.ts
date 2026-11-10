@@ -7,6 +7,7 @@ const raw = (process.env.API_PROXY_TARGET ?? '').trim().replace(/^["']|["']$/g, 
 const apiOrigin = /^https?:\/\//.test(raw) ? raw : '';
 
 const nextConfig: NextConfig = {
+  transpilePackages: ['@hive/ui'],
   async rewrites() {
     return apiOrigin ? [{ source: '/api/auth/:path*', destination: `${apiOrigin}/api/auth/:path*` }] : [];
   },

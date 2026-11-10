@@ -280,7 +280,7 @@ function BlockedCard() {
 export default function SettingsPage() {
   const { user, loading, updateUser } = useAuth();
   const [section, setSection] = useState<Section>('profile');
-  useEffect(() => { if (new URLSearchParams(window.location.search).get('section') === 'interests') setSection('interests'); }, []);
+  useEffect(() => { const wanted = new URLSearchParams(window.location.search).get('section'); if (sections.some(([id]) => id === wanted)) setSection(wanted as Section); }, []);
   if (loading) return <main className="p-16 text-center text-white/60">Loading…</main>;
   if (!user) return <main className="p-16 text-center"><Link className="font-semibold text-brand hover:underline" href="/login?next=/settings">Log in to see your settings</Link></main>;
   return <main className="mx-auto max-w-4xl px-4 py-8">

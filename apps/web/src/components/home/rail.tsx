@@ -1,17 +1,17 @@
-'use client';
+"use client";
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { Sheet, Tooltip } from '@hive/ui';
 import { useAuth } from '../../lib/auth';
-import { sortSpaces, spaceKindLabel, type Space } from '../../lib/spaces';
-import { Avatar, colourFor } from '../ui/avatar';
-import { Icon, Logo, type IconName } from '../ui/icons';
-import { statusTitle } from '../../lib/status';
+import { apiData, requestError, SPACES_CHANGED, type Space } from '../../lib/spaces';
+import { activeStatus } from '../../lib/status';
+import { Avatar } from '../ui/avatar';
+import { Icon, type IconName } from '../ui/icons';
 import { StatusDialog } from '../status-dialog';
-import { PopupMenu } from './popup-menu';
-import { useInstall } from '../../lib/push';
-import { AskHive } from '../ai/ask-panel';
+import { PopupMenu, type MenuItem } from './popup-menu';
+import { SpaceIcon, SpaceTiles } from './space-tiles';
 
 function useTheme() {
   const [dark, setDark] = useState(false);
@@ -25,9 +25,8 @@ function useTheme() {
   return { dark, toggle };
 }
 
-const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(word => word[0]!.toUpperCase()).join('') || '?';
 
-/** The far-left strip: brand, one tile per space, and the user's own controls at the bottom. */
+/** Space navigation, desktop expansion, and the mobile space sheet. */
 export function Rail({ spaces, current, onSwitch, unread, todos = 0 }: {
   spaces: Space[]; current: string | null; onSwitch: (slug: string) => void; unread: number; todos?: number;
 }) {
@@ -35,81 +34,154 @@ export function Rail({ spaces, current, onSwitch, unread, todos = 0 }: {
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
-  const view = search.get('view');
-  const isActive = (href: string) => {
-    const [path, query] = href.split('?');
-    if (pathname !== path) return false;
-    const wanted = new URLSearchParams(query).get('view');
-    return wanted ? view === wanted : path !== '/home' || !['inbox', 'todos'].includes(view ?? '');
-  };
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  const install = useInstall();
-  const [settingStatus, setSettingStatus] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [sheet, setSheet] = useState(false);
+  const [join, setJoin] = useState(false);
+  const [invite, setInvite] = useState('');
+  const [joinError, setJoinError] = useState('');
+  const [statusDialog, setStatusDialog] = useState(false);
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; label: string; items: MenuItem[] } | null>(null);
+  const [order, setOrder] = useState<string[] | null>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [error, setError] = useState('');
+  const [optimistic, setOptimistic] = useState<string | null>(null);
+  const enter = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const leave = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const { dark, toggle } = useTheme();
-  const ordered = sortSpaces(spaces);
-  const favorites = ordered.filter(space => space.favorite);
-  const workspaces = ordered.filter(space => space.type === 'workspace' && !space.favorite);
-  const communities = ordered.filter(space => space.type === 'community' && !space.favorite);
-  const tileFor = (space: Space) => {
-    const active = space.slug === current;
-    const label = `${space.name} (${spaceKindLabel(space)})`;
-    return <button key={space.id} type="button" title={label} aria-label={label} aria-current={active ? 'page' : undefined}
-      onClick={() => onSwitch(space.slug)}
-      className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold transition ${active ? 'ring-2 ring-[var(--brand)] ring-offset-2 ring-offset-[var(--rail)]' : 'opacity-85 hover:opacity-100'}`}
-      style={{ background: colourFor(space.slug) }}>
-      <span style={{ color: '#fff' }}>{initials(space.name)}</span>
-      {space.unread > 0 && <span className="absolute -right-1.5 -top-1.5 min-w-[18px] rounded-full bg-brand px-1 text-center text-[10px] font-semibold leading-[18px]" style={{ color: 'var(--on-brand)' }} aria-label={`${space.unread} unread`}>{space.unread > 99 ? '99+' : space.unread}</span>}
-      {space.type === 'workspace' && <span aria-hidden className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--rail)]" style={{ color: '#fff' }}>
-        <Icon name="lock" size={9} /></span>}
-    </button>;
+  const expanded = pinned || hovered;
+  const active = optimistic ?? current;
+  const ordered = [...spaces].sort((a, b) => {
+    const position = (space: Space) => order?.includes(space.id) ? order.indexOf(space.id) : space.position ?? Infinity;
+    return Number(b.kind === 'work') - Number(a.kind === 'work') || position(a) - position(b) || a.name.localeCompare(b.name);
+  });
+  const work = ordered.filter(space => space.kind === 'work');
+  const social = ordered.filter(space => space.kind === 'community');
+  const selectedSpace = spaces.find(space => space.slug === active);
+  const status = user?.appear_offline ? 'offline' : user && activeStatus(user).away ? 'away' : 'active';
+
+  useEffect(() => { try { setPinned(localStorage.getItem('hive.rail.pinned') === 'true'); } catch { /* storage unavailable */ } }, []);
+  useEffect(() => () => { clearTimeout(enter.current); clearTimeout(leave.current); }, []);
+  useEffect(() => setOptimistic(null), [current]);
+  useEffect(() => { if (!savingRef.current) setOrder(null); }, [spaces]);
+  const switchSpace = (slug: string) => { setOptimistic(slug); setSheet(false); onSwitch(slug); };
+  const switchRef = useRef(switchSpace);
+  switchRef.current = switchSpace;
+  const orderedRef = useRef(ordered);
+  orderedRef.current = ordered;
+  useEffect(() => {
+    const shortcut = (event: globalThis.KeyboardEvent) => {
+      if ((!event.ctrlKey && !event.metaKey) || event.altKey || !/^[1-9]$/.test(event.key)) return;
+      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+      const space = orderedRef.current[Number(event.key) - 1];
+      if (space) { event.preventDefault(); switchRef.current(space.slug); }
+    };
+    window.addEventListener('keydown', shortcut);
+    return () => window.removeEventListener('keydown', shortcut);
+  }, []);
+
+  async function saveOrder(ids: string[], kind: Space['kind']) {
+    if (savingRef.current) return;
+    let index = 0;
+    const next = ordered.map(space => space.kind === kind ? ids[index++] : space.id);
+    setOrder(next); setSaving(true); savingRef.current = true; setError('');
+    try {
+      await apiData('/api/me/preferences', { method: 'PATCH', body: JSON.stringify({ spaceOrder: next }) });
+      window.dispatchEvent(new Event(SPACES_CHANGED));
+    } catch (cause) { setOrder(null); setError(requestError(cause)); }
+    finally { setSaving(false); savingRef.current = false; }
+  }
+  function arrows(event: KeyboardEvent<HTMLElement>) {
+    if (event.defaultPrevented || (event.target as HTMLElement).closest('[data-dragging="true"]') || !['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    const buttons = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]')];
+    const index = buttons.indexOf(event.target as HTMLElement);
+    if (index < 0) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length;
+    buttons[next]?.focus();
+  }
+  const below = (button: HTMLElement) => { const box = button.getBoundingClientRect(); return { x: box.right + 8, y: box.top }; };
+  function addMenu(button: HTMLElement) {
+    setSheet(false);
+    setMenu({ at: below(button), label: 'Add a space', items: [
+      { label: 'Create a work space', icon: 'lock', onSelect: () => router.push('/spaces/new?type=workspace') },
+      { label: 'Create a community', icon: 'globe', onSelect: () => router.push('/spaces/new?type=community') },
+      { label: 'Join with invite link', icon: 'users', onSelect: () => { setSheet(false); setJoinError(''); setJoin(true); } },
+    ] });
+  }
+  function profileMenu(button: HTMLElement) {
+    setSheet(false);
+    setMenu({ at: below(button), label: 'Your profile', items: [
+      { label: 'Set a status', icon: 'smile', onSelect: () => { setSheet(false); setStatusDialog(true); } },
+      { label: 'Preferences', icon: 'settings', onSelect: () => router.push('/settings') },
+      { label: 'Sign out', icon: 'logout', onSelect: () => { void logout().catch(cause => setError(requestError(cause))); } },
+    ] });
+  }
+  const navItem = (href: string, icon: IconName, label: string, count = 0) => {
+    const view = new URLSearchParams(href.split('?')[1]).get('view');
+    const isActive = pathname === href.split('?')[0] && (view ? search.get('view') === view : !['inbox', 'todos'].includes(search.get('view') ?? ''));
+    return <Tooltip key={href} content={label}><Link href={href} aria-current={isActive ? 'page' : undefined} className={`rail-global-link ${isActive ? 'rail-global-active' : ''}`}>
+      <Icon name={icon} size={20} /><span>{label}</span>{count > 0 && <span className="rail-global-badge" aria-label={`${count} unread`}>{count > 99 ? '99+' : count}</span>}
+    </Link></Tooltip>;
   };
-  const navItem = (href: string, icon: IconName, label: string, badge = 0, badgeTone: 'brand' | 'alert' = 'brand') => {
-    const active = isActive(href);
-    return <Link href={href} title={label} aria-label={badge ? `${label}, ${badge > 99 ? '99+' : badge}` : label} aria-current={active ? 'page' : undefined}
-      className={`relative flex w-14 flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10.5px] font-medium transition ${active ? 'bg-white/[0.12] text-white' : 'text-white/65 hover:bg-white/[0.08] hover:text-white'}`}>
-      <Icon name={icon} size={19} />{label}
-      {badge > 0 && <span className={`absolute right-2 top-0.5 min-w-[17px] rounded-full px-1 text-center text-[10px] font-semibold leading-[17px] ${badgeTone === 'alert' ? 'bg-rose-500' : 'bg-brand'}`}
-        style={{ color: badgeTone === 'alert' ? '#fff' : 'var(--on-brand)' }}>{badge > 99 ? '99+' : badge}</span>}
-    </Link>;
-  };
-  const group = (title: string, list: Space[]) => list.length > 0 && <>
-    <p className="mt-3 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-white/45">{title}</p>
-    {list.map(tileFor)}
+  const globalNav = <>{navItem('/home', 'home', 'Home')}{navItem('/home?view=inbox', 'bell', 'Activity', unread)}{navItem('/home?view=todos', 'checkSquare', 'Tasks', todos)}{navItem('/spaces', 'compass', 'Explore')}</>;
+  const controls = <>
+    <Tooltip content={dark ? 'Switch to light theme' : 'Switch to dark theme'}><button type="button" onClick={toggle} aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'} className="rail-control"><Icon name={dark ? 'sun' : 'moon'} size={20} /></button></Tooltip>
+    {user && <Tooltip content={`Your profile: ${status}`}><button type="button" aria-label={`Your profile and status: ${status}`} aria-haspopup="menu" aria-expanded={menu?.label === 'Your profile'} onClick={event => profileMenu(event.currentTarget)} className="rail-control">
+      <Avatar name={user.username} src={user.avatar_url} size={44} status={status} statusBorder="var(--rail)" />
+    </button></Tooltip>}
   </>;
-  return <nav aria-label="Spaces" className="on-dark flex h-full w-[76px] shrink-0 flex-col items-center gap-1 bg-[var(--rail)] py-3">
-    <Link href="/home" aria-label="Hive home" className="mb-2"><Logo size={32} /></Link>
-    {navItem('/home', 'home', 'Home')}
-    {navItem('/home?view=inbox', 'bell', 'Activity', unread, 'alert')}
-    {navItem('/home?view=todos', 'checkSquare', 'Tasks', todos)}
-    {navItem('/spaces', 'compass', 'Explore')}
-    {navItem('/games', 'gaming', 'Games')}
-    <div className="mt-1 flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto px-2 pb-2 [scrollbar-width:none]">
-      {group('Starred', favorites)}
-      {group('Work', workspaces)}
-      {group('Social', communities)}
-      <Link href="/spaces/new" title="Create a space" aria-label="Create a space" className="mt-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-dashed border-white/25 text-white/70 transition hover:border-white/60 hover:text-white">
-        <Icon name="plus" />
-      </Link>
+  return <>
+    <div className={`rail-shell ${pinned ? 'rail-pinned' : ''}`}>
+      <nav aria-label="Spaces" className={`on-dark space-rail ${expanded ? 'space-rail-expanded' : ''}`} onKeyDown={arrows}
+        onPointerEnter={event => { if (event.pointerType !== 'mouse') return; clearTimeout(leave.current); enter.current = setTimeout(() => setHovered(true), 600); }}
+        onPointerLeave={() => { clearTimeout(enter.current); leave.current = setTimeout(() => setHovered(false), 300); }}
+        onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setHovered(false); }}>
+        <Tooltip content={pinned ? 'Collapse spaces' : 'Expand spaces'}><button type="button" aria-label={pinned ? 'Collapse spaces' : 'Expand spaces'} aria-expanded={expanded} className="rail-control rail-expand"
+          onClick={() => { const next = !pinned; setPinned(next); setHovered(false); clearTimeout(enter.current); try { localStorage.setItem('hive.rail.pinned', String(next)); } catch { /* storage unavailable */ } }}>
+          <Icon name={pinned ? 'chevronLeft' : 'chevronRight'} size={18} />{expanded && <span className="text-sm">Spaces</span>}
+        </button></Tooltip>
+        <div className="rail-spaces">
+          {work.length > 0 && <><h2 className="rail-group-label">WORK</h2><SpaceTiles spaces={work} current={active} expanded={expanded} onSwitch={switchSpace} onOrder={ids => void saveOrder(ids, 'work')} disabled={saving} /></>}
+          {work.length > 0 && social.length > 0 && <div role="separator" className="rail-divider" />}
+          {social.length > 0 && <><h2 className="rail-group-label">SOCIAL</h2><SpaceTiles spaces={social} current={active} expanded={expanded} onSwitch={switchSpace} onOrder={ids => void saveOrder(ids, 'community')} disabled={saving} /></>}
+          <Tooltip content="Add a space"><button type="button" aria-label="Add a space" aria-haspopup="menu" aria-expanded={menu?.label === 'Add a space'} className="rail-add" onClick={event => addMenu(event.currentTarget)}><Icon name="plus" /></button></Tooltip>
+        </div>
+        <div role="separator" className="rail-divider" />
+        <div className="rail-global">{globalNav}</div>
+        <div className="rail-profile">{controls}</div>
+        {error && <p role="alert" className="px-2 text-xs text-rail-muted">{error}</p>}
+      </nav>
     </div>
-    <AskHive />
-    <button type="button" onClick={toggle} aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'} title={dark ? 'Light theme' : 'Dark theme'}
-      className="flex h-9 w-9 items-center justify-center rounded-xl text-white/65 transition hover:bg-white/[0.08] hover:text-white"><Icon name={dark ? 'sun' : 'moon'} size={18} /></button>
-    {user && <div className="relative mt-1">
-      <button type="button" aria-label="Your account menu" aria-haspopup="menu" aria-expanded={!!menu} title={statusTitle(user) ?? 'Your account'}
-        onClick={event => { const box = event.currentTarget.getBoundingClientRect(); setMenu({ x: box.right + 8, y: box.top - 120 }); }}>
-        <Avatar name={user.username} src={user.avatar_url} size={40} online />
-        {user.status_emoji && <span aria-hidden className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--surface)] text-[11px] shadow">{user.status_emoji}</span>}
-      </button>
-    </div>}
-    {menu && <PopupMenu at={menu} label="Account" onClose={() => setMenu(null)} items={[
-      { label: 'Set a status', icon: 'smile', onSelect: () => setSettingStatus(true) },
-      { label: 'Settings and profile', icon: 'settings', onSelect: () => router.push('/settings') },
-      { label: 'Manage communities', icon: 'users', onSelect: () => router.push('/communities/manage') },
-      { label: 'Help & policies', icon: 'file', onSelect: () => router.push('/policies') },
-      ...(install ? [{ label: 'Install Hive', icon: 'download' as const, onSelect: () => void install() }] : []),
-      { separator: true },
-      { label: 'Log out', icon: 'logout', onSelect: () => void logout() },
-    ]} />}
-    {settingStatus && user && <StatusDialog user={user} onSaved={updateUser} onClose={() => setSettingStatus(false)} />}
-  </nav>;
+    <div className="rail-mobile-top on-dark">
+      <Sheet open={sheet} onOpenChange={setSheet} title="Your spaces" description="Choose a work space or community."
+        trigger={<button type="button" aria-label="Open spaces" className="rail-mobile-trigger">{selectedSpace ? <SpaceIcon space={selectedSpace} /> : <Icon name="layers" />}<span className="truncate">{selectedSpace?.name ?? 'Spaces'}</span><Icon name="chevronDown" size={16} /></button>}>
+        <nav aria-label="Spaces">
+          {([['WORK', work], ['SOCIAL', social]] as const).map(([title, list]) => list.length > 0 && <section key={title} className="mb-5"><h2 className="mb-3 text-xs font-semibold text-muted">{title}</h2><div className="grid grid-cols-4 gap-x-2 gap-y-4">
+            {list.map(space => <button key={space.id} type="button" aria-label={space.name} aria-current={space.slug === active ? 'page' : undefined} onClick={() => switchSpace(space.slug)} className={`mobile-space ${space.slug === active ? 'space-current' : ''}`}><SpaceIcon space={space} /><span className="w-full truncate text-xs">{space.name}</span></button>)}
+          </div></section>)}
+          {!spaces.length && <p className="mb-4 text-sm text-muted">No space yet. Create one or browse communities to get started.</p>}
+          <button type="button" className="btn-ghost min-h-11 w-full justify-center" aria-haspopup="menu" onClick={event => addMenu(event.currentTarget)}><Icon name="plus" />Add a space</button>
+          <div className="on-dark mt-4 flex items-center justify-center gap-3 rounded-xl bg-rail p-3">{controls}</div>
+        </nav>
+      </Sheet>
+    </div>
+    <nav aria-label="Global navigation" className="on-dark rail-mobile-tabs">{globalNav}</nav>
+    {menu && <PopupMenu at={menu.at} label={menu.label} items={menu.items} onClose={() => setMenu(null)} />}
+    <Sheet open={join} onOpenChange={setJoin} title="Join with invite link" description="Paste the invite link or code someone shared with you." center>
+      <form onSubmit={event => {
+        event.preventDefault();
+        const raw = invite.trim();
+        const code = raw.match(/(?:^|\/)invite\/([a-zA-Z0-9_-]+)(?:[?#].*)?$/)?.[1] ?? (/^[a-zA-Z0-9_-]+$/.test(raw) ? raw : null);
+        if (!code) { setJoinError('Enter a valid invite link or code.'); return; }
+        setJoin(false); router.push(`/invite/${encodeURIComponent(code)}`);
+      }}>
+        <label className="block text-sm font-medium">Invite link or code<input autoFocus className="auth-input" value={invite} onChange={event => setInvite(event.target.value)} required /></label>
+        {joinError && <p role="alert" className="mt-2 text-sm text-rose-500">{joinError}</p>}
+        <button className="auth-button mt-4 min-h-11">Open invite</button>
+      </form>
+    </Sheet>
+    {statusDialog && user && <StatusDialog user={user} onSaved={updateUser} onClose={() => setStatusDialog(false)} />}
+  </>;
 }

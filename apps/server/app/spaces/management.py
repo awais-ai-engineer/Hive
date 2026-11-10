@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, delete, exists, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert
 
+from app.access import SYSTEM_KINDS, message_live
 from app.db.models import (
     Channel,
     ChannelRead,
@@ -25,23 +26,27 @@ async def joined_spaces(session, user):
     members = select(SpaceMember.space_id, func.count().label("total")).where(active).group_by(SpaceMember.space_id).subquery()
     quiet = exists().where(ConversationPref.user_id == user.id, ConversationPref.channel_id == Channel.id)
     muted = or_(SpaceMember.muted.is_(True), quiet)
-    unread = (select(Channel.space_id, func.count().label("total"))
+    mentioned = and_(mention_condition(user.username), unread_thread_mention(user.id))
+    counted = or_(Message.parent_id.is_(None), and_(muted, mentioned))
+    unread = (select(Channel.space_id, func.count().filter(counted).label("total"),
+        func.count().filter(mentioned).label("mentions"))
         .join(Message, Message.channel_id == Channel.id)
         .join(SpaceMember, and_(SpaceMember.space_id == Channel.space_id, SpaceMember.user_id == user.id))
         .outerjoin(ChannelRead, and_(ChannelRead.channel_id == Channel.id, ChannelRead.user_id == user.id))
-        .where(active, visible_channel(user.id), or_(Message.parent_id.is_(None), and_(muted, mention_condition(user.username))), Message.deleted_at.is_(None),
+        .where(active, visible_channel(user.id), or_(Message.parent_id.is_(None), mentioned), Message.deleted_at.is_(None),
+            Message.kind.notin_(SYSTEM_KINDS), message_live(),
             Message.author_id != user.id, or_(~muted, mention_condition(user.username)),
             or_(~muted, unread_thread_mention(user.id)),
             or_(Message.id > ChannelRead.last_read_id, and_(ChannelRead.last_read_id.is_(None), Message.created_at > SpaceMember.joined_at)))
         .group_by(Channel.space_id).subquery())
-    rows = await session.execute(select(Space, SpaceMember, func.coalesce(members.c.total, 0), func.coalesce(unread.c.total, 0))
+    rows = await session.execute(select(Space, SpaceMember, func.coalesce(members.c.total, 0), func.coalesce(unread.c.total, 0), func.coalesce(unread.c.mentions, 0))
         .join(SpaceMember, and_(SpaceMember.space_id == Space.id, SpaceMember.user_id == user.id))
         .outerjoin(members, members.c.space_id == Space.id).outerjoin(unread, unread.c.space_id == Space.id)
         .where(active).order_by(SpaceMember.favorite.desc(), SpaceMember.position.asc().nulls_last(), func.lower(Space.name), Space.id))
     fields = ("id", "type", "name", "slug", "description", "allowed_email_domain", "public_chat", "created_at", "category", "tags")
     return [SpaceOut(**{key: getattr(space, key) for key in fields}, member_count=count, my_role=member.role,
-        role=member.role, muted=member.muted, favorite=member.favorite, position=member.position, unread=total)
-        for space, member, count, total in rows]
+        role=member.role, muted=member.muted, favorite=member.favorite, position=member.position, unread=total, mentionCount=mentions)
+        for space, member, count, total, mentions in rows]
 
 
 async def interests(session, user_id):

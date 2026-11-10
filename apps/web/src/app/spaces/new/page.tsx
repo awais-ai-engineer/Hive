@@ -26,6 +26,8 @@ export default function NewSpacePage() {
   const [category, setCategory] = useState('other');
   const [tags, setTags] = useState<string[]>([]);
 
+  useEffect(() => { if (new URLSearchParams(window.location.search).get('type') === 'community') setType('community'); }, []);
+
   useEffect(() => {
     if (!loading && !user) router.replace('/login?next=%2Fspaces%2Fnew');
   }, [loading, user, router]);

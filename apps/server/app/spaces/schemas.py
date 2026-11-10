@@ -1,8 +1,16 @@
 import re
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StringConstraints,
+    computed_field,
+    field_validator,
+)
 
 from app.db.models import MemberRole, SpaceType
 from app.spaces.categories import CATEGORIES
@@ -122,6 +130,24 @@ class SpaceOut(BaseModel):
     favorite: bool = False
     position: int | None = None
     unread: int = 0
+    mentionCount: int = 0
+    iconUrl: str | None = None
+
+    @computed_field
+    @property
+    def kind(self) -> Literal['work', 'community']:
+        return 'work' if self.type == SpaceType.workspace else 'community'
+
+    @computed_field
+    @property
+    def unreadCount(self) -> int:
+        return self.unread
+
+    @computed_field
+    @property
+    def color(self) -> str:
+        palette = ('#d9d0fa', '#f8d1e1', '#f6dfae', '#bce8d6', '#c0dff6')
+        return palette[sum(self.id.encode()) % len(palette)]
 
 
 class InterestsIn(BaseModel):

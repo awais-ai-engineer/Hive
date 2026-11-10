@@ -63,5 +63,23 @@ export const inviteCreateSchema = z.object({
 });
 
 export type SpaceCreateInput = z.infer<typeof spaceCreateSchema>;
+export const spaceSchema = z.object({
+  id: z.string(), type: z.enum(['community', 'workspace']), kind: z.enum(['work', 'community']),
+  name: z.string(), slug: z.string(), description: z.string().nullable(),
+  category: z.string(), tags: z.array(z.string()), allowed_email_domain: z.string().nullable(),
+  public_chat: z.boolean(), created_at: z.string(), member_count: z.number().int().nonnegative(),
+  my_role: z.enum(['owner', 'admin', 'moderator', 'member', 'guest']).nullable(),
+  role: z.enum(['owner', 'admin', 'moderator', 'member', 'guest']).nullable(),
+  muted: z.boolean(), favorite: z.boolean(), position: z.number().int().nullable(),
+  unread: z.number().int().nonnegative(), unreadCount: z.number().int().nonnegative(),
+  mentionCount: z.number().int().nonnegative(), iconUrl: z.string().nullable(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+});
+export type Space = z.infer<typeof spaceSchema>;
+
+const spaceIds = z.array(z.string().min(1).max(26)).max(500)
+  .refine(ids => new Set(ids).size === ids.length, 'Provide unique space IDs');
+export const preferencesSchema = z.object({ spaceOrder: spaceIds });
+export const preferencesPatchSchema = z.object({ spaceOrder: spaceIds.optional() }).strict();
 export type SpacePatchInput = z.infer<typeof spacePatchSchema>;
 export type ChannelCreateInput = z.infer<typeof channelCreateSchema>;
