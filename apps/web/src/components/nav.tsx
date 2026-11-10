@@ -88,8 +88,9 @@ export default function Nav() {
           {user && <Link href="/home" className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-white/65 transition hover:bg-[var(--surface-2)] hover:text-white">Home
             {unread > 0 && <span aria-label={`${unread} unread messages`} className="rounded-full bg-brand px-1.5 text-[11px] font-semibold leading-5 text-white">{unread > 99 ? '99+' : unread}</span>}
           </Link>}
-          {link('/feed', 'Feed')}
-          {link('/spaces', 'Explore')}
+          {user && link('/feed', 'Feed')}
+          {user && link('/spaces', 'Explore')}
+          {link('/guide', 'How it works')}
           {link('/policies', 'Help & policies')}
         </div>
         {!loading && <div className="ml-auto flex items-center gap-2 text-sm">
