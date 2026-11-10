@@ -1,4 +1,4 @@
-# Render Blueprint: the Hive API (FastAPI + Socket.IO) and its Redis.
+# Render Blueprint: the Hive API (FastAPI + Socket.IO), the website (Next.js) and Redis.
 # Secrets marked `sync: false` are entered in the Render dashboard, never committed.
 services:
   - type: web
@@ -38,6 +38,25 @@ services:
         value: hive-media
       - key: MAX_VIDEO_MB
         value: "50"
+
+  - type: web
+    name: hive-web
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @hive/shared build && pnpm --filter @hive/web build
+    startCommand: cd apps/web && pnpm exec next start -p $PORT
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # The API's address, e.g. https://hive-api-xxxx.onrender.com (no trailing slash).
+      # NEXT_PUBLIC_* values are baked in at build time: redeploy the site after changing it.
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+      - key: API_PROXY_TARGET
+        sync: false
+      - key: NEXT_PUBLIC_AUTH_PROXY
+        value: "1"
 
   - type: keyvalue
     name: hive-redis
