@@ -5,7 +5,7 @@ import { refreshSession, subscribeSession, type AuthSession } from './api';
 
 let current: AuthSession | null = null;
 let refreshed = false;
-export const socket = io(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000', {
+export const socket = io((process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000').trim().replace(/\/+$/, ''), {
   autoConnect: false, withCredentials: true,
   auth: callback => callback(current ? { token: current.access_token } : {}),
 });

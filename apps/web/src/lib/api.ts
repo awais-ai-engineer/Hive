@@ -17,7 +17,7 @@ export type User = {
 };
 
 export type AuthSession = { access_token: string; token_type: string; user: User };
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000').trim().replace(/\/+$/, '');
 // Login, refresh and logout use a cookie. When the site and the API live on different domains,
 // those calls go through the site's own domain (a rewrite in next.config.ts), so the cookie is
 // first-party and works in browsers that block third-party cookies.
