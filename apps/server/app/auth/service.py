@@ -1,3 +1,5 @@
+import re
+import secrets
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException
@@ -42,6 +44,47 @@ async def authenticate(session: AsyncSession, email: str, password: str) -> User
     )
     if not user or not valid or user.is_system or user.is_bot:
         raise HTTPException(401, "Invalid email or password")
+    return user
+
+
+async def authenticate_google(session: AsyncSession, claims: dict) -> User:
+    subject = claims["sub"]
+    email = str(claims["email"]).strip().lower()
+    user = await session.scalar(select(User).where(User.google_sub == subject))
+    if user:
+        if user.is_system or user.is_bot:
+            raise HTTPException(401, "Google sign-in is unavailable for this account")
+        return user
+
+    user = await session.scalar(select(User).where(User.email == email))
+    if user:
+        if user.is_system or user.is_bot:
+            raise HTTPException(401, "Google sign-in is unavailable for this account")
+        if user.google_sub and user.google_sub != subject:
+            raise HTTPException(409, "This email is connected to a different Google account")
+        user.google_sub = subject
+        return user
+
+    base = re.sub(r"[^a-zA-Z0-9_]", "_", email.split("@", 1)[0]).strip("_")[:24]
+    if len(base) < 3:
+        base = f"{base}user"[:24]
+    username = base
+    while await session.scalar(select(User.id).where(User.username == username)):
+        username = f"{base[:24]}_{secrets.token_hex(3)}"
+
+    picture = claims.get("picture")
+    avatar_url = picture if isinstance(picture, str) and picture.startswith("https://") else None
+    name = claims.get("name")
+    user = User(
+        username=username,
+        email=email,
+        google_sub=subject,
+        password_hash=await run_in_threadpool(hash_password, secrets.token_urlsafe(32)),
+        display_name=name[:50] if isinstance(name, str) else None,
+        avatar_url=avatar_url,
+    )
+    session.add(user)
+    await session.flush()
     return user
 
 

@@ -7,7 +7,7 @@ services:
     plan: free
     region: singapore
     rootDir: apps/server
-    buildCommand: pip install uv && uv sync --frozen --no-dev
+    buildCommand: pip install uv && uv sync --frozen --no-dev && uv run alembic upgrade head
     startCommand: uv run --no-dev uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips "*"
     healthCheckPath: /api/health
     envVars:
@@ -21,6 +21,10 @@ services:
           name: hive-redis
           property: connectionString
       - key: WEB_ORIGIN
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: JWT_SECRET
         generateValue: true
@@ -57,6 +61,8 @@ services:
         sync: false
       - key: NEXT_PUBLIC_AUTH_PROXY
         value: "1"
+      - key: NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED
+        sync: false
 
   - type: keyvalue
     name: hive-redis

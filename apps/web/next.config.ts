@@ -4,7 +4,7 @@ import type { NextConfig } from 'next';
 // refresh cookie is first-party (see AUTH_URL in src/lib/api.ts).
 // Tolerate pasted values with spaces, quotes or a trailing slash; ignore anything that isn't a URL.
 const raw = (process.env.API_PROXY_TARGET ?? '').trim().replace(/^["']|["']$/g, '').replace(/\/+$/, '');
-const apiOrigin = /^https?:\/\//.test(raw) ? raw : '';
+const apiOrigin = /^https?:\/\//.test(raw) ? raw : process.env.NODE_ENV !== 'production' ? 'http://localhost:4000' : '';
 
 const nextConfig: NextConfig = {
   transpilePackages: ['@hive/ui'],

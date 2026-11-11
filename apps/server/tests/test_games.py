@@ -77,7 +77,7 @@ async def test_word_validation_and_limits(client, setup_chat):
     bad = await client.post(f"{base()}/word/guess", headers=bh, json={"guess": "zzzzz"})
     assert bad.status_code == 422 and bad.json()["detail"]["code"] == "not_a_word"
     assert (await client.post(f"{base()}/word/guess", headers=bh, json={"guess": "abc"})).status_code == 422
-    pool = [w for w in ("about", "above", "abuse", "actor", "adapt", "added", "admit") if w != answer]
+    pool = [word for word in sorted(words.valid_words()) if word != answer][:7]
     for index in range(6):
         response = await client.post(f"{base()}/word/guess", headers=bh, json={"guess": pool[index]})
         assert response.status_code == 200
