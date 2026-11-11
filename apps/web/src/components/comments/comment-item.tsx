@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import Link from 'next/link';
 import { Avatar } from '../ui/avatar';
 import { ReportDialog } from '../report-dialog';
@@ -95,13 +97,13 @@ export function CommentItem({
   if (isCollapsed) {
     return (
       <div className="flex items-center gap-2 py-1 text-xs text-white/40">
-        <button
+        <UiButton
           onClick={onToggleCollapse}
           className="rounded px-1 text-amber-400 hover:bg-white/10"
-          title="Expand comment"
+          tooltip="Expand comment"
         >
           [+]
-        </button>
+        </UiButton>
         <span className="font-medium text-white/60">
           {comment.deleted ? '[deleted]' : comment.author?.username ?? 'deleted'}
         </span>
@@ -121,13 +123,13 @@ export function CommentItem({
     >
       {/* Header */}
       <div className="flex items-center gap-2 text-xs text-white/40">
-        <button
+        <UiButton
           onClick={onToggleCollapse}
           className="rounded px-1 text-white/50 hover:bg-white/10 hover:text-white"
-          title="Collapse comment"
+          tooltip="Collapse comment"
         >
           [–]
-        </button>
+        </UiButton>
         {!comment.deleted && comment.author && <Link href={`/u/${comment.author.username}`} aria-label={`${comment.author.username}'s profile`}><Avatar name={comment.author.username} src={comment.author.avatar_url} size={24} /></Link>}
         <span className="font-semibold text-white/85">
           {comment.deleted ? (
@@ -182,33 +184,33 @@ export function CommentItem({
             reason={voteReason}
             onChange={handleVoteChange}
           />
-          <button
+          <UiButton
             onClick={() => setReplying(val => !val)}
             className="hover:text-amber-400 font-medium"
           >
             Reply
-          </button>
+          </UiButton>
           {canEdit && (
-            <button
+            <UiButton
               onClick={() => setEditing(true)}
               className="hover:text-amber-400 font-medium"
             >
               Edit
-            </button>
+            </UiButton>
           )}
           {canDelete && (
-            <button
+            <UiButton
               onClick={() => setConfirmDelete(true)}
               className="hover:text-rose-400 font-medium"
             >
               Delete
-            </button>
+            </UiButton>
           )}
-          {!!userId && <button onClick={() => void saved.toggle('comment', comment.id).catch(() => {})} aria-pressed={isSaved} className={`hover:text-amber-400 font-medium ${isSaved ? 'text-brand' : ''}`}>{isSaved ? 'Saved' : 'Save'}</button>}
-          {!isAuthor && !!userId && <button onClick={() => setReporting(true)} className="hover:text-amber-400 font-medium">Report</button>}
-          <button onClick={handleShare} className="hover:text-amber-400 font-medium">
+          {!!userId && <UiButton onClick={() => void saved.toggle('comment', comment.id).catch(() => {})} aria-pressed={isSaved} className={`hover:text-amber-400 font-medium ${isSaved ? 'text-brand' : ''}`}>{isSaved ? 'Saved' : 'Save'}</UiButton>}
+          {!isAuthor && !!userId && <UiButton onClick={() => setReporting(true)} className="hover:text-amber-400 font-medium">Report</UiButton>}
+          <UiButton onClick={handleShare} className="hover:text-amber-400 font-medium">
             {copied ? 'Copied link!' : 'Share'}
-          </button>
+          </UiButton>
         </div>
       )}
 
@@ -223,20 +225,20 @@ export function CommentItem({
             Are you sure you want to delete this comment? Replies will remain visible.
           </p>
           <div className="mt-2 flex items-center gap-3">
-            <button
+            <UiButton
               disabled={busy}
               onClick={handleConfirmDelete}
               className="text-xs font-semibold text-rose-400 hover:text-rose-300 disabled:opacity-50"
             >
               {busy ? 'Deleting…' : 'Confirm delete'}
-            </button>
-            <button
+            </UiButton>
+            <UiButton
               disabled={busy}
               onClick={() => setConfirmDelete(false)}
               className="text-xs text-white/60 hover:text-white"
             >
               Cancel
-            </button>
+            </UiButton>
           </div>
         </div>
       )}

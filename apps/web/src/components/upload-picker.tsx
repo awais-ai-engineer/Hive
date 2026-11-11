@@ -1,5 +1,7 @@
 'use client';
 
+import { FileDropzone as UiFileDropzone, Button as UiButton } from '@hive/ui';
+
 import { useEffect, useRef, useState } from 'react';
 import type { Attachment } from '@hive/shared';
 import { uploadFile } from '../lib/api';
@@ -64,7 +66,7 @@ export function UploadPicker({ path, mediaOnly = false, maxFiles = 5, onChange, 
   if (controls) controls.current = { open: () => picker.current?.click(), add: files => void add(files) };
   if (compact) {
     return <div className="min-w-0">
-      <input ref={picker} type="file" multiple aria-label="Choose files" onChange={event => void add(Array.from(event.target.files ?? []))} className="sr-only" />
+      <UiFileDropzone.Input ref={picker} multiple aria-label="Choose files" onChange={event => void add(Array.from(event.target.files ?? []))} className="sr-only" />
       {rows.length > 0 && <ul className="flex flex-wrap gap-2 px-3 pt-3">{rows.map(row => <li key={row.id} className="flex w-44 max-w-full items-center gap-2 rounded-xl border border-white/10 bg-[var(--surface-2)] p-2 text-xs">
         {row.file.type.startsWith('image/') ? <img src={row.preview} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />
           : <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">📄</span>}
@@ -73,16 +75,16 @@ export function UploadPicker({ path, mediaOnly = false, maxFiles = 5, onChange, 
           {!row.attachment && !row.error && <progress aria-label={`Uploading ${row.file.name}`} value={row.progress} max={100} className="h-1 w-full accent-[var(--brand)]" />}
           {row.error && <span role="alert" className="block truncate text-rose-500">{row.error}</span>}
         </span>
-        <button type="button" className="shrink-0 text-white/50 hover:text-rose-500" aria-label={`Remove ${row.file.name}`} onClick={() => {
+        <UiButton tooltip={`Remove ${row.file.name}`} type="button" className="shrink-0 text-white/50 hover:text-rose-500" aria-label={`Remove ${row.file.name}`} onClick={() => {
           row.controller.abort(); URL.revokeObjectURL(row.preview); update(current.current.filter(item => item.id !== row.id));
-        }}>✕</button>
+        }}>✕</UiButton>
       </li>)}</ul>}
       {error && <p role="alert" className="px-3 pt-2 text-xs text-rose-500">{error}</p>}
     </div>;
   }
   return <div className="my-3 min-w-0 rounded border border-dashed border-white/20 p-3" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); void add(Array.from(event.dataTransfer.files)); }}>
-    <input ref={picker} type="file" multiple accept={mediaOnly ? 'image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm' : undefined} aria-label={mediaOnly ? 'Choose media' : 'Choose files'} onChange={event => void add(Array.from(event.target.files ?? []))} className="sr-only" />
-    <button type="button" className="text-sm text-amber-400" onClick={() => picker.current?.click()}>{mediaOnly ? 'Choose media' : 'Attach files'}</button>
+    <UiFileDropzone.Input ref={picker} multiple accept={mediaOnly ? 'image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm' : undefined} aria-label={mediaOnly ? 'Choose media' : 'Choose files'} onChange={event => void add(Array.from(event.target.files ?? []))} className="sr-only" />
+    <UiButton type="button" className="text-sm text-amber-400" onClick={() => picker.current?.click()}>{mediaOnly ? 'Choose media' : 'Attach files'}</UiButton>
     <p className="mt-1 text-xs text-white/40">{mediaOnly ? '10 images or 1 video · Images 10 MB · Videos 100 MB' : 'Drop files here · Images/files 10 MB · Videos 100 MB'}</p>
     <ul className="mt-2 flex flex-wrap gap-2">{rows.map(row => <li key={row.id} className="w-36 max-w-full rounded border border-white/10 p-2 text-xs">
       {mediaOnly && row.file.type.startsWith('image/') && <img src={row.preview} alt={row.file.name} className="mb-1 h-20 w-full object-contain" />}
@@ -90,9 +92,9 @@ export function UploadPicker({ path, mediaOnly = false, maxFiles = 5, onChange, 
       <p className="truncate">{row.file.name}</p>
       {!row.attachment && !row.error && <progress aria-label={`Uploading ${row.file.name}`} value={row.progress} max={100} className="w-full accent-amber-400" />}
       {row.error && <p role="alert" className="text-rose-400">{row.error}</p>}
-      <button type="button" className="mt-1 text-rose-400" aria-label={`Remove ${row.file.name}`} onClick={() => {
+      <UiButton tooltip={`Remove ${row.file.name}`} type="button" className="mt-1 text-rose-400" aria-label={`Remove ${row.file.name}`} onClick={() => {
         row.controller.abort(); URL.revokeObjectURL(row.preview); update(current.current.filter(item => item.id !== row.id));
-      }}>Remove</button>
+      }}>Remove</UiButton>
     </li>)}</ul>
     {error && <p role="alert" className="mt-2 text-xs text-rose-400">{error}</p>}
   </div>;

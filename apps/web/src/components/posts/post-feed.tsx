@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, Select as UiSelect } from '@hive/ui';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from '../ui/icons';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -72,20 +74,20 @@ export function PostFeed({ space }: { space?: Space }) {
   return <div className="min-w-0 space-y-4">
     <div className="flex flex-wrap items-center gap-3">
       {([['hot', 'Hot', 'trending'], ['new', 'Latest', 'sparkles'], ['top', 'Top', 'activity']] as const).map(([value, label, icon]) =>
-        <button key={value} aria-pressed={sort === value} onClick={() => change('sort', value)}
+        <UiButton key={value} aria-pressed={sort === value} onClick={() => change('sort', value)}
           className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-medium transition ${sort === value ? 'bg-brand-soft text-brand shadow-sm' : 'text-white/60 hover:bg-[var(--surface-2)] hover:text-white'}`}>
-          <Icon name={icon} size={16} />{label}</button>)}
-      {sort === 'top' && <select aria-label="Time range" value={period} onChange={event => change('t', event.target.value)} className="rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm">
+          <Icon name={icon} size={16} />{label}</UiButton>)}
+      {sort === 'top' && <UiSelect aria-label="Time range" value={period} onChange={event => change('t', event.target.value)} className="rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm">
         {Object.entries({ day: 'Today', week: 'This week', month: 'This month', year: 'This year', all: 'All time' }).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-      </select>}
+      </UiSelect>}
     </div>
-    {fresh && <button onClick={() => void load()} className="mx-auto block rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-[var(--shadow-pop)]">↑ New posts</button>}
+    {fresh && <UiButton onClick={() => void load()} className="mx-auto block rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-[var(--shadow-pop)]">↑ New posts</UiButton>}
     {error && <p role="alert" className="text-rose-400">{error}</p>}
     {busy ? <p className="text-white/50">Loading posts…</p> : !posts.length && !error && <p className="py-8 text-center text-white/40">No posts yet.</p>}
     {posts.map(post => {
       const role = space?.my_role ?? memberships.find(item => item.id === post.space.id)?.my_role;
       return <PostCard key={post.id} post={post} combined={!space} reason={!user ? 'Log in to vote' : !role || role === 'guest' ? 'Join to vote' : ''} onChange={value => update(post.id, value)} />;
     })}
-    {cursor && !busy && <button className="auth-button" onClick={() => void more()}>Load more</button>}
+    {cursor && !busy && <UiButton className="auth-button" onClick={() => void more()}>Load more</UiButton>}
   </div>;
 }

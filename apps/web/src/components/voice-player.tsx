@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { useRef, useState } from 'react';
 import type { Attachment } from '@hive/shared';
 import { mediaUrl } from './posts/media-gallery';
@@ -25,8 +27,8 @@ export function VoicePlayer({ attachment }: { attachment: Attachment }) {
       onLoadedMetadata={event => { if (Number.isFinite(event.currentTarget.duration)) setDuration(event.currentTarget.duration); }}
       onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)}
       onError={() => setError('This recording could not be played.')} />
-    <button type="button" className="btn-ghost rounded-lg px-2 py-1 text-brand" aria-label={playing ? 'Pause recording' : 'Play recording'} title={playing ? 'Pause recording' : 'Play recording'}
-      onClick={() => { if (playing) audio.current?.pause(); else void audio.current?.play().catch(() => setError('This recording could not be played.')); }}>{playing ? 'Ⅱ' : '▶'}</button>
+    <UiButton type="button" className="btn-ghost rounded-lg px-2 py-1 text-brand" aria-label={playing ? 'Pause recording' : 'Play recording'} tooltip={playing ? 'Pause recording' : 'Play recording'}
+      onClick={() => { if (playing) audio.current?.pause(); else void audio.current?.play().catch(() => setError('This recording could not be played.')); }}>{playing ? 'Ⅱ' : '▶'}</UiButton>
     <div role="slider" tabIndex={0} aria-label="Recording position" aria-valuemin={0} aria-valuemax={Math.round(duration)} aria-valuenow={Math.floor(elapsed)} aria-valuetext={`${clock(elapsed)} of ${clock(duration)}`}
       className="flex h-9 min-w-24 flex-1 cursor-pointer items-center gap-px rounded focus-visible:outline-2 focus-visible:outline-brand"
       onClick={event => { const rect = event.currentTarget.getBoundingClientRect(); seek((event.clientX - rect.left) / rect.width * duration); }}
@@ -34,7 +36,7 @@ export function VoicePlayer({ attachment }: { attachment: Attachment }) {
       {peaks.map((peak, i) => <span key={i} className={`min-w-px flex-1 rounded-full ${i / peaks.length <= elapsed / (duration || 1) ? 'bg-brand' : 'bg-brand/30'}`} style={{ height: `${Math.max(8, peak)}%` }} />)}
     </div>
     <span className="text-xs tabular-nums text-white/60">{clock(elapsed)} / {clock(duration)}</span>
-    <button type="button" className="btn-ghost rounded px-1 text-xs" aria-label={`Playback speed ${speed} times`} title="Change playback speed" onClick={() => { const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1; setSpeed(next); if (audio.current) audio.current.playbackRate = next; }}>{speed}×</button>
+    <UiButton type="button" className="btn-ghost rounded px-1 text-xs" aria-label={`Playback speed ${speed} times`} tooltip="Change playback speed" onClick={() => { const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1; setSpeed(next); if (audio.current) audio.current.playbackRate = next; }}>{speed}×</UiButton>
     {error && <p role="alert" className="w-full text-xs text-rose-500">{error}</p>}
   </div>;
 }

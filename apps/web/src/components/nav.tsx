@@ -1,5 +1,9 @@
 'use client';
 
+import { Tooltip as UiTooltip } from '@hive/ui';
+
+import { Button as UiButton } from '@hive/ui';
+
 import { playMessageSound } from '../lib/sounds';
 import { currentUserId } from '../lib/api';
 import Link from 'next/link';
@@ -95,21 +99,21 @@ export default function Nav() {
         </div>
         {!loading && <div className="ml-auto flex items-center gap-2 text-sm">
           {user ? <>
-            <button type="button" aria-label="Search (Ctrl+K)" title="Search (Ctrl+K)" onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH))}
-              className="rounded-xl p-2 text-white/65 hover:bg-[var(--surface-2)] hover:text-white"><Icon name="search" size={20} /></button>
-            <Link href="/home?view=inbox" title="Notifications" aria-label={notifications ? `Notifications, ${notifications > 99 ? '99+' : notifications} unread` : 'Notifications'}
+            <UiButton type="button" aria-label="Search (Ctrl+K)" tooltip="Search (Ctrl+K)" onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH))}
+              className="rounded-xl p-2 text-white/65 hover:bg-[var(--surface-2)] hover:text-white"><Icon name="search" size={20} /></UiButton>
+            <UiTooltip content="Notifications"><Link href="/home?view=inbox" aria-label={notifications ? `Notifications, ${notifications > 99 ? '99+' : notifications} unread` : 'Notifications'}
               className="relative rounded-xl p-2 text-white/65 hover:bg-[var(--surface-2)] hover:text-white"><Icon name="bell" size={20} />
-              {notifications > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full bg-rose-500 px-1 text-center text-[10px] font-semibold" style={{ color: '#fff' }}>{notifications > 99 ? '99+' : notifications}</span>}
-            </Link>
+              {notifications > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full bg-rose-500 px-1 text-center text-[10px] font-semibold" style={{ color: 'var(--rail-fg)' }}>{notifications > 99 ? '99+' : notifications}</span>}
+            </Link></UiTooltip>
             <Link href="/spaces/new" className="auth-button hidden h-10 sm:inline-flex"><Icon name="plus" size={16} />Create</Link>
             <div ref={menuRef} className="relative ml-1">
-              <button type="button" aria-label="Account menu" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(value => !value)} className="rounded-full">
-                <Avatar name={user.username} src={user.avatar_url} size={36} /></button>
+              <UiButton tooltip="Account menu" type="button" aria-label="Account menu" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(value => !value)} className="rounded-full">
+                <Avatar name={user.username} src={user.avatar_url} size={36} /></UiButton>
               {menu && <div role="menu" className="card animate-in absolute right-0 z-40 mt-2 w-48 p-1 shadow-[var(--shadow-pop)]">
                 {([[`/u/${user.username}`, 'Your profile'], ['/home?view=saved', 'Saved items'], ['/home?view=files', 'All files'], ['/settings', 'Settings'], ['/communities/manage', 'Manage communities'], ['/policies', 'Help & policies']] as const).map(([href, label]) =>
                   <Link key={href} role="menuitem" href={href} className="block rounded-lg px-3 py-2 text-sm hover:bg-[var(--surface-2)]">{label}</Link>)}
-                {install && <button type="button" role="menuitem" onClick={() => { setMenu(false); void install(); }} className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--surface-2)]">Install Hive</button>}
-                <button type="button" role="menuitem" onClick={signOut} disabled={busy} className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--surface-2)] disabled:opacity-40">Log out</button>
+                {install && <UiButton type="button" role="menuitem" onClick={() => { setMenu(false); void install(); }} className="block w-full rounded-lg px-3 py-2 text-left justify-start text-sm hover:bg-[var(--surface-2)]">Install Hive</UiButton>}
+                <UiButton type="button" role="menuitem" onClick={signOut} disabled={busy} className="block w-full rounded-lg px-3 py-2 text-left justify-start text-sm hover:bg-[var(--surface-2)] disabled:opacity-40">Log out</UiButton>
               </div>}
             </div>
           </> : <>

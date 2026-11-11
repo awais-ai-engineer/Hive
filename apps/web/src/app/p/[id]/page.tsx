@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, Textarea as UiTextarea, Input as UiInput } from '@hive/ui';
+
 import { useParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { postCreateSchema } from '@hive/shared';
@@ -51,8 +53,8 @@ export default function PostPage() {
     {post && <>
       <PostCard post={post} full combined reason={post.deleted ? 'Post deleted' : !user ? 'Log in to vote' : !space?.my_role || space.my_role === 'guest' ? 'Join to vote' : ''} onChange={value => setPost(current => current ? { ...current, ...value } : current)} />
       {!post.deleted && <div className="mt-3 flex gap-2 text-sm [&>button]:rounded-xl [&>button]:border [&>button]:border-white/10 [&>button]:bg-surface [&>button]:px-3 [&>button]:py-1.5 [&>button]:font-medium [&>button:hover]:bg-[var(--surface-2)]">
-        {own && <button onClick={() => setEditing(value => !value)}>Edit</button>}
-        {(own || moderate) && <button onClick={() => setConfirm(true)}>Delete</button>}
+        {own && <UiButton onClick={() => setEditing(value => !value)}>Edit</UiButton>}
+        {(own || moderate) && <UiButton onClick={() => setConfirm(true)}>Delete</UiButton>}
       </div>}
       {editing && <form className="mt-4 space-y-3" onSubmit={async event => {
         event.preventDefault(); setError('');
@@ -63,17 +65,17 @@ export default function PostPage() {
         catch (cause) { setError(requestError(cause)); }
         finally { setBusy(false); }
       }}>
-        <label className="block">Body<textarea className="auth-input min-h-40" maxLength={40000} value={body} onChange={event => setBody(event.target.value)} /></label>
-        <label className="block">URL<input className="auth-input" type="url" maxLength={2000} value={url} onChange={event => setUrl(event.target.value)} /></label>
-        <button disabled={busy} className="auth-button">Save</button><button type="button" className="ml-4" onClick={() => setEditing(false)}>Cancel</button>
+        <label className="block">Body<UiTextarea className="auth-input min-h-40" maxLength={40000} value={body} onChange={event => setBody(event.target.value)} /></label>
+        <label className="block">URL<UiInput className="auth-input" type="url" maxLength={2000} value={url} onChange={event => setUrl(event.target.value)} /></label>
+        <UiButton disabled={busy} className="auth-button">Save</UiButton><UiButton type="button" className="ml-4" onClick={() => setEditing(false)}>Cancel</UiButton>
       </form>}
       {confirm && <div role="alertdialog" aria-label="Delete post" className="mt-4 rounded border border-rose-400/30 p-4">
-        <p>Delete this post?</p><button disabled={busy} className="mt-3 text-rose-400" onClick={async () => {
+        <p>Delete this post?</p><UiButton disabled={busy} className="mt-3 text-rose-400" onClick={async () => {
           setBusy(true);
           try { await apiData(`/api/posts/${id}`, { method: 'DELETE' }); setPost(await apiData<Post>(`/api/posts/${id}`)); setConfirm(false); setEditing(false); }
           catch (cause) { setError(requestError(cause)); }
           finally { setBusy(false); }
-        }}>Confirm delete</button><button className="ml-4" onClick={() => setConfirm(false)}>Cancel</button>
+        }}>Confirm delete</UiButton><UiButton className="ml-4" onClick={() => setConfirm(false)}>Cancel</UiButton>
       </div>}
       <section id="comments" aria-label="Comments" className="mt-8 scroll-mt-20">
         <Suspense fallback={<p className="text-white/50">Loading comments…</p>}>

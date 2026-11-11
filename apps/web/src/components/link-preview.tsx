@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { useEffect, useState } from 'react';
 import { apiData } from '../lib/spaces';
 
@@ -19,5 +21,5 @@ export function LinkPreview({source,messageId,userId}:{source:string;messageId:s
     void cache.get(key)!.then(value=>{if(active)setPreview(value);});return()=>{active=false;};
   },[raw,messageId,userId]);
   if(hidden||!preview)return null;
-  return <aside className="my-2 max-w-lg rounded-xl border border-white/10 bg-canvas p-3" aria-label="Link preview"><div className="flex items-start gap-3"><a href={preview.url} target="_blank" rel="noopener noreferrer nofollow ugc" className="min-w-0 flex-1"><p className="text-xs text-white/60">{preview.siteName||preview.host}</p><p className="my-1 break-words font-semibold text-brand">{preview.title||preview.host}</p><p className="line-clamp-3 break-words text-sm text-white/70">{preview.description}</p></a><button type="button" title="Hide preview" aria-label="Hide preview" className="rounded-lg px-2 py-1 text-white/65" onClick={()=>{setHidden(true);try{const key=`hive:hidden-previews:${userId}`;const saved=JSON.parse(localStorage.getItem(key)||'[]');localStorage.setItem(key,JSON.stringify([...new Set([...(Array.isArray(saved)?saved:[]),messageId])].slice(-200)));}catch{/* Hiding still applies in this view. */}}}>×</button></div>{preview.image&&<img src={preview.image} referrerPolicy="no-referrer" loading="lazy" alt="" className="mt-2 max-h-40 max-w-full rounded-lg object-contain" />}</aside>;
+  return <aside className="my-2 max-w-lg rounded-xl border border-white/10 bg-canvas p-3" aria-label="Link preview"><div className="flex items-start gap-3"><a href={preview.url} target="_blank" rel="noopener noreferrer nofollow ugc" className="min-w-0 flex-1"><p className="text-xs text-white/60">{preview.siteName||preview.host}</p><p className="my-1 break-words font-semibold text-brand">{preview.title||preview.host}</p><p className="line-clamp-3 break-words text-sm text-white/70">{preview.description}</p></a><UiButton type="button" tooltip="Hide preview" aria-label="Hide preview" className="rounded-lg px-2 py-1 text-white/65" onClick={()=>{setHidden(true);try{const key=`hive:hidden-previews:${userId}`;const saved=JSON.parse(localStorage.getItem(key)||'[]');localStorage.setItem(key,JSON.stringify([...new Set([...(Array.isArray(saved)?saved:[]),messageId])].slice(-200)));}catch{/* Hiding still applies in this view. */}}}>×</UiButton></div>{preview.image&&<img src={preview.image} referrerPolicy="no-referrer" loading="lazy" alt="" className="mt-2 max-h-40 max-w-full rounded-lg object-contain" />}</aside>;
 }

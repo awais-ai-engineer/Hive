@@ -1,5 +1,9 @@
 'use client';
 
+import { Tooltip as UiTooltip } from '@hive/ui';
+
+import { Button as UiButton } from '@hive/ui';
+
 import { useState } from 'react';
 import type { Comment } from '@hive/shared';
 import { CommentItem } from './comment-item';
@@ -58,11 +62,10 @@ export function CommentTree({
   return (
     <div className="relative my-2">
       {/* Clickable vertical gutter line */}
-      <div
+      <UiTooltip content="Click to collapse"><div
         onClick={() => setCollapsed(val => !val)}
         className="absolute bottom-0 left-0 top-6 w-3 cursor-pointer opacity-0 transition-opacity hover:opacity-100 group-hover:opacity-100"
-        title="Click to collapse"
-      />
+      /></UiTooltip>
 
       <CommentItem
         comment={comment}
@@ -102,14 +105,14 @@ export function CommentTree({
           {comment.more_replies > 0 && (
             <div className="mt-2 text-xs">
               {comment.depth >= 5 && onFocusThread ? (
-                <button
+                <UiButton
                   onClick={() => onFocusThread(comment.id)}
                   className="font-medium text-amber-400 hover:underline"
                 >
                   Continue this thread →
-                </button>
+                </UiButton>
               ) : (
-                <button
+                <UiButton
                   disabled={loadingMore}
                   onClick={handleLoadMore}
                   className="font-medium text-amber-400 hover:underline disabled:opacity-50"
@@ -119,7 +122,7 @@ export function CommentTree({
                     : `${comment.more_replies} more ${
                         comment.more_replies === 1 ? 'reply' : 'replies'
                       }`}
-                </button>
+                </UiButton>
               )}
               {loadError && <p className="mt-1 text-rose-400">{loadError}</p>}
             </div>

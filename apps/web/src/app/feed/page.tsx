@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import Link from 'next/link';
 import { Suspense, useEffect, useState } from 'react';
 import { PostFeed } from '../../components/posts/post-feed';
@@ -44,8 +46,8 @@ export default function FeedPage() {
       {!hideHero && <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#5b3be8] via-[#7c5cff] to-[#a78bfa] p-6 sm:p-8" style={{ color: '#fff' }}>
         <div aria-hidden className="absolute -right-10 -top-10 h-56 w-56 rounded-full bg-[rgb(255_255_255/0.16)] blur-2xl" />
         <div aria-hidden className="absolute -bottom-16 right-24 h-40 w-40 rounded-full bg-fuchsia-300/30 blur-2xl" />
-        <button type="button" onClick={() => { setHideHero(true); try { localStorage.setItem('hive:hide-feed-hero', '1'); } catch { /* ignore */ } }}
-          aria-label="Dismiss" className="absolute right-4 top-4 rounded-full p-1.5 hover:bg-[rgb(255_255_255/0.16)]" style={{ color: '#fff' }}><Icon name="x" size={18} /></button>
+        <UiButton tooltip="Dismiss" type="button" onClick={() => { setHideHero(true); try { localStorage.setItem('hive:hide-feed-hero', '1'); } catch { /* ignore */ } }}
+          aria-label="Dismiss" className="absolute right-4 top-4 rounded-full p-1.5 hover:bg-[rgb(255_255_255/0.16)]" style={{ color: '#fff' }}><Icon name="x" size={18} /></UiButton>
         <h1 className="relative text-2xl font-extrabold sm:text-3xl">{user ? 'Your feed' : 'Posts & Discussions'}</h1>
         <p className="relative mt-1 max-w-lg text-sm opacity-90 sm:text-base">
           {user ? 'The best posts from every space you belong to, in one place.' : 'Share ideas, ask questions and discuss them with the community.'}</p>

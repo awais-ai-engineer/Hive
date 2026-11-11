@@ -1,5 +1,7 @@
 'use client';
 
+import { Radio as UiRadio, Input as UiInput, Textarea as UiTextarea, Button as UiButton } from '@hive/ui';
+
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { spaceCreateSchema, type SpaceCreateInput } from '@hive/shared';
@@ -66,24 +68,24 @@ export default function NewSpacePage() {
       <fieldset><legend className="sr-only">Space type</legend>
         <div className="grid gap-3 sm:grid-cols-2" role="radiogroup">
           {kinds.map(kind => <label key={kind.value} className={`card cursor-pointer p-4 transition ${type === kind.value ? 'ring-2 ring-[var(--brand)]' : 'hover:bg-brand-soft'}`}>
-            <input className="sr-only" type="radio" name="type" checked={type === kind.value} onChange={() => setType(kind.value)} />
+            <UiRadio className="sr-only" name="type" checked={type === kind.value} onChange={() => setType(kind.value)} />
             <span className="flex items-center gap-2 font-semibold"><span className="text-brand"><Icon name={kind.icon} size={20} /></span>{kind.title}</span>
             <span className="mt-2 block text-sm text-white/60">{kind.text}</span>
           </label>)}
         </div>
       </fieldset>
-      <label className="block font-medium">Name<input className="auth-input" required minLength={2} maxLength={60} value={name}
+      <label className="block font-medium">Name<UiInput className="auth-input" required minLength={2} maxLength={60} value={name}
         onChange={event => { setName(event.target.value); if (!slugEdited) setSlug(makeSlug(event.target.value)); }} />
         <span className="text-sm font-normal text-white/55">What people will see in the sidebar and search.</span></label>
-      <label className="block font-medium">Slug<input className="auth-input" required minLength={3} maxLength={50} value={slug}
+      <label className="block font-medium">Slug<UiInput className="auth-input" required minLength={3} maxLength={50} value={slug}
         onChange={event => { setSlugEdited(true); setSlug(event.target.value); }} />
         <span className="text-sm font-normal text-white/55">Used in the web address: /s/{slug || 'your-space'}. Lowercase letters, numbers and dashes.</span></label>
-      <label className="block font-medium">Description<textarea className="auth-input" name="description" maxLength={500} rows={3} />
+      <label className="block font-medium">Description<UiTextarea className="auth-input" name="description" maxLength={500} rows={3} />
         <span className="text-sm font-normal text-white/55">Optional. A sentence about what this space is for.</span></label>
       {type === 'community' && <><fieldset><legend className="mb-3 font-medium">Category</legend><CategoryPicker value={[category]} onChange={values => setCategory(values[0] ?? 'other')} /></fieldset><TagsInput value={tags} onChange={setTags} /></>}
       {type === 'workspace' && <DomainInput />}
       {error && <p role="alert" className="text-rose-400">{error}</p>}
-      <button disabled={busy || loading} className="auth-button">{busy ? 'Creating…' : 'Create space'}</button>
+      <UiButton disabled={busy || loading} className="auth-button">{busy ? 'Creating…' : 'Create space'}</UiButton>
     </form>
   </main>;
 }

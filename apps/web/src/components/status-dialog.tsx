@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, Input as UiInput, Select as UiSelect, DateTimePicker as UiDateTimePicker, Checkbox as UiCheckbox, DatePicker as UiDatePicker } from '@hive/ui';
+
 import { useEffect, useState, type FormEvent } from 'react';
 import { apiFetch, responseData, type User } from '../lib/api';
 import { requestError } from '../lib/spaces';
@@ -69,52 +71,52 @@ export function StatusDialog({ user, onSaved, onClose }: { user: User; onSaved: 
   }
 
   return <div className="on-surface fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
-    <button type="button" aria-label="Close" onClick={onClose} className="fixed inset-0 bg-[rgb(0_0_0/0.5)]" />
+    <UiButton tooltip="Close" type="button" aria-label="Close" onClick={onClose} className="fixed inset-0 bg-[rgb(0_0_0/0.5)]" />
     <form role="dialog" aria-modal="true" aria-label="Set a status" onSubmit={submit} className="card relative my-auto w-full max-w-md space-y-4 p-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold">Set a status</h2>
-        <button type="button" onClick={onClose} aria-label="Close dialog" className="rounded p-1 text-white/60 hover:bg-white/10"><Icon name="x" size={18} /></button>
+        <UiButton tooltip="Close dialog" type="button" onClick={onClose} aria-label="Close dialog" className="rounded p-1 text-white/60 hover:bg-white/10"><Icon name="x" size={18} /></UiButton>
       </div>
       <div className="flex gap-2">
-        <input aria-label="Status emoji" className="auth-input !mt-0 !w-14 text-center text-xl" maxLength={16} value={emoji} placeholder="💬" onChange={event => setEmoji(event.target.value)} />
-        <input aria-label="Status text" className="auth-input !mt-0" autoFocus maxLength={80} value={text} placeholder="What are you up to?" onChange={event => setText(event.target.value)} />
+        <UiInput aria-label="Status emoji" className="auth-input !mt-0 !w-14 text-center text-xl" maxLength={16} value={emoji} placeholder="💬" onChange={event => setEmoji(event.target.value)} />
+        <UiInput aria-label="Status text" className="auth-input !mt-0" autoFocus maxLength={80} value={text} placeholder="What are you up to?" onChange={event => setText(event.target.value)} />
       </div>
       <div className="flex flex-wrap gap-1" role="group" aria-label="Suggested emoji">
-        {EMOJI.map(item => <button key={item} type="button" aria-pressed={emoji === item} onClick={() => setEmoji(emoji === item ? '' : item)}
-          className={`h-9 w-9 rounded-lg text-lg hover:bg-[var(--surface-2)] ${emoji === item ? 'bg-brand-soft ring-2 ring-brand' : ''}`}>{item}</button>)}
+        {EMOJI.map(item => <UiButton key={item} type="button" aria-pressed={emoji === item} onClick={() => setEmoji(emoji === item ? '' : item)}
+          className={`h-9 w-9 rounded-lg text-lg hover:bg-[var(--surface-2)] ${emoji === item ? 'bg-brand-soft ring-2 ring-brand' : ''}`}>{item}</UiButton>)}
       </div>
       <div>
         <p className="mb-1 text-sm font-medium">Quick picks</p>
         <div className="flex flex-wrap gap-2">
-          {PRESETS.map(([e, t]) => <button key={t} type="button" onClick={() => { setEmoji(e); setText(t); if (t === 'Vacationing' || t === 'Out sick') setAway(true); }}
-            className="rounded-full border border-white/10 bg-[var(--surface-2)] px-3 py-1 text-sm hover:border-brand/50">{e} {t}</button>)}
+          {PRESETS.map(([e, t]) => <UiButton key={t} type="button" onClick={() => { setEmoji(e); setText(t); if (t === 'Vacationing' || t === 'Out sick') setAway(true); }}
+            className="rounded-full border border-white/10 bg-[var(--surface-2)] px-3 py-1 text-sm hover:border-brand/50">{e} {t}</UiButton>)}
         </div>
       </div>
       <label className="block text-sm font-medium">Clear after
-        <select className="auth-input" value={clear} onChange={event => setClear(event.target.value as Clear)}>
+        <UiSelect aria-label="Clear after" className="auth-input" value={clear} onChange={event => setClear(event.target.value as Clear)}>
           {CLEAR_AFTER.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
+        </UiSelect>
       </label>
       {clear === 'custom' && <label className="block text-sm font-medium">Clear on
-        <input type="datetime-local" className="auth-input" value={custom} min={inputValue(new Date())} onChange={event => setCustom(event.target.value)} />
+        <UiDateTimePicker label="Clear on" className="auth-input" value={custom} min={inputValue(new Date())} onChange={event => setCustom(event.target.value)} />
       </label>}
       <div className="rounded-xl bg-brand-soft p-3">
         <label className="flex cursor-pointer items-start gap-3">
-          <input type="checkbox" role="switch" className="mt-1" checked={away} onChange={event => setAway(event.target.checked)} />
+          <UiCheckbox role="switch" className="mt-1" checked={away} onChange={event => setAway(event.target.checked)} />
           <span><span className="text-sm font-semibold">🌴 Out of office</span>
             <span className="block text-sm text-white/60">Shows a note in your direct messages so people know when you are back.</span></span>
         </label>
         {away && <label className="mt-3 block text-sm font-medium">Out of office until
-          <input type="date" className="auth-input" required value={awayDate} min={dayValue(new Date())} onChange={event => setAwayDate(event.target.value)} />
+          <UiDatePicker label="Out of office until" className="auth-input" required value={awayDate} min={dayValue(new Date())} onChange={event => setAwayDate(event.target.value)} />
         </label>}
       </div>
       {error && <p role="alert" className="text-sm text-rose-500">{error}</p>}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button type="button" disabled={busy} onClick={() => void save({ status_emoji: null, status_text: null, status_expires_at: null, out_of_office_until: null })}
-          className="text-sm font-medium text-brand hover:underline disabled:opacity-40">Clear status</button>
+        <UiButton type="button" disabled={busy} onClick={() => void save({ status_emoji: null, status_text: null, status_expires_at: null, out_of_office_until: null })}
+          className="text-sm font-medium text-brand hover:underline disabled:opacity-40">Clear status</UiButton>
         <div className="flex gap-2">
-          <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
-          <button disabled={busy} className="auth-button">{busy ? 'Saving…' : 'Save'}</button>
+          <UiButton type="button" onClick={onClose} className="btn-ghost">Cancel</UiButton>
+          <UiButton disabled={busy} className="auth-button">{busy ? 'Saving…' : 'Save'}</UiButton>
         </div>
       </div>
     </form>

@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { useEffect, useRef, useState } from 'react';
 import { socket } from '../lib/socket';
 import { useMessageList } from '../lib/use-channel-messages';
@@ -47,7 +49,7 @@ export function ThreadPanel({ channelId, channels, parentId, userId, reason, can
   return <aside aria-label="Thread" className="fixed inset-0 z-20 flex flex-col bg-surface p-4 md:inset-y-0 md:left-auto md:w-[400px] md:border-l md:border-white/10 md:shadow-[var(--shadow-pop)] xl:static xl:z-auto xl:-my-4 xl:-mr-6 xl:w-[380px] xl:shrink-0 xl:shadow-none">
     <div className="mb-3 flex items-center justify-between">
       <h2 className="font-semibold">Thread</h2>
-      <button onClick={onClose} aria-label="Close thread" className="text-xl text-white/60 hover:text-white">×</button>
+      <UiButton tooltip="Close thread" onClick={onClose} aria-label="Close thread" className="text-xl text-white/60 hover:text-white">×</UiButton>
     </div>
     {thread.ready && thread.messages.length > 0 && <CatchUp channelId={channelId} threadId={parentId} className="mb-2" />}
     {(error || thread.error) && <p role="alert" className="mb-2 text-sm text-rose-400">{error || thread.error}</p>}

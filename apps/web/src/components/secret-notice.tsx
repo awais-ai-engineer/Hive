@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { useState } from 'react';
 import { Icon } from './ui/icons';
 
@@ -10,7 +12,7 @@ export function SecretNotice({ name, safety, ready, peerReady, error }: { name: 
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
       <Icon name="lock" size={15} className="shrink-0 text-brand" />
       <span>Messages are end-to-end encrypted. Only you and <strong>{name}</strong> can read them.</span>
-      <button type="button" aria-expanded={open} onClick={() => setOpen(value => !value)} className="font-semibold text-brand underline">{open ? 'Hide details' : 'Verify and learn more'}</button>
+      <UiButton type="button" aria-expanded={open} onClick={() => setOpen(value => !value)} className="font-semibold text-brand underline">{open ? 'Hide details' : 'Verify and learn more'}</UiButton>
     </p>
     {error ? <p role="alert" className="mt-1 text-rose-500">{error}</p>
       : !ready ? <p role="status" className="mt-1 text-white/60">Setting up secure keys on this device…</p>

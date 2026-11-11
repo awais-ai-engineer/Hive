@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, Input as UiInput, Radio as UiRadio } from '@hive/ui';
+
 import { useCallback, useEffect, useState } from 'react';
 import { gamesPath, post, type QuizAdmin, type QuizResult, type QuizStart, type QuizSummary } from '../../lib/games';
 import { apiData, requestError } from '../../lib/spaces';
@@ -56,24 +58,24 @@ function Play({ slug, quiz, onDone }: { slug: string; quiz: QuizSummary; onDone:
     return () => clearTimeout(timer);
   }, [run, left, result, chosen, answer]);
 
-  if (error) return <p role="alert" className="text-rose-500">{error} <button className="underline" onClick={onDone}>Back</button></p>;
+  if (error) return <p role="alert" className="text-rose-500">{error} <UiButton className="underline" onClick={onDone}>Back</UiButton></p>;
   if (result) return <section className="card p-5 text-center" aria-live="polite">
     <h3 className="text-2xl font-extrabold">{result.score} points</h3>
     <p className="mt-1 text-white/65">{result.correctCount} of {result.total} correct</p>
-    <ol className="mt-4 space-y-2 text-left text-sm">{result.results.map(item => <li key={item.id} className="rounded-xl border border-white/10 p-3">
+    <ol className="mt-4 space-y-2 text-left justify-start text-sm">{result.results.map(item => <li key={item.id} className="rounded-xl border border-white/10 p-3">
       <p className="font-medium">{item.text}</p>
       <p className={item.correct ? 'text-emerald-600' : 'text-rose-500'}>{item.correct ? 'Correct: ' : `You said ${item.choice === null ? 'nothing (out of time)' : item.options[item.choice]}. Answer: `}{item.correct ? item.options[item.correctIndex!] : item.options[item.correctIndex!]}</p>
     </li>)}</ol>
-    <button type="button" className="auth-button mt-4 !w-auto px-5" onClick={onDone}>Back to quizzes</button>
+    <UiButton type="button" className="auth-button mt-4 !w-auto px-5" onClick={onDone}>Back to quizzes</UiButton>
   </section>;
   if (!run) return <div aria-busy="true" className="h-48 animate-pulse rounded-2xl bg-white/5" />;
   const question = run.questions[index];
   return <section className="card p-5" aria-live="polite">
     <div className="mb-4 flex items-center justify-between gap-3"><p className="text-sm text-white/60">Question {index + 1} of {run.questions.length}</p><Ring left={left} total={run.timeLimitS} /></div>
     <h3 className="mb-4 text-xl font-bold [overflow-wrap:anywhere]">{question.text}</h3>
-    <div className="grid gap-2 sm:grid-cols-2">{question.options.map((option, choice) => <button key={choice} type="button" disabled={chosen !== null} onClick={() => void answer(choice)}
-      className={`min-h-14 rounded-xl border px-4 py-3 text-left font-medium transition [overflow-wrap:anywhere] ${chosen === choice ? 'border-brand bg-brand-soft' : 'border-white/15 hover:bg-[var(--surface-2)]'}`}>
-      <span className="mr-2 text-white/45">{'ABCD'[choice]}</span>{option}</button>)}</div>
+    <div className="grid gap-2 sm:grid-cols-2">{question.options.map((option, choice) => <UiButton key={choice} type="button" disabled={chosen !== null} onClick={() => void answer(choice)}
+      className={`min-h-14 rounded-xl border px-4 py-3 text-left justify-start font-medium transition [overflow-wrap:anywhere] ${chosen === choice ? 'border-brand bg-brand-soft' : 'border-white/15 hover:bg-[var(--surface-2)]'}`}>
+      <span className="mr-2 text-white/45">{'ABCD'[choice]}</span>{option}</UiButton>)}</div>
     {chosen !== null && <p className="mt-3 text-sm text-white/55">Answer locked in.</p>}
   </section>;
 }
@@ -93,24 +95,24 @@ function Editor({ slug, quizId, onBack }: { slug: string; quizId: string; onBack
   if (!quiz) return error ? <p role="alert" className="text-rose-500">{error}</p> : <div className="h-32 animate-pulse rounded-2xl bg-white/5" />;
   return <section className="card p-5">
     <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="text-lg font-bold">{quiz.title} <span className="text-sm font-normal text-white/50">({quiz.status})</span></h3>
-      <button type="button" className="btn-ghost" onClick={onBack}>Back</button></div>
+      <UiButton type="button" className="btn-ghost" onClick={onBack}>Back</UiButton></div>
     <ol className="space-y-2">{quiz.questions.map(question => <li key={question.id} className="rounded-xl border border-white/10 p-3 text-sm">
       <div className="flex items-start justify-between gap-2"><p className="font-medium">{question.text}</p>
-        <button type="button" title="Delete question" aria-label="Delete question" className="text-white/50 hover:text-rose-500"
-          onClick={() => void run(() => apiData<QuizAdmin>(`${base}/questions/${question.id}`, { method: 'DELETE' }))}><Icon name="trash" size={15} /></button></div>
+        <UiButton type="button" tooltip="Delete question" aria-label="Delete question" className="text-white/50 hover:text-rose-500"
+          onClick={() => void run(() => apiData<QuizAdmin>(`${base}/questions/${question.id}`, { method: 'DELETE' }))}><Icon name="trash" size={15} /></UiButton></div>
       <ul className="mt-1 text-white/65">{question.options.map((option, i) => <li key={i}>{i === question.correctIndex ? '✓ ' : '• '}{option}</li>)}</ul>
     </li>)}</ol>
     {!quiz.questions.length && <p className="text-sm text-white/60">No questions yet. Add the first one below.</p>}
     <form className="mt-4 space-y-2 border-t border-white/10 pt-4" onSubmit={event => { event.preventDefault();
       void run(async () => { const next = await post<QuizAdmin>(`${base}/questions`, { text, options, correctIndex: correct }); setText(''); setOptions(['', '', '', '']); setCorrect(0); return next; }); }}>
-      <label className="block text-sm font-medium">Question<input className="auth-input" required maxLength={200} value={text} onChange={event => setText(event.target.value)} /></label>
+      <label className="block text-sm font-medium">Question<UiInput className="auth-input" required maxLength={200} value={text} onChange={event => setText(event.target.value)} /></label>
       <fieldset className="space-y-1.5"><legend className="text-sm font-medium">Answers (select the right one)</legend>
         {options.map((option, i) => <div key={i} className="flex items-center gap-2">
-          <input type="radio" name="correct" aria-label={`Answer ${i + 1} is correct`} checked={correct === i} onChange={() => setCorrect(i)} />
-          <input className="auth-input !mt-0" required maxLength={80} aria-label={`Answer ${i + 1}`} value={option} onChange={event => setOptions(list => list.map((item, j) => j === i ? event.target.value : item))} /></div>)}</fieldset>
-      <div className="flex flex-wrap gap-2"><button className="auth-button !w-auto px-4">Add question</button>
-        {quiz.status !== 'published' && <button type="button" className="btn-ghost" onClick={() => void run(() => post<QuizAdmin>(`${base}/publish`))}>Publish quiz</button>}
-        {quiz.status === 'published' && <button type="button" className="btn-ghost" onClick={() => void run(() => apiData<QuizAdmin>(base, { method: 'PATCH', body: JSON.stringify({ status: 'archived' }) }))}>Archive</button>}</div>
+          <UiRadio name="correct" aria-label={`Answer ${i + 1} is correct`} checked={correct === i} onChange={() => setCorrect(i)} />
+          <UiInput className="auth-input !mt-0" required maxLength={80} aria-label={`Answer ${i + 1}`} value={option} onChange={event => setOptions(list => list.map((item, j) => j === i ? event.target.value : item))} /></div>)}</fieldset>
+      <div className="flex flex-wrap gap-2"><UiButton className="auth-button !w-auto px-4">Add question</UiButton>
+        {quiz.status !== 'published' && <UiButton type="button" className="btn-ghost" onClick={() => void run(() => post<QuizAdmin>(`${base}/publish`))}>Publish quiz</UiButton>}
+        {quiz.status === 'published' && <UiButton type="button" className="btn-ghost" onClick={() => void run(() => apiData<QuizAdmin>(base, { method: 'PATCH', body: JSON.stringify({ status: 'archived' }) }))}>Archive</UiButton>}</div>
     </form>
     {error && <p role="alert" className="mt-2 text-sm text-rose-500">{error}</p>}
   </section>;
@@ -138,17 +140,17 @@ export function Trivia({ slug, canManage, onScored }: { slug: string; canManage:
         <div className="min-w-0"><p className="font-semibold">{quiz.title}{quiz.status !== 'published' && <span className="ml-2 rounded-full bg-brand-soft px-2 py-0.5 text-xs text-brand">{quiz.status}</span>}</p>
           <p className="text-sm text-white/60">{quiz.questionCount} questions · {quiz.timeLimitS}s each{quiz.myState === 'finished' ? ` · you scored ${quiz.myScore}` : ''}</p></div>
         <div className="flex gap-2">
-          {canManage && <button type="button" className="btn-ghost" onClick={() => setMode({ type: 'edit', quiz })}>Edit</button>}
-          {quiz.status === 'published' && quiz.myState !== 'finished' && <button type="button" className="auth-button !w-auto px-4" onClick={() => setMode({ type: 'play', quiz })}>{quiz.myState === 'playing' ? 'Continue' : 'Play'}</button>}
+          {canManage && <UiButton type="button" className="btn-ghost" onClick={() => setMode({ type: 'edit', quiz })}>Edit</UiButton>}
+          {quiz.status === 'published' && quiz.myState !== 'finished' && <UiButton type="button" className="auth-button !w-auto px-4" onClick={() => setMode({ type: 'play', quiz })}>{quiz.myState === 'playing' ? 'Continue' : 'Play'}</UiButton>}
         </div></li>)}</ul>}
     {canManage && <section className="card p-4">
       <h3 className="font-semibold">Add a quiz</h3>
       <form className="mt-2 flex flex-wrap gap-2" onSubmit={event => { event.preventDefault(); void create(() => post<{ id: string }>(gamesPath(slug, '/quizzes'), { title, timeLimitS: 20 })); }}>
-        <input className="auth-input !mt-0 min-w-0 flex-1" required maxLength={80} aria-label="Quiz title" placeholder="Quiz title" value={title} onChange={event => setTitle(event.target.value)} />
-        <button className="auth-button !w-auto px-4">Create</button></form>
+        <UiInput className="auth-input !mt-0 min-w-0 flex-1" required maxLength={80} aria-label="Quiz title" placeholder="Quiz title" value={title} onChange={event => setTitle(event.target.value)} />
+        <UiButton className="auth-button !w-auto px-4">Create</UiButton></form>
       <p className="mt-3 text-sm text-white/60">Or start with ten ready-made questions:</p>
-      <div className="mt-1.5 flex flex-wrap gap-2">{(['general', 'science', 'geography'] as const).map(pack => <button key={pack} type="button" className="btn-ghost capitalize"
-        onClick={() => void create(() => post<{ id: string }>(gamesPath(slug, '/quizzes/starter'), { pack }))}>{pack === 'general' ? 'General knowledge' : pack}</button>)}</div>
+      <div className="mt-1.5 flex flex-wrap gap-2">{(['general', 'science', 'geography'] as const).map(pack => <UiButton key={pack} type="button" className="btn-ghost capitalize"
+        onClick={() => void create(() => post<{ id: string }>(gamesPath(slug, '/quizzes/starter'), { pack }))}>{pack === 'general' ? 'General knowledge' : pack}</UiButton>)}</div>
     </section>}
   </div>;
 }

@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { SocketEvents, type HealthResponse, type PingAck } from '@hive/shared';
@@ -101,13 +103,13 @@ export default function Home() {
       </section>
 
       <div className="mt-6 flex items-center gap-4">
-        <button
+        <UiButton
           onClick={ping}
           disabled={socketState !== 'up'}
           className="rounded-lg bg-amber-400 px-4 py-2 font-medium text-black disabled:opacity-40"
         >
           Ping server over WebSocket
-        </button>
+        </UiButton>
         {latency !== null && <span className="text-white/70">Round trip: {latency} ms</span>}
       </div>
       <footer className="mt-12 border-t border-white/10 pt-6"><PolicyLinks /></footer>

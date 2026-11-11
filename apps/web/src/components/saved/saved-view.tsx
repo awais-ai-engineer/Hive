@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { forgetSaved, type SavedKind } from '../../lib/saved';
@@ -65,8 +67,8 @@ export function SavedView() {
   return <div className="min-h-0 flex-1 overflow-y-auto pr-1">
     <div role="tablist" aria-label="Saved items" className="mb-4 flex gap-1 border-b border-white/10">
       {([['message', 'Messages'], ['post', 'Posts and comments']] as const).map(([value, label]) =>
-        <button key={value} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)}
-          className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${tab === value ? 'border-brand text-brand' : 'border-transparent text-white/60 hover:text-white'}`}>{label}</button>)}
+        <UiButton key={value} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)}
+          className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${tab === value ? 'border-brand text-brand' : 'border-transparent text-white/60 hover:text-white'}`}>{label}</UiButton>)}
     </div>
     {error && <p role="alert" className="mb-3 text-sm text-rose-500">{error}</p>}
     {!ready ? <div role="status" aria-label="Loading saved items" className="space-y-3">
@@ -84,11 +86,11 @@ export function SavedView() {
         {item.title && <p className="mt-1 font-semibold">{item.title}</p>}
         {item.snippet && <p className="mt-1 line-clamp-3 break-words text-white/80">{item.snippet}</p>}
         <div className="mt-3 flex gap-2">
-          <button type="button" className="auth-button text-sm" onClick={() => router.push(href(item))}>Open</button>
-          <button type="button" className="btn-ghost text-rose-500" onClick={() => void remove(item)}>Remove</button>
+          <UiButton type="button" className="auth-button text-sm" onClick={() => router.push(href(item))}>Open</UiButton>
+          <UiButton type="button" className="btn-ghost text-rose-500" onClick={() => void remove(item)}>Remove</UiButton>
         </div>
       </li>)}
-      {cursor && <li className="text-center"><button type="button" className="btn-ghost" disabled={more} onClick={() => void load(cursor)}>{more ? 'Loading…' : 'Load more'}</button></li>}
+      {cursor && <li className="text-center"><UiButton type="button" className="btn-ghost" disabled={more} onClick={() => void load(cursor)}>{more ? 'Loading…' : 'Load more'}</UiButton></li>}
     </ul>}
   </div>;
 }

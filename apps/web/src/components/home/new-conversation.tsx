@@ -1,28 +1,25 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { Button as UiButton, Combobox, Checkbox as UiCheckbox } from '@hive/ui';
+
+import { useCallback, useRef, useState, type FormEvent } from 'react';
 import type { Conversation, UserResult } from '../../lib/dms';
 import { apiData, requestError } from '../../lib/spaces';
 
 /** Pick people (who share a space with you) and open the conversation with exactly them. */
 export function NewConversation({ onOpened, onCancel }: { onOpened: (id: string, conversation: Conversation) => void; onCancel: () => void }) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<UserResult[]>([]);
+  const people = useRef<UserResult[]>([]);
   const [chosen, setChosen] = useState<UserResult[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [secret, setSecret] = useState(false);
 
-  useEffect(() => {
-    if (!query.trim()) { setResults([]); return; }
-    let active = true;
-    const timer = setTimeout(() => {
-      apiData<UserResult[]>(`/api/users/search?q=${encodeURIComponent(query.trim())}`)
-        .then(found => { if (active) setResults(found); })
-        .catch(cause => { if (active) setError(requestError(cause)); });
-    }, 250);
-    return () => { active = false; clearTimeout(timer); };
-  }, [query]);
+  const loadPeople = useCallback(async (query: string, signal: AbortSignal) => {
+    if (!query.trim()) return [];
+    const found = await apiData<UserResult[]>(`/api/users/search?q=${encodeURIComponent(query.trim())}`, { signal });
+    people.current = found;
+    return found.filter(person => !chosen.some(item => item.id === person.id)).map(person => ({ value: person.id, label: person.username }));
+  }, [chosen]);
 
   async function start(event: FormEvent) {
     event.preventDefault();
@@ -37,26 +34,19 @@ export function NewConversation({ onOpened, onCancel }: { onOpened: (id: string,
     finally { setBusy(false); }
   }
 
-  const available = results.filter(result => !chosen.some(person => person.id === result.id));
   return <form onSubmit={start} className="rounded-lg border border-white/10 bg-canvas p-3">
     {chosen.length > 0 && <ul className="mb-2 flex flex-wrap gap-1">{chosen.map(person => <li key={person.id}
       className="flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-sm text-amber-400">
       {person.username}
-      <button type="button" aria-label={`Remove ${person.username}`} onClick={() => setChosen(list => list.filter(item => item.id !== person.id))}>×</button>
+      <UiButton tooltip={`Remove ${person.username}`} type="button" aria-label={`Remove ${person.username}`} onClick={() => setChosen(list => list.filter(item => item.id !== person.id))}>×</UiButton>
     </li>)}</ul>}
-    <input autoFocus className="auth-input" aria-label="Search people" placeholder="Search by username"
-      value={query} onChange={event => setQuery(event.target.value)} disabled={chosen.length >= 8} />
-    {available.length > 0 && <ul className="mt-1 rounded border border-white/10">{available.map(result => <li key={result.id}>
-      <button type="button" className="w-full px-3 py-2 text-left text-sm hover:bg-white/5"
-        onClick={() => { setChosen(list => [...list, result]); setQuery(''); }}>{result.username}</button>
-    </li>)}</ul>}
-    {chosen.length === 1 && <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm"><input type="checkbox" className="mt-1 accent-[var(--brand)]" checked={secret} onChange={event => setSecret(event.target.checked)} />
+    <Combobox label="Add people" placeholder="Search people" loadOptions={loadPeople} disabled={chosen.length >= 8} onValueChange={id => { const person = people.current.find(item => item.id === id); if (person) setChosen(list => [...list, person]); }} />
+    {chosen.length === 1 && <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm"><UiCheckbox className="mt-1 accent-[var(--brand)]" checked={secret} onChange={event => setSecret(event.target.checked)} />
       <span><span className="font-medium">Secret conversation</span><span className="block text-xs text-white/60">End-to-end encrypted, text only. Even Hive can&apos;t read it, and it only opens on your devices.</span></span></label>}
-    {query.trim() && !available.length && <p className="mt-2 text-xs text-white/40">No one found. You can message people who share a space with you.</p>}
     {error && <p role="alert" className="mt-2 text-sm text-rose-400">{error}</p>}
     <div className="mt-3 flex justify-end gap-2 text-sm">
-      <button type="button" onClick={onCancel} className="px-3 py-1 text-white/60">Cancel</button>
-      <button disabled={!chosen.length || busy} className="auth-button">{chosen.length > 1 ? 'Start group' : secret ? 'Start secret chat' : 'Start chat'}</button>
+      <UiButton type="button" onClick={onCancel} className="px-3 py-1 text-white/60">Cancel</UiButton>
+      <UiButton disabled={!chosen.length || busy} className="auth-button">{chosen.length > 1 ? 'Start group' : secret ? 'Start secret chat' : 'Start chat'}</UiButton>
     </div>
   </form>;
 }

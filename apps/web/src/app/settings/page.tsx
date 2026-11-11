@@ -1,5 +1,7 @@
 'use client';
 
+import { FileDropzone as UiFileDropzone, Button as UiButton, Input as UiInput, Textarea as UiTextarea, Radio as UiRadio, Select as UiSelect } from '@hive/ui';
+
 import { LanguagePicker } from '../../components/language-picker';
 import { playMessageSound, setSoundsEnabled, soundsEnabled } from '../../lib/sounds';
 import Link from 'next/link';
@@ -82,9 +84,9 @@ function ProfileCard({ user, updateUser }: { user: User; updateUser: (user: User
         <Avatar name={user.username} src={user.avatar_url} size={80} />
         <div className="space-y-2">
           <div className="flex flex-wrap gap-2">
-            <input ref={avatarInput} id="photo" type="file" accept="image/*" className="peer sr-only" onChange={event => pick('avatar', event.target.files?.[0])} />
+            <UiFileDropzone.Input ref={avatarInput} id="photo" accept="image/*" className="peer sr-only" onChange={event => pick('avatar', event.target.files?.[0])} />
             <label htmlFor="photo" className="btn-ghost cursor-pointer peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-[var(--ring)]">Upload photo</label>
-            {user.avatar_url && <button type="button" onClick={() => void removeImage('avatar')} className="btn-ghost text-rose-500">Remove</button>}
+            {user.avatar_url && <UiButton type="button" onClick={() => void removeImage('avatar')} className="btn-ghost text-rose-500">Remove</UiButton>}
           </div>
           <p className="text-xs text-white/50">PNG, JPG, GIF or WebP, up to 5 MB. You can crop and zoom before saving.</p>
         </div>
@@ -97,9 +99,9 @@ function ProfileCard({ user, updateUser }: { user: User; updateUser: (user: User
         {user.cover_url && <img src={user.cover_url.startsWith('/') ? `${API_URL}${user.cover_url}` : user.cover_url} alt="" className="h-full w-full object-cover" />}
       </div>
       <div className="mt-2 flex flex-wrap gap-2">
-        <input ref={coverInput} id="cover" type="file" accept="image/*" className="peer sr-only" onChange={event => pick('cover', event.target.files?.[0])} />
+        <UiFileDropzone.Input ref={coverInput} id="cover" accept="image/*" className="peer sr-only" onChange={event => pick('cover', event.target.files?.[0])} />
         <label htmlFor="cover" className="btn-ghost cursor-pointer peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-[var(--ring)]">{user.cover_url ? 'Change cover' : 'Upload cover'}</label>
-        {user.cover_url && <button type="button" onClick={() => void removeImage('cover')} className="btn-ghost text-rose-500">Remove</button>}
+        {user.cover_url && <UiButton type="button" onClick={() => void removeImage('cover')} className="btn-ghost text-rose-500">Remove</UiButton>}
       </div>
       {photoError && <p role="alert" className="mt-2 text-sm text-rose-500">{photoError}</p>}
     </div>
@@ -107,16 +109,16 @@ function ProfileCard({ user, updateUser }: { user: User; updateUser: (user: User
 
     <div className="grid gap-4 sm:grid-cols-2">
       <label className="block text-sm font-medium">Display name
-        <input className="auth-input" value={displayName} maxLength={60} placeholder={user.username} onChange={event => setDisplayName(event.target.value)} />
+        <UiInput className="auth-input" value={displayName} maxLength={60} placeholder={user.username} onChange={event => setDisplayName(event.target.value)} />
       </label>
       <label className="block text-sm font-medium">Username
-        <input className="auth-input" value={username} required minLength={3} maxLength={32} pattern="[a-zA-Z0-9_]+" aria-describedby="uname-hint" onChange={event => setUsername(event.target.value)} />
+        <UiInput className="auth-input" value={username} required minLength={3} maxLength={32} pattern="[a-zA-Z0-9_]+" aria-describedby="uname-hint" onChange={event => setUsername(event.target.value)} />
         <span id="uname-hint" className="mt-1 block text-xs font-normal text-white/50">People mention you with @{username || 'username'}</span>
       </label>
     </div>
 
     <label className="block text-sm font-medium">About you
-      <textarea className="auth-input resize-none" rows={3} maxLength={300} value={bio} onChange={event => setBio(event.target.value)} placeholder="A line or two about what you do." />
+      <UiTextarea className="auth-input resize-none" rows={3} maxLength={300} value={bio} onChange={event => setBio(event.target.value)} placeholder="A line or two about what you do." />
       <span className="mt-1 block text-right text-xs font-normal text-white/50" aria-live="polite">{bio.length}/300</span>
     </label>
 
@@ -126,7 +128,7 @@ function ProfileCard({ user, updateUser }: { user: User; updateUser: (user: User
         <span className="text-sm text-white/70">{(() => { const status = activeStatus(user); return status.emoji || status.text || status.away
           ? statusTitle(user)
           : 'No status set'; })()}</span>
-        <button type="button" className="btn-ghost" onClick={() => setEditingStatus(true)}>Set a status</button>
+        <UiButton type="button" className="btn-ghost" onClick={() => setEditingStatus(true)}>Set a status</UiButton>
       </div>
       <p className="mt-1 text-xs text-white/50">Let people know what you are up to, when it should clear, and if you are out of office.</p>
     </div>
@@ -134,7 +136,7 @@ function ProfileCard({ user, updateUser }: { user: User; updateUser: (user: User
 
     {error && <p role="alert" className="text-sm text-rose-500">{error}</p>}
     <div className="flex items-center gap-3">
-      <button disabled={busy} className="auth-button">{busy ? 'Saving…' : 'Save changes'}</button>
+      <UiButton disabled={busy} className="auth-button">{busy ? 'Saving…' : 'Save changes'}</UiButton>
       <Saved show={saved} />
     </div>
   </form>;
@@ -161,7 +163,7 @@ function PrivacyCard({ user, updateUser }: { user: User; updateUser: (user: User
       <h2 className="text-lg font-bold">Who can send you new direct messages</h2>
       <div role="radiogroup" aria-label="Who can send you new direct messages" className="mt-3 space-y-2">
         {POLICIES.map(([value, title, text]) => <label key={value} className={`flex cursor-pointer gap-3 rounded-xl border p-3 transition ${policy === value ? 'border-brand bg-brand-soft' : 'border-white/10 hover:bg-[var(--surface-2)]'}`}>
-          <input type="radio" name="dm_policy" className="mt-1 accent-[var(--brand)]" checked={policy === value} onChange={() => void change({ dm_policy: value })} />
+          <UiRadio name="dm_policy" className="mt-1 accent-[var(--brand)]" checked={policy === value} onChange={() => void change({ dm_policy: value })} />
           <span><span className="block font-semibold">{title}</span><span className="block text-sm text-white/60">{text}</span></span>
         </label>)}
       </div>
@@ -169,9 +171,9 @@ function PrivacyCard({ user, updateUser }: { user: User; updateUser: (user: User
     <section className="card flex items-start justify-between gap-4 p-5 sm:p-6">
       <div><h2 id="offline-label" className="text-lg font-bold">Appear offline</h2>
         <p className="mt-1 text-sm text-white/60">Others will see you as offline, even while you’re using Hive.</p></div>
-      <button type="button" role="switch" aria-checked={offline} aria-labelledby="offline-label" onClick={() => void change({ appear_offline: !offline })}
+      <UiButton type="button" role="switch" aria-checked={offline} aria-labelledby="offline-label" onClick={() => void change({ appear_offline: !offline })}
         className={`relative mt-1 h-6 w-11 shrink-0 rounded-full transition ${offline ? 'bg-brand' : 'bg-white/20'}`}>
-        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-[#fff] shadow transition-all ${offline ? 'left-[22px]' : 'left-0.5'}`} /></button>
+        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-[#fff] shadow transition-all ${offline ? 'left-[22px]' : 'left-0.5'}`} /></UiButton>
     </section>
     <p className="rounded-2xl bg-brand-soft p-4 text-sm text-brand">Your email is never shown to other people. Profiles show only spaces you both belong to.</p>
     {error && <p role="alert" className="text-sm text-rose-500">{error}</p>}
@@ -192,10 +194,10 @@ function TranslateCard({ user, updateUser }: { user: User; updateUser: (user: Us
   return <section className="card mt-5 p-5 sm:p-6">
     <h2 className="text-lg font-bold">Translation</h2>
     <label className="mt-3 block text-sm font-medium">Translate messages into
-      <select className="auth-input" value={user.translate_language ?? ''} onChange={event => void change(event.target.value)}>
+      <UiSelect aria-label="Translate messages into" className="auth-input" value={user.translate_language ?? ''} onChange={event => void change(event.target.value)}>
         <option value="">Don&apos;t offer translation</option>
         {ai.languages.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}
-      </select>
+      </UiSelect>
     </label>
     <p className="mt-2 text-sm text-white/60">When this is set, messages from other people show a small Translate link. Only the text you ask to translate is sent to the AI service.</p>
     {error && <p role="alert" className="mt-2 text-sm text-rose-500">{error}</p>}
@@ -214,9 +216,9 @@ function SoundCard() {
   return <section className="card mb-5 flex items-start justify-between gap-4 p-5 sm:p-6">
     <div><h2 className="text-lg font-bold">Sounds</h2>
       <p className="mt-1 text-sm text-white/60">Play a chime for new messages in conversations you aren&apos;t looking at, and a ringtone when someone calls you. Quiet conversations stay silent.</p></div>
-    <button type="button" role="switch" aria-checked={on} aria-label="Notification sounds" onClick={toggle}
+    <UiButton tooltip="Notification sounds" type="button" role="switch" aria-checked={on} aria-label="Notification sounds" onClick={toggle}
       className={`relative mt-1 h-6 w-11 shrink-0 rounded-full transition ${on ? 'bg-brand' : 'bg-white/20'}`}>
-      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-[#fff] shadow transition-all ${on ? 'left-[22px]' : 'left-0.5'}`} /></button>
+      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-[#fff] shadow transition-all ${on ? 'left-[22px]' : 'left-0.5'}`} /></UiButton>
   </section>;
 }
 
@@ -243,9 +245,9 @@ function NotificationsCard() {
     {!prefs ? !error && <div role="status" aria-label="Loading notification settings" className="mt-4 h-40 animate-pulse rounded-xl bg-white/5" />
       : <ul className="mt-3 divide-y divide-white/10">{notificationTypes.map(type => <li key={type} className="flex items-start justify-between gap-4 py-3">
         <div><p id={`pref-${type}`} className="font-medium">{TYPE_LABELS[type].title}</p><p className="text-sm text-white/60">{TYPE_LABELS[type].hint}</p></div>
-        <button type="button" role="switch" aria-checked={prefs[type]} aria-labelledby={`pref-${type}`} onClick={() => void toggle(type)}
+        <UiButton type="button" role="switch" aria-checked={prefs[type]} aria-labelledby={`pref-${type}`} onClick={() => void toggle(type)}
           className={`relative mt-1 h-6 w-11 shrink-0 rounded-full transition ${prefs[type] ? 'bg-brand' : 'bg-white/20'}`}>
-          <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-[#fff] shadow transition-all ${prefs[type] ? 'left-[22px]' : 'left-0.5'}`} /></button>
+          <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-[#fff] shadow transition-all ${prefs[type] ? 'left-[22px]' : 'left-0.5'}`} /></UiButton>
       </li>)}</ul>}
   </section>;
 }
@@ -272,7 +274,7 @@ function BlockedCard() {
       : <ul className="mt-3 divide-y divide-white/10">{list.map(person => <li key={person.id} className="flex items-center gap-3 py-3">
         <Avatar name={person.username} src={person.avatar_url} size={36} />
         <Link href={`/u/${person.username}`} className="flex-1 truncate font-medium hover:underline">{person.username}</Link>
-        <button type="button" className="btn-ghost" onClick={() => void unblock(person)}>Unblock</button>
+        <UiButton type="button" className="btn-ghost" onClick={() => void unblock(person)}>Unblock</UiButton>
       </li>)}</ul>}
   </section>;
 }
@@ -287,8 +289,8 @@ export default function SettingsPage() {
     <h1 className="mb-6 text-3xl font-extrabold tracking-tight">Settings</h1>
     <div className="grid gap-6 md:grid-cols-[200px_1fr]">
       <nav aria-label="Settings sections" className="flex gap-1 overflow-x-auto md:flex-col">
-        {sections.map(([id, label]) => <button key={id} type="button" aria-current={section === id ? 'page' : undefined} onClick={() => setSection(id)}
-          className={`whitespace-nowrap rounded-xl px-3 py-2 text-left text-sm font-medium transition ${section === id ? 'bg-brand-soft text-brand' : 'text-white/65 hover:bg-[var(--surface-2)] hover:text-white'}`}>{label}</button>)}
+        {sections.map(([id, label]) => <UiButton key={id} type="button" aria-current={section === id ? 'page' : undefined} onClick={() => setSection(id)}
+          className={`whitespace-nowrap rounded-xl px-3 py-2 text-left justify-start text-sm font-medium transition ${section === id ? 'bg-brand-soft text-brand' : 'text-white/65 hover:bg-[var(--surface-2)] hover:text-white'}`}>{label}</UiButton>)}
         <Link href="/communities/manage" className="rounded-xl px-3 py-2 text-sm text-brand">Manage communities</Link>
       </nav>
       <div className="min-w-0">

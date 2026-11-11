@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, Input as UiInput, Select as UiSelect } from '@hive/ui';
+
 import type { FormEvent } from 'react';
 import { commandCreateSchema } from '@hive/shared';
 import { apiData, requestError } from '../../lib/spaces';
@@ -26,15 +28,15 @@ export function CommandsSection({ slug, bots, commands, reload, fail }: {
       <ul className="space-y-2">{commands.map(command => <li key={command.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 p-3">
         <div className="min-w-0 flex-1"><p className="font-medium">/{command.name} <span className="font-normal text-white/60">{command.usage !== `/${command.name}` ? command.usage : ''}</span></p>
           <p className="text-xs text-white/60">{command.description || 'No description'} · answered by {command.botName}</p></div>
-        <button type="button" className="text-rose-500" onClick={() => void remove(command)}>Delete</button>
+        <UiButton type="button" className="text-rose-500" onClick={() => void remove(command)}>Delete</UiButton>
       </li>)}</ul>}
     {!usable.length ? <p className="text-sm text-white/60">Create a bot with an address first: commands are sent there.</p> :
       <form onSubmit={create} className="flex flex-wrap items-end gap-3">
-        <label className="w-36 text-sm">Command<input name="name" className="auth-input" required maxLength={33} placeholder="/standup" /></label>
-        <label className="text-sm">Answered by<select name="botId" className="auth-input" required>{usable.map(bot => <option key={bot.id} value={bot.id}>{bot.name}</option>)}</select></label>
-        <label className="min-w-40 flex-1 text-sm">Description<input name="description" className="auth-input" maxLength={200} placeholder="Post today's stand-up notes" /></label>
-        <label className="min-w-40 flex-1 text-sm">Example<input name="usage" className="auth-input" maxLength={120} placeholder="/standup done: …" /></label>
-        <button className="auth-button">Add command</button>
+        <label className="w-36 text-sm">Command<UiInput name="name" className="auth-input" required maxLength={33} placeholder="/standup" /></label>
+        <label className="text-sm">Answered by<UiSelect aria-label="Answered by" name="botId" className="auth-input" required>{usable.map(bot => <option key={bot.id} value={bot.id}>{bot.name}</option>)}</UiSelect></label>
+        <label className="min-w-40 flex-1 text-sm">Description<UiInput name="description" className="auth-input" maxLength={200} placeholder="Post today's stand-up notes" /></label>
+        <label className="min-w-40 flex-1 text-sm">Example<UiInput name="usage" className="auth-input" maxLength={120} placeholder="/standup done: …" /></label>
+        <UiButton className="auth-button">Add command</UiButton>
       </form>}
   </Section>;
 }

@@ -1,0 +1,110 @@
+/* Shared primitives consume the host application's semantic tokens. */
+:where(.ui-button, .ui-input, .ui-textarea, .ui-select-trigger) { border-radius: var(--radius-md); font: inherit; }
+:where(.ui-button) { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: 32px; min-width: 32px; padding: 6px 12px; font-size: 14px; font-weight: 500; cursor: pointer; }
+:where(.ui-button[data-variant='primary']) { background: var(--brand); color: var(--on-brand); }
+:where(.ui-button[data-variant='secondary']) { background: var(--surface); color: var(--fg); border: 1px solid var(--border); }
+:where(.ui-button[data-variant='ghost']) { color: inherit; }
+:where(.ui-button[data-variant='danger']) { background: var(--danger); color: var(--on-danger); }
+:where(.ui-button[data-size='sm']) { padding: 4px 8px; font-size: 12px; }
+:where(.ui-button[data-size='lg']) { min-height: 44px; padding: 10px 20px; }
+.ui-button[data-icon-only='true'] { width: 32px; min-width: 32px; padding: 0; }
+:where(.ui-button):disabled { cursor: not-allowed; opacity: 0.5; }
+:where(.ui-button):not(:disabled):hover { filter: brightness(0.96); }
+:where(.ui-button, .ui-input, .ui-textarea, .ui-checkbox, .ui-radio, .ui-select-trigger, .ui-switch, .ui-slider, .ui-tab, .ui-menu-item, .ui-select-item):focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.ui-field { display: flex; min-width: 0; flex-direction: column; gap: 6px; }
+.ui-label { font-size: 14px; font-weight: 500; }
+.ui-help { display: block; margin: 4px 0 12px; font-size: 13px; font-weight: 400; color: var(--muted); }
+.ui-error { display: block; font-size: 13px; color: var(--danger-text); }
+:where(.ui-input, .ui-textarea) { box-sizing: border-box; width: 100%; min-height: 36px; border: 1px solid var(--border); background: var(--surface); color: var(--fg); padding: 8px 12px; }
+:where(.ui-input, .ui-textarea)[aria-invalid='true'] { border-color: var(--danger-text); }
+:where(.ui-input, .ui-textarea):disabled { opacity: 0.5; cursor: not-allowed; }
+.ui-input-wrap { position: relative; display: flex; align-items: center; }
+.ui-input-wrap:has(.ui-leading) .ui-input { padding-inline-start: 36px; }
+.ui-input-wrap:has(.ui-password) .ui-input { padding-inline-end: 64px; }
+.ui-leading { position: absolute; inset-inline-start: 12px; color: var(--muted); }
+.ui-password { position: absolute; inset-inline-end: 4px; bottom: 2px; font-size: 12px; }
+.ui-textarea { min-height: 80px; resize: vertical; }
+:where(.ui-checkbox, .ui-radio) { appearance: none; display: inline-grid; place-content: center; width: 32px; height: 32px; min-width: 32px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; vertical-align: middle; flex-shrink: 0; }
+.ui-checkbox { border-radius: 8px; }
+.ui-checkbox:checked { background: var(--brand); border-color: var(--brand); }
+.ui-checkbox:checked::after { content: '✓'; color: var(--on-brand); font-size: 22px; }
+.ui-radio { border-radius: 50%; }
+.ui-radio:checked, .ui-radio[data-state='checked'] { border: 8px solid var(--brand); }
+.ui-radio-group, .ui-radio-group label { display: flex; align-items: center; gap: 12px; }
+.ui-switch { display: inline-flex; width: 48px; height: 32px; min-width: 48px; align-items: center; border-radius: 999px; padding: 4px; background: var(--control-off); }
+.ui-switch[data-state='checked'] { background: var(--brand); }
+.ui-switch-thumb { height: 24px; width: 24px; border-radius: 50%; background: var(--rail-fg); transition: transform 140ms; }
+.ui-switch-thumb[data-state='checked'] { transform: translateX(16px); }
+.ui-switch:disabled { opacity: 0.5; }
+.ui-slider { min-width: 120px; min-height: 32px; accent-color: var(--brand); cursor: pointer; }
+.ui-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 3px 8px; font-size: 12px; background: var(--surface-2); color: var(--fg); }
+.ui-badge[data-tone='accent'] { background: var(--brand-soft); color: var(--brand-soft-fg); }
+.ui-badge[data-tone='danger'] { background: var(--danger-soft); color: var(--danger-text); }
+.ui-skeleton { min-height: 20px; border-radius: var(--radius-md); background: var(--surface-2); }
+.ui-separator { width: 100%; height: 1px; margin: 12px 0; background: var(--border); }
+.ui-tab-list { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border); }
+.ui-tab { min-height: 36px; min-width: 32px; border-bottom: 2px solid transparent; padding: 8px 12px; color: var(--muted); }
+.ui-tab[data-state='active'] { color: var(--brand-soft-fg); border-bottom-color: var(--brand); }
+.ui-tab-panel { padding: 16px 0; }
+.ui-popover, .ui-select-content, .ui-menu { z-index: 100; max-width: calc(100vw - 24px); max-height: var(--radix-popper-available-height, 70dvh); overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--fg-base); padding: 8px; box-shadow: var(--shadow-pop); font-size: 14px; }
+.ui-popover { min-width: 220px; }
+.ui-menu { min-width: 200px; }
+.ui-menu-header { display: grid; gap: 2px; padding: 8px 12px 10px; color: var(--fg-base); font-weight: 600; }
+.ui-menu-subtitle { color: var(--muted); font-size: 12px; font-weight: 400; }
+.ui-menu [data-radix-popper-content-wrapper] { z-index: 100; }
+.ui-menu-item, .ui-select-item { display: flex; min-height: 36px; width: 100%; align-items: center; justify-content: space-between; gap: 12px; border-radius: 8px; padding: 8px 12px; cursor: pointer; text-align: start; }
+.ui-menu-item[data-highlighted], .ui-select-item[data-highlighted], .ui-select-item[data-active='true'] { background: var(--brand-soft); color: var(--brand-soft-fg); }
+.ui-menu-item[data-danger='true'] { color: var(--danger-text); }
+.ui-menu-item[data-disabled], .ui-select-item[data-disabled] { opacity: 0.45; cursor: not-allowed; }
+.ui-select-trigger { display: inline-flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--border); padding: 8px 12px; background: var(--surface); color: var(--fg-base); }
+.ui-select-content { min-width: var(--radix-select-trigger-width); max-height: min(320px, var(--radix-select-content-available-height)); }
+.ui-select-scroll { text-align: center; }
+.ui-form-value { display: none; }
+.ui-combobox-list { max-height: 240px; overflow-y: auto; margin-top: 8px; }
+.ui-modal-overlay { position: fixed; inset: 0; z-index: 110; background: var(--overlay); }
+.ui-dialog { position: fixed; top: 50%; left: 50%; z-index: 111; width: min(480px, calc(100vw - 32px)); max-height: 85dvh; overflow-y: auto; transform: translate(-50%, -50%); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; background: var(--surface); color: var(--fg-base); box-shadow: var(--shadow-pop); }
+.ui-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; font-size: 18px; font-weight: 600; }
+.ui-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+.ui-picker { display: inline-flex; min-width: 0; }
+.ui-picker-trigger { gap: 12px; width: 100%; justify-content: space-between; }
+.ui-time-picker, .ui-date-time { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ui-time-picker .ui-select-trigger { min-width: 62px; padding: 6px 8px; }
+.ui-calendar { --rdp-accent-color: var(--brand); --rdp-accent-background-color: var(--brand-soft); }
+.ui-calendar .rdp-months { position: relative; display: flex; }
+.ui-calendar .rdp-month-caption { display: flex; align-items: center; height: 44px; padding: 0 68px 0 8px; font-weight: 600; }
+.ui-calendar .rdp-nav { position: absolute; top: 0; right: 0; display: flex; }
+.ui-calendar .rdp-button_previous, .ui-calendar .rdp-button_next { display: flex; align-items: center; justify-content: center; width: 32px; height: 44px; border-radius: 8px; }
+.ui-calendar .rdp-chevron { width: 18px; height: 18px; fill: var(--fg); }
+.ui-calendar .rdp-weekday { width: 36px; height: 32px; font-size: 12px; font-weight: 500; color: var(--muted); }
+.ui-calendar .rdp-day_button { width: 36px; height: 36px; border-radius: 8px; }
+.ui-calendar .rdp-selected .rdp-day_button { background: var(--brand); color: var(--on-brand); font-weight: 600; }
+.ui-calendar .rdp-today:not(.rdp-selected) .rdp-day_button { border: 1px solid var(--brand); }
+.ui-calendar .rdp-disabled { opacity: 0.35; }
+.ui-calendar button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.ui-dropzone { padding: 20px; border: 1px dashed var(--border); border-radius: var(--radius-md); }
+.ui-file-input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.ui-file-list { display: flex; flex-wrap: wrap; gap: 12px; }
+.ui-file-list li { display: flex; width: 160px; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-md); font-size: 12px; overflow-wrap: anywhere; }
+.ui-file-list img, .ui-file-list video { width: 100%; height: 90px; object-fit: contain; }
+.ui-file-list progress { width: 100%; accent-color: var(--brand); }
+.ui-swatches { display: flex; gap: 8px; }
+.ui-swatch { width: 36px; height: 36px; padding: 0; border: 2px solid var(--border); }
+.ui-swatch[aria-pressed='true'] { outline: 2px solid var(--brand); outline-offset: 2px; }
+.ui-emoji-picker { max-width: 100%; }
+.ui-emoji-picker em-emoji-picker { --background-rgb: var(--emoji-background-rgb); --color-border: var(--border); --border-radius: var(--radius-md); width: min(340px, calc(100vw - 32px)); }
+[data-sonner-toaster] .ui-toast { background: var(--surface); color: var(--fg-base); border: 1px solid var(--border); box-shadow: var(--shadow-pop); }
+[data-sonner-toaster] .ui-toast-action { background: var(--brand); color: var(--on-brand); }
+.ui-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; }
+@media (prefers-reduced-motion: no-preference) { .ui-spinner { animation: ui-spin 700ms linear infinite; } .ui-skeleton { animation: ui-pulse 1.5s ease-in-out infinite; } }
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+@keyframes ui-pulse { 50% { opacity: 0.5; } }
+@media (prefers-reduced-motion: reduce) { .ui-switch-thumb, [data-sonner-toast] { animation: none !important; transition: none !important; } }
+@media (pointer: coarse), (width < 760px) {
+  :where(.ui-button, .ui-input, .ui-textarea, .ui-checkbox, .ui-radio, .ui-switch, .ui-slider, .ui-select-trigger, .ui-tab, .ui-menu-item, .ui-select-item) { min-height: 44px; min-width: 44px; }
+  .ui-button[data-icon-only='true'] { width: 44px; min-width: 44px; }
+  .ui-calendar .rdp-day_button { width: 44px; height: 44px; }
+  .ui-calendar .rdp-button_previous, .ui-calendar .rdp-button_next { width: 44px; }
+}
+
+.ui-radio-group { flex-wrap: wrap; }
+[data-sonner-toaster] .ui-toast-close { background: var(--surface); color: var(--fg-base); border-color: var(--border); }

@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, Input as UiInput, Checkbox as UiCheckbox } from '@hive/ui';
+
 import { useEffect, useState, type FormEvent } from 'react';
 import { channelCreateSchema } from '@hive/shared';
 import { apiData, requestError, type Channel, type Space } from '../../lib/spaces';
@@ -35,28 +37,28 @@ export function CreateChannelDialog({ space, onCreated, onClose }: {
   }
 
   return <div className="on-surface fixed inset-0 z-50 flex items-center justify-center p-4">
-    <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-[rgb(0_0_0/0.5)]" />
+    <UiButton tooltip="Close" type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-[rgb(0_0_0/0.5)]" />
     <form role="dialog" aria-modal="true" aria-label="Create channel" onSubmit={submit} className="card relative w-full max-w-md space-y-4 p-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold">Create a channel</h2>
-        <button type="button" onClick={onClose} aria-label="Close dialog" className="rounded p-1 text-white/60 hover:bg-white/10"><Icon name="x" size={18} /></button>
+        <UiButton tooltip="Close dialog" type="button" onClick={onClose} aria-label="Close dialog" className="rounded p-1 text-white/60 hover:bg-white/10"><Icon name="x" size={18} /></UiButton>
       </div>
       <label className="block text-sm font-medium">Name
-        <input className="auth-input" autoFocus required maxLength={80} value={name} placeholder="project-updates"
+        <UiInput className="auth-input" autoFocus required maxLength={80} value={name} placeholder="project-updates"
           onChange={event => setName(toName(event.target.value))} />
         <span className="font-normal text-white/55">Lowercase letters, numbers and dashes.</span></label>
       <label className="block text-sm font-medium">Topic
-        <input className="auth-input" maxLength={250} value={topic} onChange={event => setTopic(event.target.value)} />
+        <UiInput className="auth-input" maxLength={250} value={topic} onChange={event => setTopic(event.target.value)} />
         <span className="font-normal text-white/55">Optional. What is this channel about?</span></label>
       <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-brand-soft p-3">
-        <input type="checkbox" role="switch" className="mt-1" checked={isPrivate} onChange={event => setIsPrivate(event.target.checked)} />
+        <UiCheckbox role="switch" className="mt-1" checked={isPrivate} onChange={event => setIsPrivate(event.target.checked)} />
         <span><span className="flex items-center gap-1.5 text-sm font-semibold"><Icon name="lock" size={14} />Make private</span>
           <span className="text-sm text-white/60">Only people you add can see this channel.</span></span>
       </label>
       {error && <p role="alert" className="text-sm text-rose-500">{error}</p>}
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
-        <button disabled={busy || !name} className="auth-button">{busy ? 'Creating…' : 'Create channel'}</button>
+        <UiButton type="button" onClick={onClose} className="btn-ghost">Cancel</UiButton>
+        <UiButton disabled={busy || !name} className="auth-button">{busy ? 'Creating…' : 'Create channel'}</UiButton>
       </div>
     </form>
   </div>;

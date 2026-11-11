@@ -1,5 +1,9 @@
 'use client';
 
+import { Tooltip as UiTooltip } from '@hive/ui';
+
+import { Button as UiButton, Select as UiSelect } from '@hive/ui';
+
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -79,20 +83,20 @@ export default function MembersPage() {
           && member.user.id !== user?.id;
         const choices = roles.filter(role => rank[role] < rankYou);
         return <li key={member.user.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <div><span aria-label={member.online ? 'Online' : 'Offline'} className={`mr-2 inline-block h-2 w-2 rounded-full ${member.online ? 'bg-emerald-400' : 'bg-white/20'}`} /><Link href={`/u/${member.user.username}`} className="font-medium hover:underline">{member.user.username}</Link> <StatusMark person={member.user} /> {member.top_player && <span title="Top 3 players last week" className="ml-1 rounded-full bg-brand-soft px-2 py-0.5 text-xs font-semibold text-brand">Top player</span>}
+          <div><span aria-label={member.online ? 'Online' : 'Offline'} className={`mr-2 inline-block h-2 w-2 rounded-full ${member.online ? 'bg-emerald-400' : 'bg-white/20'}`} /><Link href={`/u/${member.user.username}`} className="font-medium hover:underline">{member.user.username}</Link> <StatusMark person={member.user} /> {member.top_player && <UiTooltip content="Top 3 players last week"><span className="ml-1 rounded-full bg-brand-soft px-2 py-0.5 text-xs font-semibold text-brand">Top player</span></UiTooltip>}
             <span className="ml-3 rounded bg-white/10 px-2 py-1 text-xs capitalize">{member.role}</span></div>
           {(mayChangeRole || mayKick || (user && space?.my_role && member.user.id !== user.id)) && <div className="flex items-center gap-2">
-            {user && space?.my_role && member.user.id !== user.id && <button onClick={() => message(member)} className="text-sm text-amber-400">Message</button>}
-            {mayChangeRole && <select aria-label={`Role for ${member.user.username}`} defaultValue={member.role ?? 'guest'}
+            {user && space?.my_role && member.user.id !== user.id && <UiButton onClick={() => message(member)} className="text-sm text-amber-400">Message</UiButton>}
+            {mayChangeRole && <UiSelect aria-label={`Role for ${member.user.username}`} defaultValue={member.role ?? 'guest'}
               onChange={event => updateRole(member, event.target.value)} className="rounded bg-surface px-2 py-1">
               <option value={member.role ?? 'guest'} disabled>Change role</option>
               {choices.map(role => <option key={role} value={role}>{role}</option>)}
-            </select>}
-            {mayKick && <button onClick={() => remove(member)} className="text-sm text-rose-400">Remove</button>}
+            </UiSelect>}
+            {mayKick && <UiButton onClick={() => remove(member)} className="text-sm text-rose-400">Remove</UiButton>}
           </div>}
         </li>;
       })}
     </ul>
-    {cursor && <button onClick={more} className="auth-button mt-5">Load more</button>}
+    {cursor && <UiButton onClick={more} className="auth-button mt-5">Load more</UiButton>}
   </main>;
 }

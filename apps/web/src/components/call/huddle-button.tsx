@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { useState } from 'react';
 import { calls } from '../../lib/call';
 import { useHuddles } from '../../lib/huddles';
@@ -34,17 +36,17 @@ export function HuddleButton({ channelId, title, ring = false }: { channelId: st
 
   const label = inThis ? 'Open the huddle window' : count ? `Join the huddle with ${huddle.users.map(user => user.username).join(', ')}` : 'Start a huddle';
   return <div className="relative shrink-0">
-    <button type="button" onClick={() => void toggle()} aria-label={label} title={label} aria-pressed={inThis}
+    <UiButton type="button" onClick={() => void toggle()} aria-label={label} tooltip={label} aria-pressed={inThis}
       className={count || inThis
         ? 'flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1.5 text-sm font-semibold transition hover:bg-emerald-700'
         : 'btn-ghost !px-2.5 !py-1.5'}
-      style={count || inThis ? { color: '#fff' } : undefined}>
+      style={count || inThis ? { color: 'var(--rail-fg)' } : undefined}>
       <Icon name="headphones" size={16} />
       <span className={count || inThis ? '' : 'max-sm:sr-only'}>{count ? `Huddle · ${count}` : 'Huddle'}</span>
       {count > 0 && <span className="-space-x-1.5 flex max-sm:hidden" aria-hidden>
         {huddle.users.slice(0, 3).map(user => <span key={user.id} className="rounded-full ring-2 ring-emerald-600"><Avatar name={user.username} src={user.avatarUrl} size={20} /></span>)}
       </span>}
-    </button>
+    </UiButton>
     {error && <p role="alert" className="on-surface card absolute right-0 top-full z-20 mt-1 w-64 p-2 text-xs text-rose-500">{error}</p>}
   </div>;
 }

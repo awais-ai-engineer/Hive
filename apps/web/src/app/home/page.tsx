@@ -1,10 +1,13 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { playMessageSound } from '../../lib/sounds';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { CallDock } from '../../components/call/call-dock';
+import { calls } from '../../lib/call';
 import { VoiceRoom } from '../../components/call/voice-room';
 import { ChannelChat } from '../../components/channel-chat';
 import { PostFeed } from '../../components/posts/post-feed';
@@ -76,6 +79,9 @@ function Home() {
   const [todoCount, setTodoCount] = useState(0);
   const [error, setError] = useState('');
   const [drawer, setDrawer] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const switcherInitialized = useRef(false);
+  const keyboardOpenedSwitcher = useRef(false);
   const sidebar = useSidebarData(!loading && !!user);
   const notifications = useNotificationCount();
   const prefs = useRef(sidebar.data.prefs);
@@ -84,6 +90,44 @@ function Home() {
   const preferredSlug = slugParam ?? (spacesReady ? loadSetting<string | null>(LAST_SPACE, null) : null);
   const slug = spacesReady && !spaces.some(item => item.slug === preferredSlug) ? spaces[0]?.slug ?? null : preferredSlug;
   const space = spaces.find(item => item.slug === slug) ?? null;
+
+  useEffect(() => {
+    if (!spacesReady || switcherInitialized.current) return;
+    switcherInitialized.current = true;
+    try {
+      const saved = localStorage.getItem('hive.switcher.open');
+      setSwitcherOpen(saved === null ? spaces.length > 1 : saved === 'true');
+    } catch { setSwitcherOpen(spaces.length > 1); }
+  }, [spacesReady, spaces.length]);
+  const saveSwitcherState = useCallback((next: boolean) => {
+    setSwitcherOpen(next);
+    try { localStorage.setItem('hive.switcher.open', String(next)); } catch { /* storage unavailable */ }
+  }, []);
+  const toggleSwitcher = useCallback(() => {
+    keyboardOpenedSwitcher.current = false;
+    setSwitcherOpen(open => {
+      const next = !open;
+      try { localStorage.setItem('hive.switcher.open', String(next)); } catch { /* storage unavailable */ }
+      return next;
+    });
+  }, []);
+  const openSwitcher = useCallback(() => saveSwitcherState(true), [saveSwitcherState]);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && document.querySelector('[role="menu"], [role="dialog"], [role="alertdialog"]')) return;
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 's' && spaces.length > 1) {
+        event.preventDefault();
+        const opening = !switcherOpen;
+        keyboardOpenedSwitcher.current = opening;
+        saveSwitcherState(opening);
+      } else if (event.key === 'Escape' && switcherOpen && keyboardOpenedSwitcher.current) {
+        keyboardOpenedSwitcher.current = false;
+        saveSwitcherState(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [spaces.length, switcherOpen, saveSwitcherState]);
 
   const go = useCallback((params: Record<string, string | null | undefined>) => {
     const next = new URLSearchParams();
@@ -259,6 +303,13 @@ function Home() {
     await loadChannels().catch(() => {});
     go({ c: created.id });
   }
+  function startHuddle() {
+    const voice = channels.find(item => item.type === 'voice');
+    if (!voice) { go({ view: 'directory', dir: 'channels' }); return; }
+    void calls.join(voice.id, `${space?.name ?? 'Space'} huddle`).then(() => {
+      if (calls.getState().status !== 'error') calls.setStageOpen(true);
+    });
+  }
 
   const reloadTimers = useCallback(() => { loadConversations(); void loadChannels().catch(() => {}); }, [loadConversations, loadChannels]);
   useEffect(() => {
@@ -341,37 +392,38 @@ function Home() {
   const showView = view === 'unreads' || view === 'threads' || view === 'directory' || view === 'todos' || view === 'drafts' || view === 'inbox' || view === 'saved' || view === 'files' || (!conversation && !channel);
   const activeView = view === 'directory' || view === 'todos' || view === 'drafts' || view === 'saved' || view === 'files' || view === 'inbox' ? view : showView && view !== 'threads' ? 'unreads' : view;
   const threadChange = (id: string | null) => go({ c: selected, t: id });
+  const headerProps = { onToggleSwitcher: toggleSwitcher, switcherOpen, canToggleSwitcher: spaces.length > 1 };
 
   let main;
   if (view === 'todos' && user) {
     main = <>
-      <ChatHeader title="Tasks" onMenu={() => setDrawer(true)} />
+      <ChatHeader {...headerProps} title="Tasks" onMenu={() => setDrawer(true)} />
       <TodosView userId={user.id} />
     </>;
   } else if (view === 'inbox') {
     main = <>
-      <ChatHeader title="Activity" onMenu={() => setDrawer(true)} />
+      <ChatHeader {...headerProps} title="Activity" onMenu={() => setDrawer(true)} />
       <InboxView />
     </>;
   } else if (view === 'saved') {
     main = <>
-      <ChatHeader title="Saved items" onMenu={() => setDrawer(true)} />
+      <ChatHeader {...headerProps} title="Saved items" onMenu={() => setDrawer(true)} />
       <SavedView />
     </>;
   } else if (view === 'files') {
     main = <>
-      <ChatHeader title="All files" onMenu={() => setDrawer(true)} />
+      <ChatHeader {...headerProps} title="All files" onMenu={() => setDrawer(true)} />
       <FilesView spaces={spaces} />
     </>;
   } else if (view === 'directory') {
     main = <>
-      <ChatHeader title="Directories" onMenu={() => setDrawer(true)} />
+      <ChatHeader {...headerProps} title="Directories" onMenu={() => setDrawer(true)} />
       <DirectoryView space={space} tab={directoryTab} onTab={next => go({ view: 'directory', dir: next === 'channels' ? 'channels' : null })}
         onMessage={username => void openPerson(username)} onOpenChannel={id => go({ c: id })} />
     </>;
   } else if (conversation) {
     main = <>
-      <ChatHeader conversation={conversation} tab={tab} onTab={next => go({ c: conversation.id, tab: next === 'messages' ? null : next })}
+      <ChatHeader {...headerProps} conversation={conversation} tab={tab} onTab={next => go({ c: conversation.id, tab: next === 'messages' ? null : next })}
         onMenu={() => setDrawer(true)} onError={setError} onTimerChanged={reloadTimers} {...controls(conversation.id)} />
       {tab === 'files' ? <FilesView key={conversation.id} channelId={conversation.id} />
         : tab === 'docs' && user ? <DocsView key={conversation.id} channelId={conversation.id} userId={user.id} canWrite docId={docParam}
@@ -385,7 +437,7 @@ function Home() {
     </>;
   } else if (channel && space) {
     main = <>
-      <ChatHeader channel={channel} space={space} tab={tab} onTab={next => go({ c: channel.id, tab: next === 'messages' ? null : next })}
+      <ChatHeader {...headerProps} channel={channel} space={space} tab={tab} onTab={next => go({ c: channel.id, tab: next === 'messages' ? null : next })}
         onMenu={() => setDrawer(true)} onError={setError} onTimerChanged={reloadTimers} {...controls(channel.id)}
         onLeft={() => { void loadChannels().catch(() => {}); go({ c: null }); }} />
       {channel.type === 'voice' ? <VoiceRoom channelId={channel.id} title={channel.name}
@@ -406,17 +458,17 @@ function Home() {
     </>;
   } else if (view === 'drafts') {
     main = <>
-      <ChatHeader title="Drafts & scheduled" onMenu={() => setDrawer(true)} />
+      <ChatHeader {...headerProps} title="Drafts & scheduled" onMenu={() => setDrawer(true)} />
       <DraftsView onOpen={(place, threadId) => openPlace(place, threadId ?? undefined)} />
     </>;
   } else if (view === 'threads') {
     main = <>
-      <ChatHeader title="Threads" onMenu={() => setDrawer(true)} />
+      <ChatHeader {...headerProps} title="Threads" onMenu={() => setDrawer(true)} />
       <ThreadsView version={threadsVersion} userId={user?.id} onOpen={item => openPlace(item.channel, item.parent.id)} />
     </>;
   } else {
     main = <>
-      <ChatHeader title="Unreads" onMenu={() => setDrawer(true)} />
+      <ChatHeader {...headerProps} title="Unreads" onMenu={() => setDrawer(true)} />
       {selected && conversations.length + channels.length > 0 && <p className="mb-3 text-sm text-white/50">That conversation isn&apos;t in this space. Showing your unread messages instead.</p>}
       <UnreadsView items={unreads} ready={unreadsReady} userId={user?.id} onOpen={(place, threadId) => openPlace(place, threadId)} onMarkRead={markUnreadItem} />
     </>;
@@ -424,8 +476,9 @@ function Home() {
 
   // Full-screen app shell: workspace rail, purple sidebar, then the open conversation.
   return <main className="hive-home flex h-dvh overflow-hidden bg-canvas">
-    {drawer && <button type="button" aria-label="Close sidebar" onClick={() => setDrawer(false)} className="sidebar-backdrop fixed inset-0 z-30 bg-[rgb(0_0_0/0.5)]" />}
-    <Rail spaces={spaces} current={space?.slug ?? null} onSwitch={next => go({ s: next })} unread={notifications} todos={todoCount} />
+    {drawer && <UiButton tooltip="Close sidebar" type="button" aria-label="Close sidebar" onClick={() => setDrawer(false)} className="sidebar-backdrop fixed inset-0 z-30 bg-[rgb(0_0_0/0.5)]" />}
+    <Rail spaces={spaces} current={space?.slug ?? null} onSwitch={next => go({ s: next })} unread={notifications} todos={todoCount}
+      switcherOpen={switcherOpen} onToggleSwitcher={toggleSwitcher} onOpenSwitcher={openSwitcher} onMore={() => setDrawer(true)} onNewHuddle={startHuddle} />
     <div className={`home-sidebar ${drawer ? 'home-sidebar-open' : ''}`}>
       <aside className="h-full w-[min(80vw,280px)] min-[760px]:w-[280px]">
         <Sidebar spaces={spaces} space={space} channels={channels} conversations={conversations}
@@ -433,6 +486,7 @@ function Home() {
           unreadTotal={unreadTotal} threadsUnread={threadsUnread}
           data={sidebar.data} update={sidebar.setData} onChanged={sidebar.reload}
           onBrowseChannels={() => go({ view: 'directory', dir: 'channels' })}
+          onOpenSwitcher={openSwitcher}
           onSwitchSpace={next => go({ s: next })} onOpen={id => go({ c: id })} onConversation={addConversation} onView={next => go({ view: next })}
           onChannelCreated={channel => void channelCreated(channel)} />
       </aside>

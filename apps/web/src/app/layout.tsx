@@ -3,6 +3,7 @@ import { I18nProvider } from '../lib/i18n';
 import { Inter, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '../lib/auth';
+import { ConfirmationProvider, ToastHost } from '@hive/ui';
 import Nav from '../components/nav';
 import { SearchPalette } from '../components/search/search-palette';
 import { AuthGate } from '../components/auth-gate';
@@ -35,7 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`} suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body className="min-h-screen font-sans antialiased">
-        <I18nProvider><AuthProvider><PwaSetup /><Nav /><SearchPalette /><AuthGate>{children}</AuthGate></AuthProvider></I18nProvider>
+        <I18nProvider><AuthProvider><PwaSetup /><Nav /><SearchPalette /><AuthGate>{children}</AuthGate><ConfirmationProvider /><ToastHost /></AuthProvider></I18nProvider>
       </body>
     </html>
   );

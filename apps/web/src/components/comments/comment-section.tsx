@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Comment } from '@hive/shared';
@@ -269,7 +271,7 @@ export function CommentSection({ postId, space, postDeleted }: Props) {
         <div className="flex items-center gap-2 text-xs">
           <span className="text-white/40">Sort by:</span>
           {['best', 'top', 'new', 'old'].map(option => (
-            <button
+            <UiButton
               key={option}
               aria-pressed={sort === option}
               onClick={() => changeSort(option)}
@@ -280,7 +282,7 @@ export function CommentSection({ postId, space, postDeleted }: Props) {
               }`}
             >
               {option}
-            </button>
+            </UiButton>
           ))}
         </div>
       </div>
@@ -300,12 +302,12 @@ export function CommentSection({ postId, space, postDeleted }: Props) {
       {/* Fresh Comments Pill */}
       {freshCount > 0 && (
         <div className="mb-4 text-center">
-          <button
+          <UiButton
             onClick={() => void load()}
             className="rounded-full border border-amber-400/40 bg-amber-400/15 px-4 py-1.5 text-xs font-semibold text-amber-400 shadow-sm hover:bg-amber-400/25"
           >
             {freshCount} new {freshCount === 1 ? 'comment' : 'comments'} — show
-          </button>
+          </UiButton>
         </div>
       )}
 
@@ -318,12 +320,12 @@ export function CommentSection({ postId, space, postDeleted }: Props) {
       {/* Continue this thread focused view */}
       {focusedThread ? (
         <div>
-          <button
+          <UiButton
             onClick={() => setFocusedThread(null)}
             className="mb-4 inline-flex items-center gap-1.5 text-xs font-medium text-amber-400 hover:underline"
           >
             ← Back to all comments
-          </button>
+          </UiButton>
           <CommentTree
             comment={focusedThread}
             postId={postId}
@@ -375,13 +377,13 @@ export function CommentSection({ postId, space, postDeleted }: Props) {
 
           {cursor && (
             <div className="mt-6 text-center">
-              <button
+              <UiButton
                 disabled={paging.current}
                 onClick={handleLoadMore}
                 className="rounded border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/80 hover:bg-white/10 hover:text-white"
               >
                 Load more comments
-              </button>
+              </UiButton>
             </div>
           )}
         </>

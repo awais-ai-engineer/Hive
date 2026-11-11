@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
 
@@ -20,9 +22,9 @@ export function Section({ id, title, intro, children }: { id: string; title: str
 
 export function CopyButton({ value, label = 'Copy' }: { value: string; label?: string }) {
   const [done, setDone] = useState(false);
-  return <button type="button" className="btn-ghost" onClick={async () => {
+  return <UiButton type="button" className="btn-ghost" onClick={async () => {
     try { await navigator.clipboard.writeText(value); setDone(true); setTimeout(() => setDone(false), 1500); } catch { /* clipboard blocked */ }
-  }}>{done ? 'Copied' : label}</button>;
+  }}>{done ? 'Copied' : label}</UiButton>;
 }
 
 export function Code({ children, label }: { children: string; label: string }) {
@@ -38,7 +40,7 @@ export function SecretBox({ label, value, note, onClose }: { label: string; valu
     <p className="font-semibold">{label}</p>
     <p className="mt-1 text-sm text-white/70">{note}</p>
     <code className="mt-2 block break-all rounded-lg bg-[var(--surface-2)] p-2 text-sm text-white">{value}</code>
-    <div className="mt-3 flex gap-2"><CopyButton value={value} /><button type="button" className="btn-ghost" onClick={onClose}>I saved it</button></div>
+    <div className="mt-3 flex gap-2"><CopyButton value={value} /><UiButton type="button" className="btn-ghost" onClick={onClose}>I saved it</UiButton></div>
   </div>;
 }
 

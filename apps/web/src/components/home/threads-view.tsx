@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { useCallback, useEffect, useState } from 'react';
 import { placeLabel, type ThreadItem } from '../../lib/home';
 import { apiData, requestError } from '../../lib/spaces';
@@ -50,12 +52,12 @@ export function ThreadsView({ version, userId, onOpen }: Props) {
             {item.latest_replies.map(message => <MessageItem key={message.id} message={message} grouped={false} userId={userId}
               canWrite={false} canModerate={false} onRetry={() => {}} onError={() => {}} />)}
           </div>
-          <button type="button" onClick={() => onOpen(item)} className="mt-2 text-sm font-semibold text-amber-400">
+          <UiButton type="button" onClick={() => onOpen(item)} className="mt-2 text-sm font-semibold text-amber-400">
             Open thread · {item.reply_count} {item.reply_count === 1 ? 'reply' : 'replies'}
-          </button>
+          </UiButton>
         </article>
       </li>;
     })}</ul>
-    {more && <button type="button" onClick={() => void load(items.at(-1)?.last_reply_id)} className="auth-button mt-4">Load more</button>}
+    {more && <UiButton type="button" onClick={() => void load(items.at(-1)?.last_reply_id)} className="auth-button mt-4">Load more</UiButton>}
   </div>;
 }

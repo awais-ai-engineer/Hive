@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, TimePicker as UiTimePicker, confirmAction as UiConfirm } from '@hive/ui';
+
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
 import { usePush } from '../lib/push';
@@ -11,9 +13,9 @@ const toTime = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart
 const toMinutes = (value: string) => { const [h, m] = value.split(':').map(Number); return h * 60 + m; };
 
 function Switch({ on, label, onClick, disabled }: { on: boolean; label: string; onClick: () => void; disabled?: boolean }) {
-  return <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={onClick}
+  return <UiButton tooltip={label} type="button" role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={onClick}
     className={`relative mt-1 h-6 w-11 shrink-0 rounded-full transition disabled:opacity-40 ${on ? 'bg-brand' : 'bg-white/20'}`}>
-    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-[#fff] shadow transition-all ${on ? 'left-[22px]' : 'left-0.5'}`} /></button>;
+    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-[var(--rail-fg)] shadow transition-all ${on ? 'left-[22px]' : 'left-0.5'}`} /></UiButton>;
 }
 
 /** Browser notifications for this device, with optional quiet hours. */
@@ -50,7 +52,7 @@ export function PushCard() {
       <Switch on={push.state === 'on'} label="Push notifications on this device" disabled={push.state !== 'on' && push.state !== 'off'}
         onClick={() => void (push.state === 'on' ? push.disable() : push.enable())} />
     </div>
-    {push.state === 'on' && <div className="mt-2"><button type="button" className="btn-ghost" onClick={() => void sendTest()}>Send a test notification</button> <span role="status" className="text-sm text-emerald-500">{note}</span></div>}
+    {push.state === 'on' && <div className="mt-2"><UiButton type="button" className="btn-ghost" onClick={() => void sendTest()}>Send a test notification</UiButton> <span role="status" className="text-sm text-emerald-500">{note}</span></div>}
     <div className="mt-5 border-t border-white/10 pt-4">
       <div className="flex items-start justify-between gap-4">
         <div><p className="font-medium">Quiet hours</p><p className="text-sm text-white/60">No push notifications during these hours. They still wait in your inbox.</p></div>
@@ -58,8 +60,8 @@ export function PushCard() {
           onClick={() => void saveQuiet(quietOn ? { quietStart: null, quietEnd: null, timezone: null } : { quietStart: 22 * 60, quietEnd: 7 * 60, timezone: zone })} />
       </div>
       {quiet && quietOn && <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-        <label>From <input type="time" className="auth-input !w-auto" value={toTime(quiet.quietStart!)} onChange={event => event.target.value && void saveQuiet({ ...quiet, quietStart: toMinutes(event.target.value), timezone: zone })} /></label>
-        <label>Until <input type="time" className="auth-input !w-auto" value={toTime(quiet.quietEnd!)} onChange={event => event.target.value && void saveQuiet({ ...quiet, quietEnd: toMinutes(event.target.value), timezone: zone })} /></label>
+        <label>From <UiTimePicker label="From" className="auth-input !w-auto" value={toTime(quiet.quietStart!)} onChange={event => event.target.value && void saveQuiet({ ...quiet, quietStart: toMinutes(event.target.value), timezone: zone })} /></label>
+        <label>Until <UiTimePicker label="Until" className="auth-input !w-auto" value={toTime(quiet.quietEnd!)} onChange={event => event.target.value && void saveQuiet({ ...quiet, quietEnd: toMinutes(event.target.value), timezone: zone })} /></label>
         <span className="text-white/50">Time zone: {quiet.timezone ?? zone}</span>
       </div>}
     </div>
@@ -73,7 +75,7 @@ export function DevicesCard() {
   const [error, setError] = useState('');
   useEffect(() => { apiData<DeviceRow[]>('/api/me/devices').then(setDevices).catch(cause => setError(requestError(cause))); }, []);
   async function remove(device: DeviceRow) {
-    if (!window.confirm(`Remove ${device.label || 'this device'}? It will no longer be able to read new secret messages.`)) return;
+    if (!await UiConfirm(`Remove ${device.label || 'this device'}? It will no longer be able to read new secret messages.`)) return;
     try {
       const response = await apiFetch(`/api/me/devices/${device.id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Could not remove the device. Please try again.');
@@ -88,7 +90,7 @@ export function DevicesCard() {
       : devices.length === 0 ? <p className="mt-3 text-sm text-white/60">No device has been set up yet. One is added the first time you open a secret conversation.</p>
         : <ul className="mt-3 divide-y divide-white/10">{devices.map(device => <li key={device.id} className="flex items-center gap-3 py-3">
           <div className="min-w-0 flex-1"><p className="truncate font-medium">{device.label || 'Browser'}</p><p className="text-xs text-white/50">Added {new Date(device.createdAt).toLocaleDateString()}</p></div>
-          <button type="button" className="btn-ghost text-rose-500" onClick={() => void remove(device)}>Remove</button>
+          <UiButton type="button" className="btn-ghost text-rose-500" onClick={() => void remove(device)}>Remove</UiButton>
         </li>)}</ul>}
   </section>;
 }

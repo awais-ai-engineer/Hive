@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { useId, useState, type CSSProperties } from 'react';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -21,14 +23,14 @@ export function SpaceIcon({ space }: { space: Space }) {
 
 function SortableTile({ space, active, expanded, onSwitch, disabled }: { space: Space; active: boolean; expanded: boolean; onSwitch: (slug: string) => void; disabled: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: space.id, disabled });
-  return <Tooltip content={space.name}><button ref={setNodeRef} type="button" {...attributes} {...listeners}
+  return <Tooltip content={space.name}><UiButton ref={setNodeRef} type="button" {...attributes} {...listeners}
     aria-label={expanded ? undefined : space.name} aria-current={active ? 'page' : undefined} onClick={() => onSwitch(space.slug)}
     style={{ transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 2 : undefined } as CSSProperties}
     className={`space-row ${active ? 'space-current' : ''} ${isDragging ? 'opacity-70' : ''}`}>
     <SpaceIcon space={space} />
-    {expanded && <><span className="min-w-0 flex-1 text-left"><span className="block truncate text-sm font-semibold">{space.name}</span><span className="block text-xs text-rail-muted">{space.member_count} members</span></span>
+    {expanded && <><span className="min-w-0 flex-1 text-left justify-start"><span className="block truncate text-sm font-semibold">{space.name}</span><span className="block text-xs text-rail-muted">{space.member_count} members</span></span>
       {space.unreadCount > 0 && <span className="text-xs text-rail-muted">{space.unreadCount > 99 ? '99+' : space.unreadCount}</span>}</>}
-  </button></Tooltip>;
+  </UiButton></Tooltip>;
 }
 
 /** Each group owns its drag context so a tile cannot cross the work/social divider. */

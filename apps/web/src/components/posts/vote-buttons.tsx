@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { useState } from 'react';
 import { vote, type VoteResult } from '../../lib/posts';
 import { requestError } from '../../lib/spaces';
@@ -63,29 +65,29 @@ export function VoteButtons({
     <div className={`flex shrink-0 items-center gap-1 ${horizontal
       ? `flex-row rounded-full border px-1 py-0.5 ${current.my_vote === 1 ? 'border-brand/40 bg-brand-soft text-brand' : current.my_vote === -1 ? 'border-rose-400/40 bg-rose-500/10 text-rose-500' : 'border-white/10 bg-[var(--surface-2)]'}`
       : 'flex-wrap sm:w-14 sm:flex-col'}`}>
-      <button
+      <UiButton
         aria-label="Upvote"
         aria-pressed={current.my_vote === 1}
         disabled={!!reason || busy}
-        title={reason || 'Upvote'}
+        tooltip={reason || 'Upvote'}
         className={`rounded px-1.5 py-0.5 text-xs focus-visible:outline-amber-400 disabled:opacity-40 ${current.my_vote === 1 ? 'text-amber-400' : 'text-white/50 hover:text-white/80'}`}
         onClick={() => void choose(1)}
       >
         ▲
-      </button>
+      </UiButton>
       <span aria-label="Score" className="min-w-5 text-center text-xs font-bold sm:text-sm">
         {current.score}
       </span>
-      <button
+      <UiButton
         aria-label="Downvote"
         aria-pressed={current.my_vote === -1}
         disabled={!!reason || busy}
-        title={reason || 'Downvote'}
+        tooltip={reason || 'Downvote'}
         className={`rounded px-1.5 py-0.5 text-xs focus-visible:outline-amber-400 disabled:opacity-40 ${current.my_vote === -1 ? 'text-amber-400' : 'text-white/50 hover:text-white/80'}`}
         onClick={() => void choose(-1)}
       >
         ▼
-      </button>
+      </UiButton>
       {error && <p role="alert" className="max-w-48 text-xs text-rose-400">{error}</p>}
     </div>
   );

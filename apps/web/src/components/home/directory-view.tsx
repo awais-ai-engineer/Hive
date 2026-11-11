@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, Input as UiInput } from '@hive/ui';
+
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { apiData, requestError, type Space } from '../../lib/spaces';
@@ -65,8 +67,8 @@ function PersonRow({ person, onMessage }: { person: Person; onMessage: (username
       </p>
     </div>
     <div className="flex shrink-0 gap-2">
-      <button type="button" onClick={() => onMessage(person.username)} className="auth-button !px-3 !py-1.5 text-sm">
-        <Icon name="message" size={15} />Message</button>
+      <UiButton type="button" onClick={() => onMessage(person.username)} className="auth-button !px-3 !py-1.5 text-sm">
+        <Icon name="message" size={15} />Message</UiButton>
       <Link href={`/u/${person.username}`} className="btn-ghost !py-1.5"><Icon name="user" size={15} />View profile</Link>
     </div>
   </li>;
@@ -84,9 +86,9 @@ export function DirectoryView({ space, tab, onTab, onMessage, onOpenChannel }: {
   const list = tab === 'people' ? people : channels;
 
   const tabButton = (value: DirectoryTab, label: string, icon: 'users' | 'hash') =>
-    <button type="button" role="tab" aria-selected={tab === value} onClick={() => onTab(value)}
+    <UiButton type="button" role="tab" aria-selected={tab === value} onClick={() => onTab(value)}
       className={`flex items-center gap-2 border-b-2 px-1 pb-2.5 pt-1 text-sm font-medium transition ${tab === value ? 'border-brand text-brand' : 'border-transparent text-white/55 hover:text-white'}`}>
-      <Icon name={icon} size={16} />{label}</button>;
+      <Icon name={icon} size={16} />{label}</UiButton>;
 
   return <div className="flex min-h-0 flex-1 flex-col">
     <p className="mb-3 text-sm text-white/60">{tab === 'people' ? 'Everyone who shares a space with you.' : space ? `All channels you can open in ${space.name}.` : 'Choose a space to see its channels.'}</p>
@@ -96,7 +98,7 @@ export function DirectoryView({ space, tab, onTab, onMessage, onOpenChannel }: {
     <label className="relative mt-3 block">
       <span className="sr-only">{tab === 'people' ? 'Search people' : 'Search channels'}</span>
       <Icon name="search" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/45" />
-      <input type="search" className="auth-input !mt-0 pl-9" value={query} maxLength={50} onChange={event => setQuery(event.target.value)}
+      <UiInput type="search" className="auth-input !mt-0 pl-9" value={query} maxLength={50} onChange={event => setQuery(event.target.value)}
         placeholder={tab === 'people' ? 'Search by name or username' : 'Search channels'} />
     </label>
     <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1" aria-live="polite" aria-busy={list.state === 'loading'}>
@@ -112,9 +114,9 @@ export function DirectoryView({ space, tab, onTab, onMessage, onOpenChannel }: {
             {channel.is_private && <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand">Private</span>}</p>
           <p className="truncate text-sm text-white/60">{channel.topic || 'No topic yet'} · {channel.member_count} {channel.member_count === 1 ? 'member' : 'members'}</p>
         </div>
-        <button type="button" onClick={() => onOpenChannel(channel.id)} className="btn-ghost !py-1.5" title="You are already part of this space, so you can open any channel here">Open</button>
+        <UiButton type="button" onClick={() => onOpenChannel(channel.id)} className="btn-ghost !py-1.5" tooltip="You are already part of this space, so you can open any channel here">Open</UiButton>
       </li>)}</ul>}
-      {list.hasMore && <button type="button" onClick={() => void list.more()} className="btn-ghost mx-auto mt-3 flex">Show more</button>}
+      {list.hasMore && <UiButton type="button" onClick={() => void list.more()} className="btn-ghost mx-auto mt-3 flex">Show more</UiButton>}
     </div>
   </div>;
 }

@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LetterState, WordState } from '@hive/shared';
 import { requestError } from '../../lib/spaces';
@@ -7,12 +9,12 @@ import { gamesPath, post } from '../../lib/games';
 import { apiData } from '../../lib/spaces';
 
 const ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
-const COLOURS: Record<LetterState, string> = { correct: '#16a34a', present: '#d97706', absent: '#6b7280' };
+const COLOURS: Record<LetterState, string> = { correct: 'var(--accent-preset-green)', present: 'var(--warning)', absent: 'var(--control-off)' };
 const MARKS: Record<LetterState, string> = { correct: '✓', present: '~', absent: '' };
 const LABELS: Record<LetterState, string> = { correct: 'right place', present: 'wrong place', absent: 'not in the word' };
 
 function Tile({ letter, state }: { letter: string; state?: LetterState }) {
-  const style = state ? { background: COLOURS[state], borderColor: COLOURS[state], color: '#fff' } : undefined;
+  const style = state ? { background: COLOURS[state], borderColor: COLOURS[state], color: 'var(--rail-fg)' } : undefined;
   return <div role="img" aria-label={letter ? `${letter.toUpperCase()}, ${state ? LABELS[state] : 'not checked yet'}` : 'empty'}
     style={style} className={`relative flex aspect-square items-center justify-center rounded-lg border-2 text-2xl font-bold uppercase ${state ? '' : letter ? 'border-white/40' : 'border-white/15'}`}>
     {letter}{state && <span aria-hidden className="absolute right-1 top-0.5 text-[10px] opacity-90">{MARKS[state]}</span>}
@@ -89,16 +91,16 @@ export function WordGame({ slug, onFinished }: { slug: string; onFinished: () =>
     <p role="status" aria-live="polite" className="mt-3 min-h-6 text-center text-sm text-rose-500">{message}</p>
     {state.status === 'playing' ? <div className="mt-2 space-y-1.5" aria-label="Keyboard">
       {ROWS.map((letters, index) => <div key={letters} className="flex justify-center gap-1">
-        {index === 2 && <button type="button" onClick={() => press('enter')} className="btn-ghost px-2 text-xs font-semibold" aria-label="Enter">Enter</button>}
-        {[...letters].map(letter => <button key={letter} type="button" onClick={() => press(letter)} aria-label={best[letter] ? `${letter}, ${LABELS[best[letter]]}` : letter}
-          style={best[letter] ? { background: COLOURS[best[letter]], color: '#fff' } : undefined}
-          className="h-11 w-8 rounded-md border border-white/15 text-sm font-semibold uppercase hover:bg-[var(--surface-2)] sm:w-9">{letter}</button>)}
-        {index === 2 && <button type="button" onClick={() => press('backspace')} className="btn-ghost px-2 text-xs font-semibold" aria-label="Delete last letter">Delete</button>}
+        {index === 2 && <UiButton tooltip="Enter" type="button" onClick={() => press('enter')} className="btn-ghost px-2 text-xs font-semibold" aria-label="Enter">Enter</UiButton>}
+        {[...letters].map(letter => <UiButton tooltip={best[letter] ? `${letter}, ${LABELS[best[letter]]}` : letter} key={letter} type="button" onClick={() => press(letter)} aria-label={best[letter] ? `${letter}, ${LABELS[best[letter]]}` : letter}
+          style={best[letter] ? { background: COLOURS[best[letter]], color: 'var(--rail-fg)' } : undefined}
+          className="h-11 w-8 rounded-md border border-white/15 text-sm font-semibold uppercase hover:bg-[var(--surface-2)] sm:w-9">{letter}</UiButton>)}
+        {index === 2 && <UiButton tooltip="Delete last letter" type="button" onClick={() => press('backspace')} className="btn-ghost px-2 text-xs font-semibold" aria-label="Delete last letter">Delete</UiButton>}
       </div>)}
     </div> : <section className="card mt-3 p-4 text-center">
       <h3 className="text-lg font-bold">{state.status === 'won' ? `You got it in ${state.guesses.length}!` : 'Not this time'}</h3>
       <p className="mt-1 text-sm text-white/65">{state.status === 'won' ? `You earned ${state.points} ${state.points === 1 ? 'point' : 'points'}.` : <>The word was <strong className="uppercase">{state.answer}</strong>.</>} A new word arrives tomorrow.</p>
-      <button type="button" onClick={() => void copy()} className="auth-button mt-3 !w-auto px-5">{copied ? 'Copied' : 'Copy result'}</button>
+      <UiButton type="button" onClick={() => void copy()} className="auth-button mt-3 !w-auto px-5">{copied ? 'Copied' : 'Copy result'}</UiButton>
     </section>}
   </div>;
 }

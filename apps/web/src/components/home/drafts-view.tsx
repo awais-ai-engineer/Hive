@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, Textarea as UiTextarea, DateTimePicker as UiDateTimePicker } from '@hive/ui';
+
 import { useCallback, useEffect, useState } from 'react';
 import { placeLabel, type Place } from '../../lib/home';
 import { apiData, requestError } from '../../lib/spaces';
@@ -60,9 +62,9 @@ export function DraftsView({ onOpen }: { onOpen: (place: Place, threadId: string
 
   return <div className="min-h-0 flex-1 overflow-y-auto pr-1">
     <div role="tablist" aria-label="Drafts and scheduled" className="mb-4 flex gap-1 border-b border-white/10">
-      {tabs.map(([id, label, total]) => <button key={id} role="tab" type="button" aria-selected={tab === id} onClick={() => setTab(id)}
+      {tabs.map(([id, label, total]) => <UiButton key={id} role="tab" type="button" aria-selected={tab === id} onClick={() => setTab(id)}
         className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${tab === id ? 'border-brand text-brand' : 'border-transparent text-white/60 hover:text-white'}`}>
-        {label}{total > 0 && <span className="ml-1.5 rounded-full bg-brand-soft px-1.5 text-xs text-brand">{total}</span>}</button>)}
+        {label}{total > 0 && <span className="ml-1.5 rounded-full bg-brand-soft px-1.5 text-xs text-brand">{total}</span>}</UiButton>)}
     </div>
     {error && <p role="alert" className="mb-3 text-sm text-rose-500">{error}</p>}
     {!ready ? <p className="text-white/50">Loading…</p> : !count ? <p className="mt-16 text-center text-white/50">{empty[tab]}</p> : <ul className="space-y-3">
@@ -70,8 +72,8 @@ export function DraftsView({ onOpen }: { onOpen: (place: Place, threadId: string
         <p className="text-xs font-medium text-white/50">{placeLabel(draft.place)}{draft.parentId ? ' · in a thread' : ''} · edited {when(draft.updatedAt)}</p>
         <p className="mt-1 line-clamp-3 whitespace-pre-wrap break-words">{draft.body}</p>
         <div className="mt-3 flex gap-2">
-          <button type="button" className="auth-button text-sm" onClick={() => onOpen(draft.place, draft.parentId)}>Continue writing</button>
-          <button type="button" className="btn-ghost text-rose-500" onClick={() => void discardDraft(draft)}>Discard</button>
+          <UiButton type="button" className="auth-button text-sm" onClick={() => onOpen(draft.place, draft.parentId)}>Continue writing</UiButton>
+          <UiButton type="button" className="btn-ghost text-rose-500" onClick={() => void discardDraft(draft)}>Discard</UiButton>
         </div>
       </li>)}
       {tab === 'scheduled' && scheduled.map(item => <li key={item.id} className="card p-4">
@@ -80,20 +82,20 @@ export function DraftsView({ onOpen }: { onOpen: (place: Place, threadId: string
           ? <p className="mt-1 text-sm font-medium text-rose-500">Not sent: you no longer have access to this conversation.</p>
           : <p className="mt-1 text-sm font-medium text-brand">Sends {when(item.sendAt)}</p>}
         {editing?.id === item.id ? <div className="mt-2 space-y-2">
-          <textarea aria-label="Message" className="auth-input" rows={3} maxLength={4000} value={editing.body} onChange={event => setEditing({ ...editing, body: event.target.value })} />
-          <label className="block text-sm">Send at<input type="datetime-local" className="auth-input" value={editing.sendAt} onChange={event => setEditing({ ...editing, sendAt: event.target.value })} /></label>
-          <div className="flex gap-2"><button type="button" className="auth-button text-sm" onClick={() => void saveEdit()}>Save</button><button type="button" className="btn-ghost" onClick={() => setEditing(null)}>Cancel</button></div>
+          <UiTextarea aria-label="Message" className="auth-input" rows={3} maxLength={4000} value={editing.body} onChange={event => setEditing({ ...editing, body: event.target.value })} />
+          <label className="block text-sm">Send at<UiDateTimePicker label="Send at" className="auth-input" value={editing.sendAt} onChange={event => setEditing({ ...editing, sendAt: event.target.value })} /></label>
+          <div className="flex gap-2"><UiButton type="button" className="auth-button text-sm" onClick={() => void saveEdit()}>Save</UiButton><UiButton type="button" className="btn-ghost" onClick={() => setEditing(null)}>Cancel</UiButton></div>
         </div> : <>
           <p className="mt-1 line-clamp-3 whitespace-pre-wrap break-words">{item.body}</p>
           <div className="mt-3 flex gap-2">
-            {!item.failedAt && <button type="button" className="btn-ghost" onClick={() => setEditing({ id: item.id, body: item.body, sendAt: toInput(item.sendAt) })}>Edit</button>}
-            <button type="button" className="btn-ghost text-rose-500" onClick={() => void cancelScheduled(item)}>{item.failedAt ? 'Dismiss' : 'Cancel sending'}</button>
+            {!item.failedAt && <UiButton type="button" className="btn-ghost" onClick={() => setEditing({ id: item.id, body: item.body, sendAt: toInput(item.sendAt) })}>Edit</UiButton>}
+            <UiButton type="button" className="btn-ghost text-rose-500" onClick={() => void cancelScheduled(item)}>{item.failedAt ? 'Dismiss' : 'Cancel sending'}</UiButton>
           </div>
         </>}
       </li>)}
       {tab === 'reminders' && reminders.map(item => <li key={item.id} className="card flex items-start justify-between gap-3 p-4">
         <div><p className="text-sm font-medium text-brand">{when(item.remindAt)}</p><p className="mt-1 break-words">{item.text}</p></div>
-        <button type="button" className="btn-ghost text-rose-500" onClick={() => void cancelReminder(item)}>Delete</button>
+        <UiButton type="button" className="btn-ghost text-rose-500" onClick={() => void cancelReminder(item)}>Delete</UiButton>
       </li>)}
     </ul>}
   </div>;

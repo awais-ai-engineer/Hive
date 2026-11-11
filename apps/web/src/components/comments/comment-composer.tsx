@@ -1,5 +1,7 @@
 'use client';
 
+import { Textarea as UiTextarea, Button as UiButton } from '@hive/ui';
+
 import { useState } from 'react';
 import { commentCreateSchema } from '@hive/shared';
 
@@ -52,7 +54,7 @@ export function CommentComposer({
           {error}
         </p>
       )}
-      <textarea
+      <UiTextarea
         autoFocus={autoFocus}
         disabled={!!reason || busy}
         value={body}
@@ -77,23 +79,23 @@ export function CommentComposer({
         </span>
         <div className="flex items-center gap-2">
           {onCancel && (
-            <button
+            <UiButton
               type="button"
               disabled={busy}
               onClick={onCancel}
               className="rounded px-3 py-1.5 text-xs text-white/60 hover:text-white"
             >
               Cancel
-            </button>
+            </UiButton>
           )}
-          <button
+          <UiButton
             type="button"
             disabled={!!reason || busy || !body.trim()}
             onClick={() => void handleSend()}
             className="rounded bg-amber-400 px-3.5 py-1.5 text-xs font-semibold text-black hover:bg-amber-300 disabled:opacity-40"
           >
             {busy ? 'Posting…' : submitLabel}
-          </button>
+          </UiButton>
         </div>
       </div>
     </div>

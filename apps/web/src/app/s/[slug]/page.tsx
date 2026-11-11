@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, confirmAction as UiConfirm } from '@hive/ui';
+
 import { Avatar, colourFor } from '../../../components/ui/avatar';
 import { Icon, type IconName } from '../../../components/ui/icons';
 import { CommunityGames } from '../../../components/communities/community-side';
@@ -109,8 +111,8 @@ export default function SpacePage() {
       {space && <>
         <div className="flex gap-2">
           {!space.my_role && space.type === 'community' && <JoinCommunity space={space} onJoined={() => void load()} />}
-          {canLeave && <button disabled={busy} onClick={() => { if (window.confirm(`Leave ${space.name}? You can join again later if it is public.`)) void changeMembership('leave'); }} title="You are a member. Click to leave."
-            className="btn-ghost flex-1 justify-center"><Icon name="check" size={15} />Joined</button>}
+          {canLeave && <UiButton disabled={busy} onClick={async () => { if (await UiConfirm(`Leave ${space.name}? You can join again later if it is public.`)) void changeMembership('leave'); }} tooltip="You are a member. Click to leave."
+            className="btn-ghost flex-1 justify-center"><Icon name="check" size={15} />Joined</UiButton>}
         </div>
         <CategoryChips space={space} />
         <ul className="space-y-0.5">
@@ -122,13 +124,13 @@ export default function SpacePage() {
         <div>
           <p className="mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-white/50">Chat rooms</p>
           <ul className="space-y-0.5">{channels.map(item => <li key={item.id}>
-            <button onClick={() => router.replace(`/s/${slug}?tab=chat&c=${item.id}`)}
-              className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[14px] ${tab === 'chat' && item.id === channel?.id ? 'bg-[var(--sidebar-active)] font-semibold' : 'text-white/75 hover:bg-white/[0.06]'}`}>
+            <UiButton onClick={() => router.replace(`/s/${slug}?tab=chat&c=${item.id}`)}
+              className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left justify-start text-[14px] ${tab === 'chat' && item.id === channel?.id ? 'bg-[var(--sidebar-active)] font-semibold' : 'text-white/75 hover:bg-white/[0.06]'}`}>
               <Icon name={item.type === 'voice' ? 'volume' : item.is_private ? 'lock' : 'hash'} size={15} className="shrink-0 opacity-60" />
               <span className={`truncate ${item.unread && item.id !== channel?.id ? 'font-semibold' : ''}`}>{item.name}</span>
               {item.unread > 0 && item.id !== channel?.id && <span aria-label={`${item.unread} unread`}
                 className="ml-auto rounded-full bg-brand px-1.5 text-xs font-semibold" style={{ color: 'var(--on-brand)' }}>{item.unread > 99 ? '99+' : item.unread}</span>}
-            </button>
+            </UiButton>
           </li>)}</ul>
         </div>
         {space.type === 'community' && <div className="mt-auto"><RulesCard slug={slug} /></div>}

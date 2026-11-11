@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { useEffect, useState } from 'react';
 import { calls } from '../../lib/call';
 import { socket } from '../../lib/socket';
@@ -29,9 +31,9 @@ export function IncomingCall({ titleFor, onAccept }: { titleFor: (channelId: str
     <p className="flex items-center gap-2 font-semibold"><Icon name="headphones" size={18} className="text-brand" />{ring.from.username} is calling you</p>
     <p className="mt-1 text-xs text-white/60">Join the huddle to talk. They will see you when you arrive.</p>
     <div className="mt-3 flex justify-end gap-2 text-sm">
-      <button type="button" onClick={() => setRing(null)} className="btn-ghost">Decline</button>
-      <button type="button" autoFocus className="auth-button !py-1.5 !text-sm"
-        onClick={() => { const { channelId } = ring; setRing(null); onAccept?.(channelId); void calls.join(channelId, titleFor(channelId, ring.from.username)).then(() => calls.setStageOpen(true)); }}>Join</button>
+      <UiButton type="button" onClick={() => setRing(null)} className="btn-ghost">Decline</UiButton>
+      <UiButton type="button" autoFocus className="auth-button !py-1.5 !text-sm"
+        onClick={() => { const { channelId } = ring; setRing(null); onAccept?.(channelId); void calls.join(channelId, titleFor(channelId, ring.from.username)).then(() => calls.setStageOpen(true)); }}>Join</UiButton>
     </div>
   </div>;
 }

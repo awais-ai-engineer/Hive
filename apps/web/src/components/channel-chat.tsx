@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAuth } from '../lib/auth';
 import { socket } from '../lib/socket';
@@ -142,7 +144,7 @@ export function ChannelChat({ channel, space, channels, placeholder, reason, can
         if (nearBottom.current) { setNewMessages(false); markRead(); }
         if (element.scrollTop < 20 && started.current) void loadOlder();
       }}>
-      {chat.hasOlder && <button onClick={() => void loadOlder()} className="mb-4 w-full text-sm text-amber-400">Load older messages</button>}
+      {chat.hasOlder && <UiButton onClick={() => void loadOlder()} className="mb-4 w-full text-sm text-amber-400">Load older messages</UiButton>}
       {!chat.ready && <p className="text-white/50">Loading messages…</p>}
       {chat.ready && !chat.messages.length && <p className="py-8 text-center text-white/40">No messages yet</p>}
       {chat.messages.map((message, index) => {
@@ -155,10 +157,10 @@ export function ChannelChat({ channel, space, channels, placeholder, reason, can
           onReply={encrypted ? undefined : item => setThreadId(item.id)} />;
       })}
     </div>
-    {newMessages && <button className="mt-2 w-full rounded bg-amber-400/15 py-1 text-sm text-amber-400" onClick={() => {
+    {newMessages && <UiButton className="mt-2 w-full rounded bg-amber-400/15 py-1 text-sm text-amber-400" onClick={() => {
       if (list.current) list.current.scrollTop = list.current.scrollHeight;
       nearBottom.current = true; setNewMessages(false);
-    }}>New messages ↓</button>}
+    }}>New messages ↓</UiButton>}
     <p role="status" className="min-h-7 py-1 text-xs text-white/50">{typingText}</p>
     {encrypted && <SecretNotice name={secret.other?.username ?? 'them'} safety={secret.safety} ready={secret.ready} peerReady={secret.peerReady} error={secret.error} />}
     <Composer channelId={channel.id} channels={channels} secret={encrypted} allowViewOnce={allowViewOnce} placeholder={placeholder} reason={reason || (encrypted && !!secret.error ? secret.error : '')} sendTyping onEditLast={() => { const last=chat.messages.filter(item=>item.author.id===user?.id&&!item.deleted&&!item.status&&(!item.kind||item.kind==='text')).at(-1);if(last)window.dispatchEvent(new CustomEvent('hive:edit-message',{detail:{id:last.id}})); }}

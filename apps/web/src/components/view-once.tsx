@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { useEffect, useState } from 'react';
 import type { Attachment } from '@hive/shared';
 import { API_URL, apiFetch, responseData } from '../lib/api';
@@ -45,17 +47,17 @@ export function ViewOnce({ file, own }: { file: Attachment; own: boolean }) {
         <span className="flex items-center gap-1.5 text-sm font-semibold text-white/60"><Icon name="image" size={16} />{noun} · opened</span>
         <span className="px-3 text-xs text-white/50">You already viewed this. It can&apos;t be shown again.</span>
       </div>
-        : <button type="button" onClick={() => void open()} disabled={busy} className={`${card} hover:border-brand`} aria-label={`Open ${noun.toLowerCase()}, view once`}>{blur}
+        : <UiButton tooltip={`Open ${noun.toLowerCase()}, view once`} type="button" onClick={() => void open()} disabled={busy} className={`${card} hover:border-brand`} aria-label={`Open ${noun.toLowerCase()}, view once`}>{blur}
           <span className="relative flex items-center gap-1.5 text-sm font-semibold"><Icon name="image" size={16} />{noun} · view once</span>
           <span className="relative px-3 text-xs text-white/70">{busy ? 'Opening…' : 'Tap to open. You can only see it once.'}</span>
-        </button>}
+        </UiButton>}
     {error && <p role="alert" className="mt-1 max-w-52 text-xs text-rose-500">{error}</p>}
     {opened && <div role="dialog" aria-modal="true" aria-label={`${noun}, view once`} className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[rgb(0_0_0/0.92)] p-4" onContextMenu={event => event.preventDefault()}>
-      <p className="mb-3 text-sm" style={{ color: '#fff' }}>View once: this closes for good when you leave it.</p>
+      <p className="mb-3 text-sm" style={{ color: 'var(--rail-fg)' }}>View once: this closes for good when you leave it.</p>
       {opened.kind === 'video'
         ? <video src={opened.url.startsWith('/') ? `${API_URL}${opened.url}` : opened.url} autoPlay playsInline controls controlsList="nodownload noremoteplayback" disablePictureInPicture className="max-h-[80vh] max-w-full rounded-xl" />
         : <img src={opened.url.startsWith('/') ? `${API_URL}${opened.url}` : opened.url} alt="" draggable={false} className="max-h-[80vh] max-w-full select-none rounded-xl" />}
-      <button type="button" autoFocus onClick={() => setOpened(null)} className="auth-button mt-4">Close</button>
+      <UiButton type="button" autoFocus onClick={() => setOpened(null)} className="auth-button mt-4">Close</UiButton>
     </div>}
   </div>;
 }

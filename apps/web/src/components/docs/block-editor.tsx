@@ -1,5 +1,7 @@
 'use client';
 
+import { Textarea as UiTextarea, Button as UiButton, Checkbox as UiCheckbox } from '@hive/ui';
+
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import {
   BLOCK_CHOICES, MAX_BLOCKS, MAX_TEXT, convertBlock, makeBlock, type Block, type BlockType,
@@ -45,7 +47,7 @@ function GrowingText({ value, onChange, onKeyDown, onBlur, readOnly, className, 
     element.style.height = 'auto';
     element.style.height = `${element.scrollHeight}px`;
   }, [value]);
-  return <textarea ref={element => { own.current = element; setRef(element); }} rows={1} value={value} readOnly={readOnly}
+  return <UiTextarea ref={element => { own.current = element; setRef(element); }} rows={1} value={value} readOnly={readOnly}
     aria-label={label} placeholder={readOnly ? undefined : placeholder} maxLength={maxLength} spellCheck
     onChange={event => onChange(event.target.value)} onKeyDown={onKeyDown} onBlur={onBlur}
     className={`block w-full resize-none overflow-hidden border-0 bg-transparent p-0 leading-relaxed outline-none placeholder:text-white/35 ${className}`} />;
@@ -197,33 +199,33 @@ export function BlockEditor({ blocks, onChange, readOnly = false }: {
           onChange={value => changeText(block, value)} onKeyDown={event => keyDown(event, block, index)} onBlur={() => setSlash(current => current?.id === block.id ? null : current)} />;
       const slashChoices = slash?.id === block.id ? choicesFor(block) : null;
       return <div key={block.id} className="group/block relative flex items-start gap-1">
-        {!readOnly && <button type="button" aria-label="Block options" aria-haspopup="menu" title="Change, move or delete this block"
+        {!readOnly && <UiButton type="button" aria-label="Block options" aria-haspopup="menu" tooltip="Change, move or delete this block"
           onClick={event => { const box = event.currentTarget.getBoundingClientRect(); setMenu({ id: block.id, x: box.left, y: box.bottom + 4 }); }}
           className="mt-1 shrink-0 rounded p-0.5 text-white/30 hover:bg-[var(--surface-2)] hover:text-white focus-visible:text-white sm:opacity-0 sm:group-hover/block:opacity-100 sm:focus-visible:opacity-100">
-          <Icon name="grip" size={16} /></button>}
+          <Icon name="grip" size={16} /></UiButton>}
         {readOnly && <span className="w-5 shrink-0" />}
         <div className={`min-w-0 flex-1 py-0.5 ${block.type === 'callout' ? 'flex gap-3 rounded-xl bg-brand-soft p-3' : block.type === 'divider' ? '' : 'flex gap-2'}`}>
           {block.type === 'bullet' && <span aria-hidden className="mt-0.5 w-4 shrink-0 text-center text-white/60">•</span>}
           {block.type === 'numbered' && <span aria-hidden className="mt-0.5 w-5 shrink-0 text-right text-white/60">{numbers[index]}.</span>}
-          {block.type === 'checklist' && <input type="checkbox" checked={!!block.checked} disabled={readOnly} aria-label="Done"
+          {block.type === 'checklist' && <UiCheckbox checked={!!block.checked} disabled={readOnly} aria-label="Done"
             onChange={event => update(block.id, { checked: event.target.checked })} className="mt-1.5 h-4 w-4 shrink-0 accent-[var(--brand)]" />}
           {block.type === 'callout' && <span aria-hidden className="text-xl leading-relaxed">{block.emoji ?? '💡'}</span>}
           <div className="relative min-w-0 flex-1">
             {text}
             {slashChoices && !readOnly && <div role="listbox" aria-label="Block types" className="on-surface absolute left-0 top-full z-20 mt-1 max-h-64 w-64 max-w-[80vw] overflow-y-auto rounded-xl border border-white/10 bg-surface p-1 text-sm shadow-[var(--shadow-pop)]">
               {slashChoices.length === 0 && <p className="px-3 py-2 text-white/55">No matching block type</p>}
-              {slashChoices.map((choice, position) => <button key={choice.label} type="button" role="option" aria-selected={position === slash!.index}
+              {slashChoices.map((choice, position) => <UiButton key={choice.label} type="button" role="option" aria-selected={position === slash!.index}
                 onMouseDown={event => { event.preventDefault(); applyChoice(block, choice); }}
-                className={`flex w-full flex-col rounded-lg px-3 py-1.5 text-left ${position === slash!.index ? 'bg-brand-soft' : 'hover:bg-[var(--surface-2)]'}`}>
-                <span className="font-medium">{choice.label}</span><span className="text-xs text-white/50">{choice.hint}</span></button>)}
+                className={`flex w-full flex-col rounded-lg px-3 py-1.5 text-left justify-start ${position === slash!.index ? 'bg-brand-soft' : 'hover:bg-[var(--surface-2)]'}`}>
+                <span className="font-medium">{choice.label}</span><span className="text-xs text-white/50">{choice.hint}</span></UiButton>)}
             </div>}
           </div>
         </div>
       </div>;
     })}
-    {!readOnly && <button type="button" onClick={() => insertAfter(blocks.length - 1, makeBlock())} disabled={blocks.length >= MAX_BLOCKS}
+    {!readOnly && <UiButton type="button" onClick={() => insertAfter(blocks.length - 1, makeBlock())} disabled={blocks.length >= MAX_BLOCKS}
       className="ml-6 mt-2 flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-white/50 hover:bg-[var(--surface-2)] hover:text-white disabled:opacity-40">
-      <Icon name="plus" size={14} />Add a block</button>}
+      <Icon name="plus" size={14} />Add a block</UiButton>}
     {menu && menuBlock && <PopupMenu at={menu} label="Block options" onClose={() => setMenu(null)} items={[
       { heading: 'Turn into' },
       ...BLOCK_CHOICES.map(choice => ({

@@ -36,6 +36,7 @@ const paths: Record<string, string> = {
   phone: 'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.13.96.36 1.9.7 2.8a2 2 0 0 1-.45 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.45c.9.34 1.84.57 2.8.7A2 2 0 0 1 22 16.9Z',
   x: 'M18 6 6 18M6 6l12 12',
   menu: 'M4 6h16M4 12h16M4 18h16',
+  sidebar: 'M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Zm6-2v18',
   sun: 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10ZM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',
   moon: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z',
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
@@ -93,8 +94,8 @@ export function Icon({ name, size = 18, ...props }: { name: IconName; size?: num
 export function Logo({ size = 28 }: { size?: number }) {
   return <svg aria-hidden width={size} height={size} viewBox="0 0 32 32">
     <defs><linearGradient id="hive-mark" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stopColor="#f8cc74" /><stop offset="1" stopColor="#f2a516" /></linearGradient></defs>
+      <stop offset="0" stopColor="var(--call-highlight)" /><stop offset="1" stopColor="var(--brand)" /></linearGradient></defs>
     <path fill="url(#hive-mark)" d="M16 2.5 27.7 9.25v13.5L16 29.5 4.3 22.75V9.25Z" />
-    <path fill="#fff" fillOpacity=".9" d="m16 9.5 5.6 3.25v6.5L16 22.5l-5.6-3.25v-6.5Z" />
+    <path fill="var(--rail-fg)" fillOpacity=".9" d="m16 9.5 5.6 3.25v6.5L16 22.5l-5.6-3.25v-6.5Z" />
   </svg>;
 }

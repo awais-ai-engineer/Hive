@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, Select as UiSelect, Input as UiInput } from '@hive/ui';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiData, requestError, type Space } from '../../lib/spaces';
@@ -66,12 +68,12 @@ export function RepostDialog({ post, isOpen, onClose }: Props) {
       <div className="w-full max-w-md rounded-xl border border-white/10 bg-surface p-5 shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/10 pb-3">
           <h3 className="font-semibold text-white">🔁 Repost to a space</h3>
-          <button
+          <UiButton
             onClick={onClose}
             className="rounded p-1 text-white/40 hover:bg-white/10 hover:text-white"
           >
             ✕
-          </button>
+          </UiButton>
         </div>
 
         {error && (
@@ -90,7 +92,7 @@ export function RepostDialog({ post, isOpen, onClose }: Props) {
               <label className="block text-xs font-medium text-white/70">
                 Target Space
               </label>
-              <select
+              <UiSelect aria-label="Choose option"
                 value={selectedSlug}
                 onChange={e => setSelectedSlug(e.target.value)}
                 className="mt-1 w-full rounded border border-white/15 bg-canvas p-2 text-sm text-white focus:border-amber-400 focus:outline-none"
@@ -100,14 +102,14 @@ export function RepostDialog({ post, isOpen, onClose }: Props) {
                     {s.name} ({s.slug})
                   </option>
                 ))}
-              </select>
+              </UiSelect>
             </div>
 
             <div>
               <label className="block text-xs font-medium text-white/70">
                 Title (optional)
               </label>
-              <input
+              <UiInput
                 type="text"
                 maxLength={300}
                 placeholder={post.title}
@@ -118,21 +120,21 @@ export function RepostDialog({ post, isOpen, onClose }: Props) {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button
+              <UiButton
                 type="button"
                 disabled={busy}
                 onClick={onClose}
                 className="rounded px-3 py-1.5 text-xs text-white/60 hover:text-white"
               >
                 Cancel
-              </button>
-              <button
+              </UiButton>
+              <UiButton
                 type="submit"
                 disabled={busy}
                 className="rounded bg-amber-400 px-4 py-1.5 text-xs font-semibold text-black hover:bg-amber-300 disabled:opacity-50"
               >
                 {busy ? 'Reposting…' : 'Repost'}
-              </button>
+              </UiButton>
             </div>
           </form>
         )}

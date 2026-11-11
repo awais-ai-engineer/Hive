@@ -1,23 +1,35 @@
 "use client";
 
+import { AlertDialog, Button as UiButton, DropdownMenu, Sheet } from '@hive/ui';
 import { useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
-import { Sheet } from '@hive/ui';
+import { useState, type ReactNode } from 'react';
 import { apiData, requestError, SPACES_CHANGED, type Space } from '../../lib/spaces';
 import { Icon } from '../ui/icons';
-import { PopupMenu } from './popup-menu';
+import { SpaceIcon } from './space-tiles';
 
-/** Actions for the current space; switching lives in the rail. */
-export function SpaceSwitcher({ current }: { current: Space | null }) {
+/** Shared current-space action menu used by the rail tile and sidebar heading. */
+export function SpaceSwitcher({ current, onOpenSwitcher, compact = false }: {
+  /** The current membership, or null when the account has no spaces. */
+  current: Space | null;
+  /** Opens the space switcher strip. */
+  onOpenSwitcher?: () => void;
+  /** Renders the compact square trigger used in the main rail. */
+  compact?: boolean;
+}) {
   const router = useRouter();
-  const trigger = useRef<HTMLButtonElement>(null);
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [leaving, setLeaving] = useState(false);
+  const [notifications, setNotifications] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [notifications, setNotifications] = useState(false);
   const manage = current?.my_role === 'owner' || current?.my_role === 'admin';
-  const closeMenu = () => { setMenu(null); trigger.current?.focus(); };
+  const trigger: ReactNode = compact
+    ? <UiButton type="button" aria-label={current ? `Current space: ${current.name}` : 'No space yet'} aria-current={current ? 'page' : undefined} className={`rail-current-trigger ${current ? 'space-current' : ''}`} disabled={!current}>
+      {current ? <SpaceIcon space={current} /> : <Icon name="layers" size={20} />}
+    </UiButton>
+    : <UiButton type="button" disabled={!current} className="space-sidebar-heading flex min-h-11 w-full items-center justify-between gap-2 rounded-xl px-1 text-left hover:bg-white/5 disabled:opacity-100">
+      <span className="truncate">{current?.name ?? 'No space yet'}</span>{current && <Icon name="chevronDown" size={18} />}
+    </UiButton>;
+
   async function leave() {
     if (!current) return;
     setBusy(true); setError('');
@@ -26,7 +38,7 @@ export function SpaceSwitcher({ current }: { current: Space | null }) {
       try { localStorage.removeItem('hive:last-space'); } catch { /* storage unavailable */ }
       window.dispatchEvent(new Event(SPACES_CHANGED));
       setLeaving(false); router.replace('/home');
-    } catch (cause) { setError(requestError(cause)); }
+    } catch (cause) { setError(requestError(cause)); throw cause; }
     finally { setBusy(false); }
   }
   async function mute() {
@@ -38,31 +50,31 @@ export function SpaceSwitcher({ current }: { current: Space | null }) {
     } catch (cause) { setError(requestError(cause)); }
     finally { setBusy(false); }
   }
+
   return <>
-    <button ref={trigger} type="button" disabled={!current} aria-haspopup="menu" aria-expanded={!!menu}
-      onClick={event => { const box = event.currentTarget.getBoundingClientRect(); setMenu({ x: box.left, y: box.bottom + 4 }); }}
-      className="space-sidebar-heading flex min-h-11 w-full items-center justify-between gap-2 rounded-xl px-1 text-left hover:bg-white/5 disabled:opacity-100">
-      <span className="truncate">{current?.name ?? 'No space yet'}</span>{current && <Icon name="chevronDown" size={18} />}
-    </button>
-    {menu && current && <PopupMenu at={menu} label="Space actions" onClose={closeMenu} items={[
-      { label: 'Invite people', icon: 'users', disabled: !manage, onSelect: () => router.push(`/s/${current.slug}/settings#invites`) },
-      { label: 'Space settings', icon: 'settings', disabled: !manage, onSelect: () => router.push(`/s/${current.slug}/settings`) },
-      { label: 'Notification preferences', icon: 'bell', onSelect: () => { setError(''); setNotifications(true); } },
-      { separator: true },
-      { label: 'Leave space', icon: 'logout', danger: true, onSelect: () => { setError(''); setLeaving(true); } },
-    ]} />}
-    <Sheet open={leaving} onOpenChange={open => { if (!busy) setLeaving(open); }} title="Leave space" center
-      description={current?.my_role === 'owner' ? 'Transfer ownership in space settings before leaving this space.' : `Leave ${current?.name ?? 'this space'}? You will need to join again to access its conversations.`}>
-      {error && <p role="alert" className="mb-3 text-sm text-rose-500">{error}</p>}
-      <div className="flex justify-end gap-2"><button className="btn-ghost min-h-11" onClick={() => setLeaving(false)} disabled={busy}>Cancel</button>
-        {current?.my_role === 'owner' ? <button className="auth-button min-h-11" onClick={() => router.push(`/s/${current.slug}/settings`)}>Space settings</button>
-          : <button className="min-h-11 rounded-xl bg-rose-600 px-4 font-semibold text-[var(--rail-fg)] disabled:opacity-50" disabled={busy} onClick={() => void leave()}>{busy ? 'Leaving?' : 'Leave space'}</button>}
-      </div>
-    </Sheet>
+    <DropdownMenu label="Space menu" trigger={trigger} triggerTooltip={compact ? current?.name : undefined} header={<><strong>{current?.name ?? 'No space yet'}</strong>{current && <span className="ui-menu-subtitle">{current.member_count} {current.member_count === 1 ? 'member' : 'members'}</span>}</>}
+      items={[
+        { label: 'Invite people', disabled: !current || !manage, onSelect: () => current && router.push(`/s/${current.slug}/settings#invites`) },
+        { label: 'Space settings', disabled: !current || !manage, onSelect: () => current && router.push(`/s/${current.slug}/settings`) },
+        { label: 'Notification preferences', disabled: !current, onSelect: () => { setError(''); setNotifications(true); } },
+        { separator: true, label: '' },
+        { label: 'Switch space', disabled: !onOpenSwitcher, onSelect: onOpenSwitcher },
+        { label: 'Add a space', children: [
+          { label: 'Create a work space', onSelect: () => router.push('/spaces/new?type=workspace') },
+          { label: 'Create a community', onSelect: () => router.push('/spaces/new?type=community') },
+          { label: 'Join with invite link', onSelect: () => window.dispatchEvent(new Event('hive:join-invite')) },
+        ] },
+        { separator: true, label: '' },
+        { label: 'Sign out of this space', disabled: !current, danger: true, onSelect: () => { setError(''); setLeaving(true); } },
+      ]} />
+    <AlertDialog open={leaving} onOpenChange={setLeaving} title="Sign out of this space"
+      description={current?.my_role === 'owner' ? 'Transfer ownership in space settings before signing out of this space.' : `Leave ${current?.name ?? 'this space'}? You will need to join again to access its conversations.`}
+      danger={current?.my_role !== 'owner'} confirmLabel={current?.my_role === 'owner' ? 'Space settings' : 'Sign out of this space'}
+      onConfirm={() => current?.my_role === 'owner' ? router.push(`/s/${current.slug}/settings`) : leave()}>{error && <p role="alert" className="ui-error">{error}</p>}</AlertDialog>
     <Sheet open={notifications} onOpenChange={setNotifications} title="Notification preferences" center description={`Choose activity notifications for ${current?.name ?? 'this space'}. Mentions remain visible when muted.`}>
       {error && <p role="alert" className="mb-3 text-sm text-rose-500">{error}</p>}
-      <button type="button" role="switch" aria-checked={current?.muted ?? false} disabled={busy} onClick={() => void mute()} className="btn-ghost min-h-11 w-full justify-between"><span>Mute space activity</span><span>{current?.muted ? 'On' : 'Off'}</span></button>
-      <button className="btn-ghost mt-3 min-h-11 w-full justify-center" onClick={() => router.push('/settings?section=notifications')}>All notification settings</button>
+      <UiButton type="button" role="switch" aria-checked={current?.muted ?? false} disabled={busy} onClick={() => void mute()} className="btn-ghost min-h-11 w-full justify-between"><span>Mute space activity</span><span>{current?.muted ? 'On' : 'Off'}</span></UiButton>
+      <UiButton className="btn-ghost mt-3 min-h-11 w-full justify-center" onClick={() => router.push('/settings?section=notifications')}>All notification settings</UiButton>
     </Sheet>
   </>;
 }
