@@ -1,6 +1,6 @@
 'use client';
 
-import { Checkbox as UiCheckbox, Input as UiInput, Button as UiButton, DatePicker as UiDatePicker } from '@hive/ui';
+import { Checkbox as UiCheckbox, Input as UiInput, Button as UiButton, DatePicker as UiDatePicker, EmptyState, LoadingState } from '@hive/ui';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react';
@@ -172,13 +172,10 @@ export function TodoList({ scope, channelId, userId, canWrite = true, emptyTitle
       <UiButton disabled={!title.trim()} className="auth-button !mt-0 shrink-0 !px-4">Add</UiButton>
     </form>}
     {error && <p role="alert" className="mb-3 text-sm text-rose-500">{error}</p>}
-    {tasks === null && !error && <p className="text-white/55">Loading to-dos…</p>}
-    {tasks?.length === 0 && <div className="card flex flex-col items-center gap-2 p-8 text-center">
-      <Icon name="checkSquare" size={32} className="text-white/35" />
-      <p className="font-semibold">{emptyTitle}</p>
-      <p className="max-w-sm text-sm text-white/60">{emptyText}</p>
+    {tasks === null && !error && <LoadingState label="Loading to-dos" />}
+    {tasks?.length === 0 && <EmptyState icon={<Icon name="checkSquare" size={24} />} title={emptyTitle} description={emptyText}>
       {canAdd && <UiButton type="button" onClick={() => input.current?.focus()} className="auth-button !mt-2 !px-4 !py-2">Add a to-do</UiButton>}
-    </div>}
+    </EmptyState>}
     {grouped && BUCKETS.map(bucket => {
       const items = open.filter(task => bucketOf(task, now) === bucket);
       return items.length > 0 && <section key={bucket} className="mb-4" aria-label={BUCKET_LABELS[bucket]}>

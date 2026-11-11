@@ -44,6 +44,20 @@ test('two-space strip toggles, switches by tile and Cmd+2, and remains in sync w
   expect(errors).toEqual([]);
 });
 
+test('space shortcuts do not steal key presses from text fields', async ({ page }) => {
+  await mockApi(page, undefined, true);
+  await page.goto('/home?s=studio');
+  const message = page.getByRole('textbox', { name: 'Message' });
+  await message.focus();
+  await page.keyboard.press('Meta+2');
+  await expect(page).toHaveURL(/s=studio/);
+  await message.fill('hello');
+  await expect(message).toHaveText('hello');
+  await message.blur();
+  await page.keyboard.press('Meta+2');
+  await expect(page).toHaveURL(/s=design/);
+});
+
 test('the sidebar header uses the shared menu and its Switch space action opens the strip', async ({ page }) => {
   await mockApi(page);
   await page.goto('/home');

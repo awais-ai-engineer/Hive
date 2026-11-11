@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton } from '@hive/ui';
+import { Button as UiButton, EmptyState, LoadingState } from '@hive/ui';
 
 import { useCallback, useEffect, useState } from 'react';
 import { docsApi, timeAgo, type DocSummary, type DocUpdate } from '../../lib/docs';
@@ -47,13 +47,11 @@ export function DocsView({ channelId, slug, userId, canWrite, docId, onOpen }: {
         {docs && docs.length > 0 && newButton}
       </div>
       {error && <p role="alert" className="mb-3 text-sm text-rose-500">{error}</p>}
-      {docs === null && !error && <p className="text-white/55">Loading docs…</p>}
-      {docs?.length === 0 && <div className="card flex flex-col items-center gap-3 p-8 text-center">
-        <Icon name="file" size={32} className="text-white/35" />
-        <p className="font-semibold">No docs yet</p>
-        <p className="max-w-sm text-sm text-white/60">Docs keep notes, plans and checklists next to the chat.{canWrite ? ' Start one for this conversation.' : ' Someone with posting access can start one.'}</p>
+      {docs === null && !error && <LoadingState label="Loading docs" />}
+      {docs?.length === 0 && <EmptyState icon={<Icon name="file" size={24} />} title="No docs yet"
+        description={`Docs keep notes, plans and checklists next to the chat.${canWrite ? ' Start one for this conversation.' : ' Someone with posting access can start one.'}`}>
         {newButton}
-      </div>}
+      </EmptyState>}
       <ul className="space-y-2">
         {docs?.map(doc => <li key={doc.id}>
           <UiButton type="button" onClick={() => onOpen(doc.id)} className="card flex w-full items-center gap-3 p-3 text-left justify-start transition hover:border-brand/50">

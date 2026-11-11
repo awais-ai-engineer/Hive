@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton, confirmAction as UiConfirm } from '@hive/ui';
+import { Button as UiButton, confirmAction as UiConfirm, LoadingState } from '@hive/ui';
 
 import { Avatar, colourFor } from '../../../components/ui/avatar';
 import { Icon, type IconName } from '../../../components/ui/icons';
@@ -141,7 +141,7 @@ export default function SpacePage() {
         <h2 className="text-2xl font-bold">{tab === 'posts' ? 'Home feed' : `#${channel?.name ?? ''}`}</h2>
         <p className="text-sm text-white/55">{tab === 'posts' ? `Posts from ${space.name}, ranked by what’s active right now.` : channel?.topic || `Chat with the ${space.name} community.`}</p>
       </div>}
-      {error && <p role="alert" className={error === 'Loading space…' ? 'text-white/50' : 'text-rose-400'}>{error}</p>}
+      {error && (error.startsWith('Loading') ? <LoadingState label="Loading space" /> : <p role="alert" className="text-rose-400">{error}</p>)}
       {space && tab === 'posts' && <>
         {space.my_role && rank[space.my_role] >= rank.member && <Link href={`/s/${slug}/submit`}
           className="card mb-4 flex items-center gap-3 p-3 transition hover:border-[var(--brand)]">

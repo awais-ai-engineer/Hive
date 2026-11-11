@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton, TimePicker as UiTimePicker, confirmAction as UiConfirm } from '@hive/ui';
+import { Button as UiButton, TimePicker as UiTimePicker, confirmAction as UiConfirm, LoadingState, EmptyState } from '@hive/ui';
 
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
@@ -86,8 +86,8 @@ export function DevicesCard() {
     <h2 className="text-lg font-bold">Secret conversation devices</h2>
     <p className="mt-1 text-sm text-white/60">Secret conversations are encrypted on your devices. Each browser you use has its own key and can only read messages sent after it was set up. Remove devices you no longer use.</p>
     {error && <p role="alert" className="mt-2 text-sm text-rose-500">{error}</p>}
-    {devices === null ? !error && <p className="mt-3 text-sm text-white/60">Loading…</p>
-      : devices.length === 0 ? <p className="mt-3 text-sm text-white/60">No device has been set up yet. One is added the first time you open a secret conversation.</p>
+    {devices === null ? !error && <LoadingState layout="inline" label="Loading devices" />
+      : devices.length === 0 ? <EmptyState layout="compact" title="No devices yet" description="A device is added the first time you open a secret conversation." />
         : <ul className="mt-3 divide-y divide-white/10">{devices.map(device => <li key={device.id} className="flex items-center gap-3 py-3">
           <div className="min-w-0 flex-1"><p className="truncate font-medium">{device.label || 'Browser'}</p><p className="text-xs text-white/50">Added {new Date(device.createdAt).toLocaleDateString()}</p></div>
           <UiButton type="button" className="btn-ghost text-rose-500" onClick={() => void remove(device)}>Remove</UiButton>

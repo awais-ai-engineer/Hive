@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton } from '@hive/ui';
+import { Button as UiButton, EmptyState, LoadingState } from '@hive/ui';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -344,15 +344,9 @@ export function CommentSection({ postId, space, postDeleted }: Props) {
         </div>
       ) : (
         <>
-          {busy && !comments.length && (
-            <p className="py-6 text-sm text-white/40">Loading comments…</p>
-          )}
+          {busy && !comments.length && <LoadingState label="Loading comments" />}
 
-          {!busy && !comments.length && !error && (
-            <p className="py-8 text-center text-sm text-white/40">
-              No comments yet. Start the conversation.
-            </p>
-          )}
+          {!busy && !comments.length && !error && <EmptyState layout="compact" title="No comments yet" description="Add the first comment to start the conversation." />}
 
           <div className="space-y-4">
             {comments.map(c => (

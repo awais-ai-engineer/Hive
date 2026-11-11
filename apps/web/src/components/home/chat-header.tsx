@@ -31,12 +31,6 @@ type Props = {
   tab?: ChatTab;
   onTab?: (tab: ChatTab) => void;
   onMenu: () => void;
-  /** Toggles the desktop space switcher strip. */
-  onToggleSwitcher?: () => void;
-  /** Whether the desktop space switcher strip is visible. */
-  switcherOpen?: boolean;
-  /** Hides the switcher control for accounts with at most one space. */
-  canToggleSwitcher?: boolean;
   starred?: boolean;
   onStar?: () => void;
   level?: NotifyLevel;
@@ -84,7 +78,7 @@ function Tab({ active, icon, label, onClick }: { active: boolean; icon: IconName
 }
 
 /** Top of the main area: what is open, who is in it, and the Messages/Posts tabs for space channels. */
-export function ChatHeader({ title, channel, space, conversation, tab = 'messages', onTab, onMenu, onToggleSwitcher, switcherOpen = false, canToggleSwitcher = false, onLeft, onTimerChanged, onError, ...controls }: Props) {
+export function ChatHeader({ title, channel, space, conversation, tab = 'messages', onTab, onMenu, onLeft, onTimerChanged, onError, ...controls }: Props) {
   const { t } = useT();
   const [members, setMembers] = useState<Member[]>([]);
   const [panel, setPanel] = useState(false);
@@ -97,7 +91,7 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
     return () => { active = false; };
   }, [space?.slug, channel?.id]);
 
-  const menu = <>{canToggleSwitcher && onToggleSwitcher && <UiButton tooltip={switcherOpen ? 'Hide space switcher' : 'Show space switcher'} type="button" aria-label={switcherOpen ? 'Hide space switcher' : 'Show space switcher'} aria-expanded={switcherOpen} onClick={onToggleSwitcher} className="hidden min-h-10 min-w-10 items-center justify-center rounded-lg text-white/70 hover:bg-[var(--surface-2)] min-[760px]:inline-flex"><Icon name="sidebar" size={20} /></UiButton>}
+  const menu = <>
     <UiButton tooltip="Open sidebar" type="button" onClick={onMenu} aria-label="Open sidebar" className="rounded-lg p-1 text-white/70 hover:bg-[var(--surface-2)] min-[760px]:hidden"><Icon name="menu" size={22} /></UiButton></>;
   const shell = 'mb-3 border-b border-white/10';
 

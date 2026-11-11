@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton, Checkbox as UiCheckbox } from '@hive/ui';
+import { Button as UiButton, Checkbox as UiCheckbox, EmptyState, LoadingState } from '@hive/ui';
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -153,11 +153,10 @@ export function InboxView() {
       </div>}
       {error && <p role="alert" className="mb-3 text-sm text-rose-500">{error}</p>}
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-        {!ready ? <div role="status" aria-label="Loading activity" className="space-y-2">{[1, 2, 3, 4].map(index => <div key={index} className="h-16 animate-pulse rounded-xl bg-[var(--surface-2)]" />)}</div>
-          : !shown.length ? <div className="mt-16 flex flex-col items-center gap-2 text-center text-white/55">
-            <Icon name="bell" size={36} />
-            <p>{unreadOnly || filter !== 'all' ? 'Nothing here right now.' : side === 'work' ? 'No work activity yet. Mentions, replies and direct messages will show up here.' : 'No community activity yet. Comments and replies in communities show up here.'}</p>
-          </div>
+        {!ready ? <LoadingState label="Loading activity" />
+          : !shown.length ? <EmptyState icon={<Icon name="bell" size={28} />}
+            title={unreadOnly || filter !== 'all' ? 'Nothing here right now' : side === 'work' ? 'No work activity yet' : 'No community activity yet'}
+            description={side === 'work' ? 'Mentions, replies and direct messages will show up here.' : 'Comments and replies in communities will show up here.'} />
           : <ul className="space-y-1.5">{shown.map(item => <li key={item.id}>
             <UiButton type="button" onClick={() => select(item)} aria-current={item.id === selected ? 'true' : undefined}
               className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left justify-start transition ${item.id === selected ? 'border-[var(--brand)] bg-brand-soft' : 'border-[var(--border)] hover:bg-[var(--surface-2)]'}`}>

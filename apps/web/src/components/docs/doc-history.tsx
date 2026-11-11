@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton } from '@hive/ui';
+import { Button as UiButton, LoadingState } from '@hive/ui';
 
 import { useEffect, useState } from 'react';
 import { docsApi, timeAgo, type Doc, type DocVersion, type DocVersionSummary } from '../../lib/docs';
@@ -48,7 +48,7 @@ export function DocHistory({ docId, canWrite, currentVersion, onRestored, onClos
         </div>
         <p className="px-4 pb-2 text-xs text-white/55">The last 20 saves. Pick one to look at it before you restore it.</p>
         <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-3">
-          {versions === null && !error && <li className="px-2 text-sm text-white/55">Loading…</li>}
+          {versions === null && !error && <li><LoadingState layout="inline" label="Loading history" /></li>}
           {versions?.map(version => <li key={version.id}>
             <UiButton type="button" onClick={() => void show(version)} aria-current={preview?.id === version.id}
               className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left justify-start text-sm ${preview?.id === version.id ? 'bg-brand-soft' : 'hover:bg-[var(--surface-2)]'}`}>

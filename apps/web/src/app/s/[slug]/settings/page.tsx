@@ -1,6 +1,6 @@
 'use client';
 
-import { confirmAction as UiConfirm, Checkbox as UiCheckbox, Input as UiInput, Textarea as UiTextarea, Button as UiButton, Select as UiSelect } from '@hive/ui';
+import { confirmAction as UiConfirm, Checkbox as UiCheckbox, Input as UiInput, Textarea as UiTextarea, Button as UiButton, Select as UiSelect, LoadingState } from '@hive/ui';
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -142,7 +142,7 @@ export default function SettingsPage() {
 
   if (loading || !space) return <main className="mx-auto max-w-3xl px-4 py-10">
     <Link href={`/s/${slug}`} className="text-amber-400">← Back to space</Link>
-    {error && <p role="alert" className="mt-4 text-rose-400">{error}</p>}
+    {error && (error.startsWith('Loading') ? <LoadingState label="Loading space settings" /> : <p role="alert" className="mt-4 text-rose-400">{error}</p>)}
   </main>;
   if (!space.my_role || rank[space.my_role] < rank.admin) return <main className="mx-auto max-w-3xl px-4 py-10">
     <p role="alert" className="text-rose-400">Insufficient role</p></main>;
@@ -151,7 +151,7 @@ export default function SettingsPage() {
     <div><Link href={`/s/${slug}`} className="text-sm text-amber-400">← {space.name}</Link>
       <h1 className="mt-2 text-3xl font-bold">Space settings</h1></div>
     <SettingsTabs slug={slug} active="general" />
-    {error && <p role="alert" className="text-rose-400">{error}</p>}
+    {error && !error.startsWith('Loading') && <p role="alert" className="text-rose-400">{error}</p>}
     <section className="card p-5"><h2 className="mb-2 flex items-center gap-2 text-xl font-semibold"><SpaceKind space={space} size={18} />Privacy</h2>
       <p className="text-white/70"><strong>{spaceKindLabel(space)}.</strong> {space.type === 'workspace'
         ? 'Only people you invite can find or open this space. Outsiders see nothing, not even that it exists. Chat, files and posts are visible to members only.'

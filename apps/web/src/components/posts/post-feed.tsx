@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton, Select as UiSelect } from '@hive/ui';
+import { Button as UiButton, Select as UiSelect, EmptyState, LoadingState } from '@hive/ui';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from '../ui/icons';
@@ -83,7 +83,7 @@ export function PostFeed({ space }: { space?: Space }) {
     </div>
     {fresh && <UiButton onClick={() => void load()} className="mx-auto block rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-[var(--shadow-pop)]">↑ New posts</UiButton>}
     {error && <p role="alert" className="text-rose-400">{error}</p>}
-    {busy ? <p className="text-white/50">Loading posts…</p> : !posts.length && !error && <p className="py-8 text-center text-white/40">No posts yet.</p>}
+    {busy && !posts.length ? <LoadingState label="Loading posts" /> : !posts.length && !error && <EmptyState title="No posts yet" description="Posts from this community will appear here." />}
     {posts.map(post => {
       const role = space?.my_role ?? memberships.find(item => item.id === post.space.id)?.my_role;
       return <PostCard key={post.id} post={post} combined={!space} reason={!user ? 'Log in to vote' : !role || role === 'guest' ? 'Join to vote' : ''} onChange={value => update(post.id, value)} />;

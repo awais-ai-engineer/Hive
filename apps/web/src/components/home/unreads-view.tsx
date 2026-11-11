@@ -2,7 +2,7 @@
 
 import { Tooltip as UiTooltip } from '@hive/ui';
 
-import { Button as UiButton, Checkbox as UiCheckbox } from '@hive/ui';
+import { Button as UiButton, Checkbox as UiCheckbox, EmptyState, LoadingState } from '@hive/ui';
 
 import { useEffect, useState } from 'react';
 import type { PriorityLevel } from '@hive/shared';
@@ -65,9 +65,8 @@ export function UnreadsView({ items, ready, userId, onOpen, onMarkRead }: Props)
     return () => { active = false; };
   }, [sorted, ai, key]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!ready) return <ul aria-busy="true" aria-label="Loading unread messages" className="space-y-4">{[0, 1].map(index =>
-    <li key={index} className="h-28 animate-pulse rounded-xl bg-white/5" />)}</ul>;
-  if (!items.length) return <p className="mt-16 text-center text-white/50">You&apos;re all caught up 🎉</p>;
+  if (!ready) return <LoadingState label="Loading unread messages" />;
+  if (!items.length) return <EmptyState icon="✓" title="All caught up" description="New mentions, replies and messages will appear here." />;
 
   const byChannel = new Map(items.map(item => [item.channel.id, item]));
   const shared = { userId, onOpen, onMarkRead };

@@ -9,6 +9,7 @@ import { colourFor } from '../../components/ui/avatar';
 import { Icon } from '../../components/ui/icons';
 import { useAuth } from '../../lib/auth';
 import { apiData, type Space } from '../../lib/spaces';
+import { LoadingState } from '@hive/ui';
 
 function SpaceRow({ space, meta }: { space: Space; meta: string }) {
   return <li>
@@ -56,7 +57,7 @@ export default function FeedPage() {
           <Link href="/spaces" className="inline-flex items-center gap-2 rounded-xl bg-[rgb(255_255_255/0.16)] px-4 py-2 text-sm font-semibold backdrop-blur hover:bg-[rgb(255_255_255/0.26)]" style={{ color: '#fff' }}><Icon name="compass" size={16} />Explore communities</Link>
         </div>
       </section>}
-      {!loading && <Suspense fallback={<p className="text-white/50">Loading posts…</p>}><PostFeed /></Suspense>}
+      {!loading && <Suspense fallback={<LoadingState label="Loading posts" />}><PostFeed /></Suspense>}
     </div>
     <aside className="hidden space-y-5 lg:block">
       {user && <section className="card p-4">

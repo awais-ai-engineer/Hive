@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton, Textarea as UiTextarea, DateTimePicker as UiDateTimePicker } from '@hive/ui';
+import { Button as UiButton, Textarea as UiTextarea, DateTimePicker as UiDateTimePicker, EmptyState, LoadingState } from '@hive/ui';
 
 import { useCallback, useEffect, useState } from 'react';
 import { placeLabel, type Place } from '../../lib/home';
@@ -67,7 +67,7 @@ export function DraftsView({ onOpen }: { onOpen: (place: Place, threadId: string
         {label}{total > 0 && <span className="ml-1.5 rounded-full bg-brand-soft px-1.5 text-xs text-brand">{total}</span>}</UiButton>)}
     </div>
     {error && <p role="alert" className="mb-3 text-sm text-rose-500">{error}</p>}
-    {!ready ? <p className="text-white/50">Loading…</p> : !count ? <p className="mt-16 text-center text-white/50">{empty[tab]}</p> : <ul className="space-y-3">
+    {!ready ? <LoadingState label={`Loading ${tab}`} /> : !count ? <EmptyState title={tab === 'drafts' ? 'No drafts' : tab === 'scheduled' ? 'Nothing scheduled' : 'No reminders'} description={empty[tab]} /> : <ul className="space-y-3">
       {tab === 'drafts' && drafts.map(draft => <li key={`${draft.channelId}:${draft.parentId ?? ''}`} className="card p-4">
         <p className="text-xs font-medium text-white/50">{placeLabel(draft.place)}{draft.parentId ? ' · in a thread' : ''} · edited {when(draft.updatedAt)}</p>
         <p className="mt-1 line-clamp-3 whitespace-pre-wrap break-words">{draft.body}</p>

@@ -2,7 +2,7 @@
 
 import { Tooltip as UiTooltip } from '@hive/ui';
 
-import { Button as UiButton, Select as UiSelect } from '@hive/ui';
+import { Button as UiButton, Select as UiSelect, LoadingState } from '@hive/ui';
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -72,9 +72,9 @@ export default function MembersPage() {
 
   const rankYou = space?.my_role ? rank[space.my_role] : 0;
   return <main className="mx-auto max-w-3xl px-4 py-10">
-    <Link href={`/s/${slug}`} className="text-sm text-amber-400">← {space?.name ?? 'Space'}</Link>
+    <Link href={`/home?s=${encodeURIComponent(slug)}`} className="text-sm text-amber-400">← {space?.name ?? 'Space'}</Link>
     <h1 className="mb-6 mt-3 text-3xl font-bold">Members</h1>
-    {error && <p role="alert" className="text-rose-400">{error}</p>}
+    {error && (error.startsWith('Loading') ? <LoadingState label="Loading members" /> : <p role="alert" className="text-rose-400">{error}</p>)}
     <ul className="divide-y divide-white/10 rounded-xl border border-white/10">
       {members.map(member => {
         const mayChangeRole = rankYou >= rank.admin && rank[member.role ?? 'guest'] < rankYou

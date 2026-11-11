@@ -5,16 +5,23 @@ import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { apiData, requestError, SPACES_CHANGED, type Space } from '../../lib/spaces';
 import { Icon } from '../ui/icons';
+import { OPEN_SEARCH } from '../search/search-palette';
 import { SpaceIcon } from './space-tiles';
 
 /** Shared current-space action menu used by the rail tile and sidebar heading. */
-export function SpaceSwitcher({ current, onOpenSwitcher, compact = false }: {
+export function SpaceSwitcher({ current, onOpenSwitcher, compact = false, spaces = [], onSwitch, stripOpen, onToggleStrip }: {
   /** The current membership, or null when the account has no spaces. */
   current: Space | null;
   /** Opens the space switcher strip. */
   onOpenSwitcher?: () => void;
   /** Renders the compact square trigger used in the main rail. */
   compact?: boolean;
+  /** Every space the account belongs to, for the "Switch to" list. */
+  spaces?: Space[];
+  onSwitch?: (slug: string) => void;
+  /** Whether the spaces strip is showing, and the control that toggles it. */
+  stripOpen?: boolean;
+  onToggleStrip?: () => void;
 }) {
   const router = useRouter();
   const [leaving, setLeaving] = useState(false);
@@ -51,6 +58,19 @@ export function SpaceSwitcher({ current, onOpenSwitcher, compact = false }: {
     finally { setBusy(false); }
   }
 
+  // Sidebar heading: the space name with a switch button that shows or hides the spaces strip.
+  if (!compact) {
+    const toggle = onToggleStrip ?? onOpenSwitcher;
+    return <div className="space-sidebar-heading flex min-h-11 w-full items-center justify-between gap-2 px-1">
+      <span className="truncate">{current?.name ?? 'No space yet'}</span>
+      <span className="flex shrink-0 items-center gap-0.5">
+      <UiButton type="button" onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH))} aria-haspopup="dialog" aria-label="Search" tooltip="Search (Ctrl+K)"
+        className="flex h-9 w-9 items-center justify-center rounded-lg text-white/60 transition hover:bg-white/10 hover:text-white"><Icon name="search" size={18} /></UiButton>
+      {toggle && <UiButton type="button" onClick={toggle} aria-expanded={!!stripOpen} aria-label={stripOpen ? 'Hide spaces bar' : 'Switch space'} tooltip={stripOpen ? 'Hide spaces bar' : 'Switch space'}
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition ${stripOpen ? 'bg-brand-soft text-brand' : 'text-white/60 hover:bg-white/10 hover:text-white'}`}><Icon name="sidebar" size={18} /></UiButton>}
+      </span>
+    </div>;
+  }
   return <>
     <DropdownMenu label="Space menu" trigger={trigger} triggerTooltip={compact ? current?.name : undefined} header={<><strong>{current?.name ?? 'No space yet'}</strong>{current && <span className="ui-menu-subtitle">{current.member_count} {current.member_count === 1 ? 'member' : 'members'}</span>}</>}
       items={[
@@ -58,7 +78,10 @@ export function SpaceSwitcher({ current, onOpenSwitcher, compact = false }: {
         { label: 'Space settings', disabled: !current || !manage, onSelect: () => current && router.push(`/s/${current.slug}/settings`) },
         { label: 'Notification preferences', disabled: !current, onSelect: () => { setError(''); setNotifications(true); } },
         { separator: true, label: '' },
-        { label: 'Switch space', disabled: !onOpenSwitcher, onSelect: onOpenSwitcher },
+        { label: 'Switch to', disabled: spaces.length < 2 || !onSwitch, children: spaces.map(space => ({
+          label: `${space.slug === current?.slug ? '✓ ' : ''}${space.name}${space.kind === 'community' ? ' · community' : ''}`, disabled: space.slug === current?.slug, onSelect: () => onSwitch?.(space.slug) })) },
+        { label: stripOpen ? 'Hide spaces bar' : 'Show spaces bar', disabled: !onToggleStrip && !onOpenSwitcher, onSelect: () => (onToggleStrip ?? onOpenSwitcher)?.() },
+        { label: 'Browse communities', onSelect: () => router.push('/spaces') },
         { label: 'Add a space', children: [
           { label: 'Create a work space', onSelect: () => router.push('/spaces/new?type=workspace') },
           { label: 'Create a community', onSelect: () => router.push('/spaces/new?type=community') },

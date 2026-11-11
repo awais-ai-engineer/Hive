@@ -20,7 +20,6 @@ import { HuddlesSection, QuietHoursCard } from './sidebar-extras';
 import { calls } from '../../lib/call';
 import { useHuddles } from '../../lib/huddles';
 import { CreateChannelDialog } from './create-channel-dialog';
-import { FindConversation } from './find-conversation';
 import { NewConversation } from './new-conversation';
 import { PopupMenu, type MenuItem } from './popup-menu';
 import { SectionDialog } from './section-dialog';
@@ -41,6 +40,8 @@ type Props = {
   onChanged: () => void;
   onSwitchSpace: (slug: string) => void;
   onOpenSwitcher: () => void;
+  switcherOpen?: boolean;
+  onToggleSwitcher?: () => void;
   onOpen: (id: string) => void;
   /** A conversation was just started: show it right away, before any list refresh. */
   onConversation?: (conversation: Conversation) => void;
@@ -228,13 +229,12 @@ export function Sidebar(props: Props) {
       <Icon name="plus" size={15} className="shrink-0" /><span className="truncate">{label}</span></UiButton></li>;
 
   return <nav aria-label="Conversations" className="on-sidebar flex h-full min-h-0 flex-col border-r border-[var(--border)] bg-[var(--sidebar)] px-3 py-4">
-    <SpaceSwitcher current={space} onOpenSwitcher={props.onOpenSwitcher} />
+    <SpaceSwitcher current={space} onOpenSwitcher={props.onOpenSwitcher} spaces={props.spaces} onSwitch={props.onSwitchSpace} stripOpen={props.switcherOpen} onToggleStrip={props.onToggleSwitcher} />
     {!space && <div className="my-4 rounded-xl border border-white/15 p-4">
       <p className="mb-3 text-sm text-white/70">Bring your team together or find a community.</p>
       <Link href="/spaces/new" className="auth-button mb-2 min-h-11 w-full justify-center">Create a space</Link>
       <Link href="/spaces" className="btn-ghost min-h-11 w-full justify-center">Browse communities</Link>
     </div>}
-    <div className="mt-3"><FindConversation /></div>
     <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
       <ul className="space-y-0.5">
         <NavItem icon="threads" label={t('nav.threads')} active={view === 'threads'} count={props.threadsUnread} onClick={() => props.onView('threads')} />
@@ -243,7 +243,6 @@ export function Sidebar(props: Props) {
         <NavItem icon="send" label={t('nav.drafts')} active={view === 'drafts'} onClick={() => props.onView('drafts')} />
         <NavItem icon="bookmark" label={t('nav.saved')} active={view === 'saved'} onClick={() => props.onView('saved')} />
         <NavItem icon="folder" label={t('nav.allFiles')} active={view === 'files'} onClick={() => props.onView('files')} />
-        <NavItem icon="layers" label={t('nav.feed')} href="/feed" />
         {space && <NavItem icon="users" label={t('nav.members')} href={`/s/${space.slug}/members`} />}
       </ul>
 

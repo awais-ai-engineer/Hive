@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import type { Attachment } from '@hive/shared';
 import { API_URL } from '../../lib/api';
+import { fixVideoDuration } from '../../lib/video-duration';
 
 export const mediaUrl = (url: string) => /^https?:\/\//.test(url) ? url : `${API_URL}${url}`;
 
@@ -36,7 +37,7 @@ export function MediaGallery({ files, postId, full = false }: { files: Attachmen
     return () => { document.body.style.overflow = previous; window.removeEventListener('keydown', key); returnFocus.current?.focus(); };
   }, [lightbox, files.length]);
   if (!file) return null;
-  if (file.kind === 'video') return <video src={mediaUrl(file.url)} controls preload="metadata" playsInline className="mt-3 max-h-[512px] w-full rounded bg-[rgb(0_0_0)]" />;
+  if (file.kind === 'video') return <video src={mediaUrl(file.url)} controls preload="metadata" playsInline onLoadedMetadata={fixVideoDuration} className="mt-3 max-h-[512px] w-full rounded bg-[rgb(0_0_0)]" />;
   const image = <img src={mediaUrl(file.url)} alt={file.filename || `Image ${index + 1} of ${files.length}`} loading="lazy" className="max-h-[512px] w-full object-contain" />;
   const controls = <div className="flex items-center justify-between gap-3 p-2 text-sm text-amber-400">
     <UiButton tooltip="Previous image" type="button" aria-label="Previous image" onClick={() => move(-1)}>‹</UiButton>

@@ -126,12 +126,25 @@ body {
 }
 
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+[contenteditable]:focus-visible, [role='textbox']:focus-visible { outline: none; }
 
 ::selection { background: color-mix(in srgb, var(--brand) 25%, transparent); }
 
 @media (prefers-reduced-motion: no-preference) {
   .animate-in { animation: rise 160ms ease-out; }
   @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .reaction-chip { transform-origin: center; transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease; }
+  .reaction-chip:hover, .reaction-chip:focus-visible { transform: translateY(-2px) scale(1.06); }
+  .reaction-chip:active, .reaction-choice:active { transform: scale(.9); }
+  .reaction-chip:hover .reaction-emoji, .reaction-chip:focus-visible .reaction-emoji { animation: reaction-wiggle 420ms ease-in-out; }
+  .reaction-chip-selected .reaction-emoji { animation: reaction-pop 360ms cubic-bezier(.2, .8, .2, 1); }
+  .reaction-picker { transform-origin: left top; animation: reaction-picker-in 150ms cubic-bezier(.2, .8, .2, 1) both; }
+  .reaction-choice { transform-origin: center; transition: transform 140ms ease, background-color 140ms ease; }
+  .reaction-choice:hover, .reaction-choice:focus-visible { transform: translateY(-3px) scale(1.16); }
+  .reaction-choice:hover { animation: reaction-wiggle 420ms ease-in-out; }
+  @keyframes reaction-wiggle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-12deg) translateY(-2px); } 55% { transform: rotate(10deg) translateY(-3px); } 78% { transform: rotate(-5deg); } }
+  @keyframes reaction-pop { 0% { transform: scale(.65) rotate(-12deg); } 65% { transform: scale(1.3) rotate(7deg); } 100% { transform: scale(1) rotate(0); } }
+  @keyframes reaction-picker-in { from { opacity: 0; transform: translateY(5px) scale(.94); } to { opacity: 1; transform: translateY(0) scale(1); } }
 }
 
 /* ---- Components ------------------------------------------------------------------------- */
@@ -157,12 +170,14 @@ body {
 .bg-brand, .bg-amber-400, .bg-amber-500 { --fg: var(--on-brand); }
 
 @keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
-@media (prefers-reduced-motion: reduce) { .animate-in, [class*="animate-[shake"] { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .animate-in, [class*="animate-[shake"], .reaction-chip, .reaction-emoji, .reaction-picker, .reaction-choice { animation: none !important; transition: none !important; transform: none !important; } }
 
 /* The switcher strip shifts the fixed main rail; only its own 64px column animates. */
 .rail-switcher-width { width: 0; height: 100%; flex: 0 0 auto; overflow: hidden; transition: width 160ms ease; }
 .rail-switcher-width-open { width: 64px; }
 .space-switcher-strip { display: flex; width: 64px; height: 100%; flex-direction: column; align-items: center; gap: 8px; overflow-y: auto; overflow-x: hidden; background: var(--rail); padding: 8px 4px; scrollbar-width: thin; }
+.hive-home, .hive-home * { scrollbar-width: none; -ms-overflow-style: none; }
+.hive-home *::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .switcher-group-label { margin: 4px 0 0; font-size: 9px; font-weight: 700; letter-spacing: .04em; color: var(--rail-muted); }
 .rail-shell { position: relative; width: 72px; height: 100%; flex: 0 0 72px; z-index: 35; }
 .space-rail { position: absolute; inset: 0 auto 0 0; display: flex; width: 72px; flex-direction: column; align-items: center; gap: 8px; overflow: visible; background: var(--rail); padding: 8px 6px; }
@@ -174,7 +189,7 @@ body {
 .space-group { display: flex; flex-direction: column; gap: 8px; }
 .space-row { display: flex; width: 40px; min-width: 40px; height: 40px; min-height: 40px; flex-shrink: 0; align-items: center; justify-content: center; gap: 8px; padding: 0; border-radius: 10px; touch-action: none; }
 .space-row:hover { background: var(--rail-border); }
-.space-icon { position: relative; display: flex; width: 40px; height: 40px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 10px; font-size: 14px; font-weight: 700; }
+.space-icon { position: relative; display: flex; width: 40px; height: 40px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 10px; background: var(--space-icon-color); color: var(--avatar-fg); font-size: 14px; font-weight: 700; }
 .space-icon img { border-radius: 10px; }
 .space-current > .space-icon { box-shadow: 0 0 0 2px var(--rail), 0 0 0 4px var(--brand); }
 .space-unread { position: absolute; right: -2px; top: -2px; width: 8px; height: 8px; border-radius: 50%; background: var(--rail-fg); border: 2px solid var(--rail); }
@@ -241,3 +256,8 @@ body {
   --warning: #d97706;
 }
 .dark { --danger-text: #fda4af; --danger-soft: #3d1420; --emoji-background-rgb: 22, 24, 29; }
+/* Composer: the plus turns into a cross while its menu is open, like a close button. */
+.composer-plus svg { transition: transform 180ms ease; }
+.composer-plus[aria-expanded='true'] svg { transform: rotate(45deg); }
+.composer-plus[aria-expanded='true'] { background: var(--brand-soft); color: var(--brand); }
+@media (prefers-reduced-motion: reduce) { .composer-plus svg { transition: none; } }

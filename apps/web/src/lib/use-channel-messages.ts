@@ -9,26 +9,66 @@ import type { ComposerSendOptions } from './composer-actions';
 
 export type ChatMessage = Message & { status?: 'sending' | 'failed'; error?: string; plain?: string };
 
+type CachedMessageList = { messages: ChatMessage[]; parent: Message | null; hasOlder: boolean };
+const messageCache = new Map<string, CachedMessageList>();
+
+function messageCacheKey(userId: string | undefined, channelId: string, parentId: string | null) {
+  return userId ? `${userId}:${channelId}:${parentId ?? 'channel'}` : null;
+}
+
+function readMessageCache(key: string): CachedMessageList | undefined {
+  const memory = messageCache.get(key);
+  if (memory) return memory;
+  if (typeof window === 'undefined') return undefined;
+  try {
+    const raw = sessionStorage.getItem(`hive:messages:v1:${key}`);
+    if (!raw) return undefined;
+    const saved = JSON.parse(raw) as CachedMessageList;
+    if (!Array.isArray(saved.messages)) return undefined;
+    messageCache.set(key, saved);
+    return saved;
+  } catch { return undefined; }
+}
+
+function writeMessageCache(key: string, value: CachedMessageList) {
+  messageCache.set(key, value);
+  if (typeof window === 'undefined') return;
+  // Secret chat text must never be written to browser storage.
+  if (value.messages.some(message => !!message.ciphertext)) {
+    try { sessionStorage.removeItem(`hive:messages:v1:${key}`); } catch { /* storage unavailable */ }
+    return;
+  }
+  try {
+    sessionStorage.setItem(`hive:messages:v1:${key}`, JSON.stringify({ ...value, messages: value.messages.slice(-100) }));
+  } catch { /* session cache is best-effort */ }
+}
+
 /**
  * Live message list for a channel (parentId = null) or for one thread (parentId = message id).
  * Loads over REST, then follows socket events; merges by id so nothing is ever duplicated.
  */
 export function useMessageList(channelId: string, parentId: string | null = null) {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const cacheKey = messageCacheKey(user?.id, channelId, parentId);
+  const cached = cacheKey ? readMessageCache(cacheKey) : undefined;
+  const [messages, setMessages] = useState<ChatMessage[]>(() => cached?.messages ?? []);
   const messagesRef = useRef<ChatMessage[]>([]);
-  const [parent, setParent] = useState<Message | null>(null);
-  const [hasOlder, setHasOlder] = useState(false);
+  const [parent, setParent] = useState<Message | null>(() => cached?.parent ?? null);
+  const [hasOlder, setHasOlder] = useState(() => cached?.hasOlder ?? false);
   const [connected, setConnected] = useState(socket.connected);
   const [error, setError] = useState('');
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(() => !!cached);
   const generation = useRef(0);
   const olderBusy = useRef(false);
 
   const commit = useCallback((next: ChatMessage[]) => {
     messagesRef.current = next;
     setMessages(next);
-  }, []);
+    if (cacheKey && (next.length > 0 || messageCache.has(cacheKey))) {
+      const previous = messageCache.get(cacheKey);
+      writeMessageCache(cacheKey, { messages: next, parent: previous?.parent ?? null, hasOlder: previous?.hasOlder ?? false });
+    }
+  }, [cacheKey]);
   const merge = useCallback((incoming: ChatMessage[]) => {
     let next = [...messagesRef.current];
     for (const message of incoming) {
@@ -50,7 +90,14 @@ export function useMessageList(channelId: string, parentId: string | null = null
     let active = true;
     let initialized = false;
     let synchronizing = false;
-    commit([]); setParent(null); setHasOlder(false); setReady(false); setError('');
+    const saved = cacheKey ? readMessageCache(cacheKey) : undefined;
+    if (saved) {
+      messagesRef.current = saved.messages;
+      setMessages(saved.messages); setParent(saved.parent); setHasOlder(saved.hasOlder); setReady(true);
+    } else {
+      commit([]); setParent(null); setHasOlder(false); setReady(false);
+    }
+    setError('');
     olderBusy.current = false;
     const mine = (message: { channel_id: string; parent_id: string | null }) =>
       message.channel_id === channelId && message.parent_id === parentId;
@@ -127,12 +174,17 @@ export function useMessageList(channelId: string, parentId: string | null = null
       .on('message:expired', onExpired).on('attachment:viewed', onViewed).on('poll:updated', onPoll)
       .on('reaction:updated', onReaction).on('connect', onConnect).on('disconnect', onDisconnect);
     setConnected(socket.connected);
+    if (saved) {
+      initialized = true;
+      void catchUp();
+    }
     const initial = parentId
       ? apiData<ThreadPage>(`/api/messages/${parentId}/thread`).then(page => { if (active) setParent(page.parent); return { ...page, has_more: false }; })
       : apiData<MessagePage>(`/api/channels/${channelId}/messages`);
     initial.then(page => {
       if (!active) return;
       merge(page.items); setHasOlder(page.has_more); setReady(true); initialized = true;
+      if (cacheKey) writeMessageCache(cacheKey, { messages: messagesRef.current, parent: parentId ? (page as ThreadPage).parent : null, hasOlder: page.has_more });
       void catchUp();
     }).catch(cause => { if (active) { setError(requestError(cause)); setReady(true); } });
     return () => {
@@ -144,7 +196,7 @@ export function useMessageList(channelId: string, parentId: string | null = null
       // The thread panel shares the channel room with the channel view, so only the channel leaves it.
       if (!parentId && socket.connected) socket.emit('channel:leave', { channelId }, () => {});
     };
-  }, [channelId, parentId, user?.id, merge, patch, commit]);
+  }, [channelId, parentId, user?.id, merge, patch, commit, cacheKey]);
 
   async function send(body: string, clientMsgId = crypto.randomUUID(), attachments: Attachment[] = [], options: ComposerSendOptions = {}) {
     if (!user) return false;

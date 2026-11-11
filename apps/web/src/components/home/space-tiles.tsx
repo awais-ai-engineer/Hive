@@ -6,7 +6,7 @@ import { useId, useState, type CSSProperties } from 'react';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { initials, Tooltip } from '@hive/ui';
+import { colourFor, initials, Tooltip } from '@hive/ui';
 import { API_URL } from '../../lib/api';
 import type { Space } from '../../lib/spaces';
 
@@ -14,7 +14,8 @@ import type { Space } from '../../lib/spaces';
 export function SpaceIcon({ space }: { space: Space }) {
   const [failed, setFailed] = useState<string | null>(null);
   const src = space.iconUrl?.startsWith('/') ? `${API_URL}${space.iconUrl}` : space.iconUrl;
-  return <span role="img" aria-label={space.name} className="space-icon" style={{ background: space.color, color: 'var(--avatar-fg)' }}>
+  const tileColor = /^#[0-9a-fA-F]{6}$/.test(space.color) ? space.color : colourFor(space.name);
+  return <span role="img" aria-label={space.name} className="space-icon" style={{ '--space-icon-color': tileColor, color: 'var(--avatar-fg)' } as CSSProperties}>
     {src && failed !== src ? <img src={src} alt="" onError={() => setFailed(src)} className="h-full w-full rounded-[12px] object-cover" /> : <span aria-hidden className="hive-initials" data-initials={initials(space.name)} />}
     {space.mentionCount > 0 ? <span role="img" className="space-mention" data-count={space.mentionCount > 99 ? '99+' : space.mentionCount} aria-label={`${space.mentionCount} unread mentions`} />
       : space.unreadCount > 0 && <span role="img" className="space-unread" aria-label={`${space.unreadCount} unread messages`} />}

@@ -30,14 +30,35 @@ import { conversationTitle, DM_OPENED, DMS_CHANGED, type Conversation } from '..
 import { sidebarApi, useSidebarData, type NotifyLevel } from '../../lib/sidebar';
 import { loadSetting, placeHref, saveSetting, type Place, type ThreadItem, type UnreadItem } from '../../lib/home';
 import { socket } from '../../lib/socket';
+import { isTextEntryTarget } from '../../lib/keyboard';
 import { TASKS_CHANGED, tasksApi } from '../../lib/tasks';
 import { apiData, requestError, SPACES_CHANGED, type Channel, type Space } from '../../lib/spaces';
+import { LoadingState } from '@hive/ui';
 
 const rank: Record<string, number> = { owner: 5, admin: 4, moderator: 3, member: 2, guest: 1 };
 const LAST_SPACE = 'hive:last-space';
+type HomeSnapshot = {
+  spaces: Space[]; channels: Channel[]; conversations: Conversation[]; unreads: UnreadItem[];
+  threadsUnread: number; todoCount: number;
+};
+const homeSnapshots = new Map<string, HomeSnapshot>();
+const homeSnapshotKey = (userId: string) => `hive:home-cache:v1:${userId}`;
+
+function readHomeSnapshot(userId: string): HomeSnapshot | undefined {
+  const memory = homeSnapshots.get(userId);
+  if (memory) return memory;
+  try {
+    const raw = sessionStorage.getItem(homeSnapshotKey(userId));
+    if (!raw) return undefined;
+    const snapshot = JSON.parse(raw) as HomeSnapshot;
+    if (!Array.isArray(snapshot.spaces) || !Array.isArray(snapshot.channels) || !Array.isArray(snapshot.conversations)) return undefined;
+    homeSnapshots.set(userId, snapshot);
+    return snapshot;
+  } catch { return undefined; }
+}
 
 export default function HomePage() {
-  return <Suspense fallback={<p className="p-8 text-white/50">Loading…</p>}><Home /></Suspense>;
+  return <Suspense fallback={<LoadingState />}><Home /></Suspense>;
 }
 
 /** Calls `fn` once, `delay` ms after the last call (collapses bursts of socket events). */
@@ -54,6 +75,8 @@ function useDebounced(fn: () => void, delay: number) {
 
 function Home() {
   const { user, loading } = useAuth();
+  const initialSnapshot = user ? readHomeSnapshot(user.id) : undefined;
+  const snapshotHydratedFor = useRef(initialSnapshot ? user?.id ?? null : null);
   const router = useRouter();
   const search = useSearchParams();
   const slugParam = search.get('s');
@@ -66,26 +89,43 @@ function Home() {
   const tab: ChatTab = docParam ? 'docs' : tabParam === 'posts' || tabParam === 'docs' || tabParam === 'todos' || tabParam === 'files' ? tabParam : 'messages';
   const directoryTab: DirectoryTab = search.get('dir') === 'channels' ? 'channels' : 'people';
 
-  const [spaces, setSpaces] = useState<Space[]>([]);
-  const [spacesReady, setSpacesReady] = useState(false);
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [conversationsReady, setConversationsReady] = useState(false);
-  const [channelsFor, setChannelsFor] = useState<string | null>(null);
-  const [unreads, setUnreads] = useState<UnreadItem[]>([]);
-  const [unreadsReady, setUnreadsReady] = useState(false);
-  const [threadsUnread, setThreadsUnread] = useState(0);
+  const [spaces, setSpaces] = useState<Space[]>(() => initialSnapshot?.spaces ?? []);
+  const [spacesReady, setSpacesReady] = useState(() => !!initialSnapshot);
+  const [channels, setChannels] = useState<Channel[]>(() => initialSnapshot?.channels ?? []);
+  const [conversations, setConversations] = useState<Conversation[]>(() => initialSnapshot?.conversations ?? []);
+  const [conversationsReady, setConversationsReady] = useState(() => !!initialSnapshot);
+  const [channelsFor, setChannelsFor] = useState<string | null>(() => initialSnapshot?.spaces[0]?.slug ?? null);
+  const [unreads, setUnreads] = useState<UnreadItem[]>(() => initialSnapshot?.unreads ?? []);
+  const [unreadsReady, setUnreadsReady] = useState(() => !!initialSnapshot);
+  const [threadsUnread, setThreadsUnread] = useState(() => initialSnapshot?.threadsUnread ?? 0);
   const [threadsVersion, setThreadsVersion] = useState(0);
-  const [todoCount, setTodoCount] = useState(0);
+  const [todoCount, setTodoCount] = useState(() => initialSnapshot?.todoCount ?? 0);
   const [error, setError] = useState('');
   const [drawer, setDrawer] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const switcherInitialized = useRef(false);
   const keyboardOpenedSwitcher = useRef(false);
-  const sidebar = useSidebarData(!loading && !!user);
+  const sidebar = useSidebarData(!loading && !!user, user?.id);
   const notifications = useNotificationCount();
   const prefs = useRef(sidebar.data.prefs);
   prefs.current = sidebar.data.prefs;
+
+  useEffect(() => {
+    if (!user || snapshotHydratedFor.current !== user.id) return;
+    const snapshot = { spaces, channels, conversations, unreads, threadsUnread, todoCount };
+    homeSnapshots.set(user.id, snapshot);
+    try { sessionStorage.setItem(homeSnapshotKey(user.id), JSON.stringify(snapshot)); } catch { /* session cache is best-effort */ }
+  }, [user, spaces, channels, conversations, unreads, threadsUnread, todoCount]);
+
+  useEffect(() => {
+    if (!user || snapshotHydratedFor.current === user.id) return;
+    snapshotHydratedFor.current = user.id;
+    const snapshot = readHomeSnapshot(user.id);
+    if (!snapshot) return;
+    setSpaces(snapshot.spaces); setSpacesReady(true); setChannels(snapshot.channels);
+    setConversations(snapshot.conversations); setConversationsReady(true); setChannelsFor(snapshot.spaces[0]?.slug ?? null);
+    setUnreads(snapshot.unreads); setUnreadsReady(true); setThreadsUnread(snapshot.threadsUnread); setTodoCount(snapshot.todoCount);
+  }, [user, initialSnapshot]);
 
   const preferredSlug = slugParam ?? (spacesReady ? loadSetting<string | null>(LAST_SPACE, null) : null);
   const slug = spacesReady && !spaces.some(item => item.slug === preferredSlug) ? spaces[0]?.slug ?? null : preferredSlug;
@@ -114,8 +154,9 @@ function Home() {
   const openSwitcher = useCallback(() => saveSwitcherState(true), [saveSwitcherState]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing || isTextEntryTarget(event.target)) return;
       if (event.key === 'Escape' && document.querySelector('[role="menu"], [role="dialog"], [role="alertdialog"]')) return;
-      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 's' && spaces.length > 1) {
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 's') {
         event.preventDefault();
         const opening = !switcherOpen;
         keyboardOpenedSwitcher.current = opening;
@@ -155,7 +196,7 @@ function Home() {
   // Data loading -------------------------------------------------------------------------
   useEffect(() => {
     if (loading || !user) return;
-    const refresh = () => apiData<Space[]>('/api/me/spaces').then(list => { setSpaces(list); setSpacesReady(true); })
+    const refresh = () => apiData<Space[]>('/api/me/spaces').then(list => { setSpaces(list.map(space => ({ ...space, kind: space.kind ?? (space.type === 'community' ? 'community' : 'work') }))); setSpacesReady(true); })
       .catch(cause => { setError(requestError(cause)); setSpacesReady(true); });
     void refresh();
     socket.on('spaces:updated', refresh).on('space:activity', refresh).on('read:updated', refresh).on('connect', refresh);
@@ -392,7 +433,7 @@ function Home() {
   const showView = view === 'unreads' || view === 'threads' || view === 'directory' || view === 'todos' || view === 'drafts' || view === 'inbox' || view === 'saved' || view === 'files' || (!conversation && !channel);
   const activeView = view === 'directory' || view === 'todos' || view === 'drafts' || view === 'saved' || view === 'files' || view === 'inbox' ? view : showView && view !== 'threads' ? 'unreads' : view;
   const threadChange = (id: string | null) => go({ c: selected, t: id });
-  const headerProps = { onToggleSwitcher: toggleSwitcher, switcherOpen, canToggleSwitcher: spaces.length > 1 };
+  const headerProps = {};
 
   let main;
   if (view === 'todos' && user) {
@@ -449,7 +490,7 @@ function Home() {
           canWrite={!!space.my_role && space.my_role !== 'guest'} emptyTitle="No to-dos here yet"
           emptyText="Keep track of what needs doing in this channel. Anyone who can post here can add and tick off to-dos." /></div>
         : tab === 'posts' ? <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-        <Suspense fallback={<p className="text-white/50">Loading posts…</p>}><PostFeed space={space} /></Suspense>
+        <Suspense fallback={<LoadingState label="Loading posts" />}><PostFeed space={space} /></Suspense>
       </div> : <ChannelChat key={channel.id} channel={channel} channels={channels} space={space} placeholder={`Message #${channel.name}`}
         reason={!space.my_role ? 'Join this space to chat'
           : space.my_role === 'guest' ? 'You have read-only access' : ''}
@@ -486,7 +527,7 @@ function Home() {
           unreadTotal={unreadTotal} threadsUnread={threadsUnread}
           data={sidebar.data} update={sidebar.setData} onChanged={sidebar.reload}
           onBrowseChannels={() => go({ view: 'directory', dir: 'channels' })}
-          onOpenSwitcher={openSwitcher}
+          switcherOpen={switcherOpen} onToggleSwitcher={toggleSwitcher} onOpenSwitcher={openSwitcher}
           onSwitchSpace={next => go({ s: next })} onOpen={id => go({ c: id })} onConversation={addConversation} onView={next => go({ view: next })}
           onChannelCreated={channel => void channelCreated(channel)} />
       </aside>

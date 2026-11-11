@@ -25,6 +25,7 @@ import { HuddleNotes } from './ai/huddle-notes';
 import { TranslateLink } from './ai/translate';
 import { useSaved } from '../lib/saved';
 import { ViewOnce } from './view-once';
+import { fixVideoDuration } from '../lib/video-duration';
 
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '🙏'];
 
@@ -50,7 +51,7 @@ function AttachmentView({ file, own }: { file: Attachment; own: boolean }) {
   if (file.viewOnce) return <ViewOnce file={file} own={own} />;
   if (file.kind === 'audio') return <VoicePlayer attachment={file} />;
   const href = /^https?:\/\//.test(file.url) ? file.url : `${API_URL}${file.url}`;
-  if (file.kind === 'video') return <video src={href} controls preload="metadata" playsInline className="max-h-80 max-w-full rounded" />;
+  if (file.kind === 'video') return <video src={href} controls preload="metadata" playsInline onLoadedMetadata={fixVideoDuration} className="max-h-80 max-w-full rounded" />;
   if (file.kind === 'image' && file.url) {
     return <a href={href} target="_blank" rel="noreferrer" className="block w-fit">
       <img src={href} alt={file.filename} loading="lazy" className="max-h-64 max-w-full rounded border border-white/10" />
@@ -66,6 +67,7 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [picker, setPicker] = useState(false);
+  const [animatedReaction, setAnimatedReaction] = useState<string | null>(null);
   const [reporting, setReporting] = useState(false);
   const [todo, setTodo] = useState(false);
   const [pinned, setPinned] = useState(false);
@@ -90,6 +92,7 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
   }
   function react(emoji: string) {
     setPicker(false);
+    setAnimatedReaction(emoji);
     void run('reaction:toggle', { messageId: message.id, emoji });
   }
 
@@ -185,9 +188,10 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
       {message.reactions.map(reaction => {
         const mine = !!userId && reaction.user_ids.includes(userId);
         return <UiButton tooltip={`${reaction.emoji} ${reaction.count}`} key={reaction.emoji} disabled={!canWrite || !live} onClick={() => react(reaction.emoji)}
+          onAnimationEnd={() => { if (animatedReaction === reaction.emoji) setAnimatedReaction(null); }}
           aria-pressed={mine} aria-label={`${reaction.emoji} ${reaction.count}`}
-          className={`flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-sm transition ${mine ? 'border-brand/50 bg-brand-soft' : 'border-white/10 bg-[var(--surface-2)] hover:border-white/25'} disabled:cursor-default`}>
-          {reaction.emoji} <span className={`text-xs font-semibold ${mine ? 'text-brand' : 'text-white/70'}`}>{reaction.count}</span>
+          className={`reaction-chip flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-sm transition ${animatedReaction === reaction.emoji ? 'reaction-chip-selected' : ''} ${mine ? 'border-brand/50 bg-brand-soft' : 'border-white/10 bg-[var(--surface-2)] hover:border-white/25'} disabled:cursor-default`}>
+          <span className="reaction-emoji" aria-hidden>{reaction.emoji}</span> <span className={`text-xs font-semibold ${mine ? 'text-brand' : 'text-white/70'}`}>{reaction.count}</span>
         </UiButton>;
       })}
     </div>}
@@ -206,8 +210,8 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
       {!own && !!userId && !message.id.startsWith('pending:') && <UiButton tooltip="Report message" aria-label="Report message" onClick={() => setReporting(true)}>Report</UiButton>}
       {(own || canModerate) && <UiButton tooltip="Delete message" aria-label="Delete message" onClick={() => void deleteMessage()}>Delete</UiButton>}
     </div>}
-    {picker && <div role="menu" className="mt-1 flex w-fit gap-1 rounded-2xl border border-white/10 bg-surface p-1 shadow-[var(--shadow-pop)]">
-      {QUICK_REACTIONS.map(emoji => <UiButton key={emoji} role="menuitem" onClick={() => react(emoji)} className="rounded px-1 text-lg hover:bg-white/10">{emoji}</UiButton>)}
+    {picker && <div role="menu" className="reaction-picker mt-1 flex w-fit gap-1 rounded-2xl border border-white/10 bg-surface p-1 shadow-[var(--shadow-pop)]">
+      {QUICK_REACTIONS.map(emoji => <UiButton key={emoji} role="menuitem" onClick={() => react(emoji)} className="reaction-choice rounded px-1 text-lg hover:bg-white/10">{emoji}</UiButton>)}
     </div>}
     </div>
     {todo && userId && <AddTodoDialog messageId={message.id} channelId={message.channel_id} text={message.body ?? ''} userId={userId} onClose={() => setTodo(false)} />}

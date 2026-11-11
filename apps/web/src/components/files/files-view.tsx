@@ -2,7 +2,7 @@
 
 import { Tooltip as UiTooltip } from '@hive/ui';
 
-import { Button as UiButton, Select as UiSelect, Input as UiInput } from '@hive/ui';
+import { Button as UiButton, Select as UiSelect, Input as UiInput, EmptyState, LoadingState } from '@hive/ui';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -78,14 +78,11 @@ export function FilesView({ channelId, spaces }: { channelId?: string; spaces?: 
     </div>
     {error && <p role="alert" className="mb-3 text-sm text-rose-500">{error}</p>}
 
-    {!ready ? <div role="status" aria-label="Loading files" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-      {Array.from({ length: 8 }, (_, index) => <div key={index} className="aspect-square animate-pulse rounded-xl bg-white/5" />)}
-    </div>
-      : !items.length ? <div className="mt-16 flex flex-col items-center gap-2 text-center text-white/55">
-        <Icon name="folder" size={36} />
-        <p>{filtered ? 'No files match these filters.' : channelId ? 'No files yet. Files shared here appear in this tab.' : 'No files yet. Files shared in your conversations appear here.'}</p>
+    {!ready ? <LoadingState label="Loading files" />
+      : !items.length ? <EmptyState icon={<Icon name="folder" size={28} />} title={filtered ? 'No matching files' : 'No files yet'}
+        description={filtered ? 'Try clearing the filters to see more files.' : channelId ? 'Files shared in this conversation will appear here.' : 'Files shared in your conversations will appear here.'}>
         {filtered && <UiButton type="button" className="btn-ghost" onClick={() => { setKind('all'); setUploaderId(''); setSpaceId(''); setText(''); }}>Clear filters</UiButton>}
-      </div> : <>
+      </EmptyState> : <>
         {media.length > 0 && <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {media.map(file => <li key={file.id}>
             <UiButton tooltip={`Open ${file.filename}`} type="button" aria-label={`Open ${file.filename}`} onClick={() => setOpen(media.indexOf(file))}

@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton } from '@hive/ui';
+import { Button as UiButton, EmptyState, LoadingState } from '@hive/ui';
 
 import { useEffect, useRef, useState } from 'react';
 import { socket } from '../lib/socket';
@@ -57,10 +57,11 @@ export function ThreadPanel({ channelId, channels, parentId, userId, reason, can
       {thread.parent && <div className="border-b border-white/10 pb-3">
         <MessageItem {...shared} message={thread.parent} grouped={false} canWrite={canWrite} />
       </div>}
-      {!thread.ready && <p className="py-4 text-white/50">Loading thread…</p>}
-      {thread.ready && thread.parent && <p className="py-2 text-xs text-white/40">
-        {thread.messages.length ? `${thread.messages.length} ${thread.messages.length === 1 ? 'reply' : 'replies'}` : 'No replies yet'}
+      {!thread.ready && <LoadingState label="Loading thread" />}
+      {thread.ready && thread.parent && thread.messages.length > 0 && <p className="py-2 text-xs text-white/40">
+        {thread.messages.length} {thread.messages.length === 1 ? 'reply' : 'replies'}
       </p>}
+      {thread.ready && thread.parent && thread.messages.length === 0 && <EmptyState layout="compact" title="No replies yet" description="Reply below to start the conversation." />}
       {thread.messages.map((message, index) => {
         const previous = thread.messages[index - 1];
         const grouped = previous?.author.id === message.author.id &&

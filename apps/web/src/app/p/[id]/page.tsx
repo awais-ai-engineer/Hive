@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton, Textarea as UiTextarea, Input as UiInput } from '@hive/ui';
+import { Button as UiButton, Textarea as UiTextarea, Input as UiInput, LoadingState } from '@hive/ui';
 
 import { useParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
@@ -49,7 +49,7 @@ export default function PostPage() {
   const moderate = ['owner', 'admin', 'moderator'].includes(space?.my_role ?? '');
   return <main className="mx-auto max-w-4xl px-4 py-8">
     {error && <p role="alert" className="mb-4 text-rose-400">{error}</p>}
-    {!post && !error && <p>Loading post…</p>}
+    {!post && !error && <LoadingState label="Loading post" />}
     {post && <>
       <PostCard post={post} full combined reason={post.deleted ? 'Post deleted' : !user ? 'Log in to vote' : !space?.my_role || space.my_role === 'guest' ? 'Join to vote' : ''} onChange={value => setPost(current => current ? { ...current, ...value } : current)} />
       {!post.deleted && <div className="mt-3 flex gap-2 text-sm [&>button]:rounded-xl [&>button]:border [&>button]:border-white/10 [&>button]:bg-surface [&>button]:px-3 [&>button]:py-1.5 [&>button]:font-medium [&>button:hover]:bg-[var(--surface-2)]">
@@ -78,7 +78,7 @@ export default function PostPage() {
         }}>Confirm delete</UiButton><UiButton className="ml-4" onClick={() => setConfirm(false)}>Cancel</UiButton>
       </div>}
       <section id="comments" aria-label="Comments" className="mt-8 scroll-mt-20">
-        <Suspense fallback={<p className="text-white/50">Loading comments…</p>}>
+        <Suspense fallback={<LoadingState label="Loading comments" />}>
           <CommentSection postId={post.id} space={space} postDeleted={post.deleted} />
         </Suspense>
       </section>

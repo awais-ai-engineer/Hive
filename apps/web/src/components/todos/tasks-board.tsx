@@ -2,7 +2,7 @@
 
 import { Tooltip as UiTooltip } from '@hive/ui';
 
-import { Button as UiButton, Input as UiInput, Select as UiSelect, DatePicker as UiDatePicker } from '@hive/ui';
+import { Button as UiButton, Input as UiInput, Select as UiSelect, DatePicker as UiDatePicker, LoadingState } from '@hive/ui';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type DragEvent, type FormEvent } from 'react';
@@ -120,7 +120,7 @@ export function TasksBoard({ userId }: { userId: string }) {
         <UiButton className="auth-button shrink-0" disabled={!title.trim()}><Icon name="plus" size={15} />New task</UiButton>
       </form>
       {error && <p role="alert" className="mb-3 text-sm text-rose-500">{error}</p>}
-      {open === null ? <div role="status" aria-label="Loading tasks" className="grid gap-3 md:grid-cols-3">{[1, 2, 3].map(index => <div key={index} className="h-48 animate-pulse rounded-2xl bg-[var(--surface-2)]" />)}</div>
+      {open === null ? <LoadingState label="Loading tasks" />
         : <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto md:grid-cols-3">
           {COLUMNS.map(column => {
             const list = visible.filter(task => task.status === column.status);

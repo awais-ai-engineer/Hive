@@ -13,6 +13,7 @@ import { ThreadPanel } from './thread-panel';
 import { SecretNotice } from './secret-notice';
 import { useSecretChat } from '../lib/secret';
 import { requestError } from '../lib/spaces';
+import { EmptyState, LoadingState } from '@hive/ui';
 
 type Props = {
   channel: { id: string; name: string };
@@ -145,8 +146,8 @@ export function ChannelChat({ channel, space, channels, placeholder, reason, can
         if (element.scrollTop < 20 && started.current) void loadOlder();
       }}>
       {chat.hasOlder && <UiButton onClick={() => void loadOlder()} className="mb-4 w-full text-sm text-amber-400">Load older messages</UiButton>}
-      {!chat.ready && <p className="text-white/50">Loading messages…</p>}
-      {chat.ready && !chat.messages.length && <p className="py-8 text-center text-white/40">No messages yet</p>}
+      {!chat.ready && <LoadingState label="Loading messages" />}
+      {chat.ready && !chat.messages.length && <EmptyState layout="compact" title="No messages yet" description="Send a message to start the conversation." />}
       {chat.messages.map((message, index) => {
         const previous = chat.messages[index - 1];
         const grouped = message.kind !== 'huddle' && previous?.kind !== 'huddle' && previous?.author.id === message.author.id && !previous.reply_count &&
@@ -161,7 +162,7 @@ export function ChannelChat({ channel, space, channels, placeholder, reason, can
       if (list.current) list.current.scrollTop = list.current.scrollHeight;
       nearBottom.current = true; setNewMessages(false);
     }}>New messages ↓</UiButton>}
-    <p role="status" className="min-h-7 py-1 text-xs text-white/50">{typingText}</p>
+    {typingText && <p role="status" aria-live="polite" className="py-1 text-xs text-white/50">{typingText}</p>}
     {encrypted && <SecretNotice name={secret.other?.username ?? 'them'} safety={secret.safety} ready={secret.ready} peerReady={secret.peerReady} error={secret.error} />}
     <Composer channelId={channel.id} channels={channels} secret={encrypted} allowViewOnce={allowViewOnce} placeholder={placeholder} reason={reason || (encrypted && !!secret.error ? secret.error : '')} sendTyping onEditLast={() => { const last=chat.messages.filter(item=>item.author.id===user?.id&&!item.deleted&&!item.status&&(!item.kind||item.kind==='text')).at(-1);if(last)window.dispatchEvent(new CustomEvent('hive:edit-message',{detail:{id:last.id}})); }}
       onSend={(body, files, options) => { nearBottom.current = true; return encrypted ? sendSecret(body) : chat.send(body, undefined, files, options); }} />

@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton, Input as UiInput } from '@hive/ui';
+import { Button as UiButton, Input as UiInput, LoadingState } from '@hive/ui';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SaveRejected, docHref, docsApi, makeBlock, timeAgo, type Block, type Doc, type DocUpdate } from '../../lib/docs';
@@ -145,7 +145,7 @@ export function DocEditor({ docId, channelId, slug, userId, canWrite, onBack, on
 
   if (!doc) return <div className="flex flex-1 items-center justify-center p-8">
     {error ? <div className="text-center"><p role="alert" className="mb-3 text-rose-500">{error}</p><UiButton type="button" onClick={onBack} className="btn-ghost">Back to docs</UiButton></div>
-      : <p className="text-white/55">Loading doc…</p>}
+      : <LoadingState label="Loading document" />}
   </div>;
 
   const status = state === 'saving' ? 'Saving…' : state === 'dirty' ? 'Unsaved changes' : state === 'error' ? 'Not saved' : savedAt ? `Saved · ${timeAgo(savedAt)}` : 'Saved';

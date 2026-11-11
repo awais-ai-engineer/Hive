@@ -1,6 +1,6 @@
 'use client';
 
-import { Slider as UiSlider, Button as UiButton } from '@hive/ui';
+import { Slider as UiSlider, Button as UiButton, LoadingState } from '@hive/ui';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from './ui/icons';
@@ -180,7 +180,7 @@ export function ImageCropper({ file, shape, onCancel, onSave }: {
           className="cursor-grab rounded-xl bg-[var(--surface-2)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--ring)] active:cursor-grabbing"
           onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onKeyDown={key} />
       </div>
-      {!bitmap && !error && <p role="status" className="text-center text-sm text-white/60">Loading picture…</p>}
+      {!bitmap && !error && <LoadingState layout="inline" label="Loading picture" />}
       <div className="flex items-center gap-3">
         <label htmlFor="crop-zoom" className="text-sm font-medium">Zoom</label>
         <UiSlider id="crop-zoom" min={1} max={MAX_ZOOM} step={0.01} value={zoom} disabled={!bitmap}

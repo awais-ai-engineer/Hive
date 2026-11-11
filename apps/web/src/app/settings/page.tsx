@@ -1,6 +1,6 @@
 'use client';
 
-import { FileDropzone as UiFileDropzone, Button as UiButton, Input as UiInput, Textarea as UiTextarea, Radio as UiRadio, Select as UiSelect } from '@hive/ui';
+import { FileDropzone as UiFileDropzone, Button as UiButton, Input as UiInput, Textarea as UiTextarea, Radio as UiRadio, Select as UiSelect, LoadingState, EmptyState } from '@hive/ui';
 
 import { LanguagePicker } from '../../components/language-picker';
 import { playMessageSound, setSoundsEnabled, soundsEnabled } from '../../lib/sounds';
@@ -242,7 +242,7 @@ function NotificationsCard() {
     <h2 className="text-lg font-bold">Notifications</h2>
     <p className="mt-1 text-sm text-white/60">Choose what lands in your inbox. Muted spaces and quiet conversations still only let mentions through.</p>
     {error && <p role="alert" className="mt-2 text-sm text-rose-500">{error}</p>}
-    {!prefs ? !error && <div role="status" aria-label="Loading notification settings" className="mt-4 h-40 animate-pulse rounded-xl bg-white/5" />
+    {!prefs ? !error && <LoadingState layout="inline" label="Loading notification settings" />
       : <ul className="mt-3 divide-y divide-white/10">{notificationTypes.map(type => <li key={type} className="flex items-start justify-between gap-4 py-3">
         <div><p id={`pref-${type}`} className="font-medium">{TYPE_LABELS[type].title}</p><p className="text-sm text-white/60">{TYPE_LABELS[type].hint}</p></div>
         <UiButton type="button" role="switch" aria-checked={prefs[type]} aria-labelledby={`pref-${type}`} onClick={() => void toggle(type)}
@@ -269,8 +269,8 @@ function BlockedCard() {
   return <section className="card p-5 sm:p-6">
     <h2 className="text-lg font-bold">Blocked people</h2>
     {error && <p role="alert" className="mt-2 text-sm text-rose-500">{error}</p>}
-    {list === null ? !error && <p className="mt-3 text-sm text-white/60">Loading…</p>
-      : list.length === 0 ? <p className="mt-3 text-sm text-white/60">You haven’t blocked anyone.</p>
+    {list === null ? !error && <LoadingState layout="inline" label="Loading blocked people" />
+      : list.length === 0 ? <EmptyState layout="compact" title="No blocked people" description="People you block will appear here." />
       : <ul className="mt-3 divide-y divide-white/10">{list.map(person => <li key={person.id} className="flex items-center gap-3 py-3">
         <Avatar name={person.username} src={person.avatar_url} size={36} />
         <Link href={`/u/${person.username}`} className="flex-1 truncate font-medium hover:underline">{person.username}</Link>
@@ -283,7 +283,7 @@ export default function SettingsPage() {
   const { user, loading, updateUser } = useAuth();
   const [section, setSection] = useState<Section>('profile');
   useEffect(() => { const wanted = new URLSearchParams(window.location.search).get('section'); if (sections.some(([id]) => id === wanted)) setSection(wanted as Section); }, []);
-  if (loading) return <main className="p-16 text-center text-white/60">Loading…</main>;
+  if (loading) return <LoadingState label="Loading settings" />;
   if (!user) return <main className="p-16 text-center"><Link className="font-semibold text-brand hover:underline" href="/login?next=/settings">Log in to see your settings</Link></main>;
   return <main className="mx-auto max-w-4xl px-4 py-8">
     <h1 className="mb-6 text-3xl font-extrabold tracking-tight">Settings</h1>

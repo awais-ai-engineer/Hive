@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton, Input as UiInput, Textarea as UiTextarea } from '@hive/ui';
+import { Button as UiButton, Input as UiInput, Textarea as UiTextarea, LoadingState } from '@hive/ui';
 
 import { useEffect, useRef, useState } from 'react';
 import type { Post } from '../../lib/posts';
@@ -212,7 +212,7 @@ export function ShareMenu({ post, isOpen, onClose }: Props) {
 
               <div className="max-h-48 overflow-y-auto rounded border border-white/10 bg-canvas p-1">
                 {busy && destinations.length === 0 ? (
-                  <p className="p-3 text-center text-xs text-white/40">Loading chats…</p>
+                  <LoadingState layout="inline" label="Loading chats" className="px-3" />
                 ) : filtered.length === 0 ? (
                   <p className="p-3 text-center text-xs text-white/40">No conversations found</p>
                 ) : (

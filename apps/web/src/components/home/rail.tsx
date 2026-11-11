@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useAuth } from '../../lib/auth';
 import { apiData, requestError, SPACES_CHANGED, type Space } from '../../lib/spaces';
+import { isTextEntryTarget } from '../../lib/keyboard';
 import { activeStatus } from '../../lib/status';
 import { Avatar } from '../ui/avatar';
 import { Icon, type IconName } from '../ui/icons';
@@ -78,7 +79,8 @@ export function Rail({ spaces, current, onSwitch, unread, todos = 0, switcherOpe
   }, []);
   useEffect(() => {
     const onShortcut = (event: globalThis.KeyboardEvent) => {
-      if ((!event.ctrlKey && !event.metaKey) || event.altKey || event.shiftKey || !/^[1-9]$/.test(event.key)) return;
+      if (event.isComposing || isTextEntryTarget(event.target)
+        || (!event.ctrlKey && !event.metaKey) || event.altKey || event.shiftKey || !/^[1-9]$/.test(event.key)) return;
       if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
       const space = ordered[Number(event.key) - 1];
       if (space) { event.preventDefault(); onSwitch(space.slug); }
@@ -120,6 +122,7 @@ export function Rail({ spaces, current, onSwitch, unread, todos = 0, switcherOpe
     {navItem('/home?view=inbox', 'bell', 'Activity', unread)}
     {navItem('/home?view=todos', 'checkSquare', 'Tasks', todos)}
     {navItem('/home?view=files', 'folder', 'Files')}
+    {navItem('/feed', 'layers', 'Feed')}
     {navItem('/spaces', 'compass', 'Explore')}
   </>;
   const profileItems = [
@@ -138,20 +141,33 @@ export function Rail({ spaces, current, onSwitch, unread, todos = 0, switcherOpe
     { label: 'New channel', disabled: !selectedSpace, onSelect: () => router.push('/home?view=directory&dir=channels') },
     { label: 'New huddle', disabled: !selectedSpace, onSelect: onNewHuddle },
   ]} />;
+  const addMenu = [
+    { label: 'Create a work space', onSelect: () => router.push('/spaces/new?type=workspace') },
+    { label: 'Create a community', onSelect: () => router.push('/spaces/new?type=community') },
+    { label: 'Join with invite link', onSelect: () => window.dispatchEvent(new Event('hive:join-invite')) },
+  ];
+  const others = spaces.filter(space => space.slug !== current);
+  const spacesMenu = (trigger: ReactNode) => <DropdownMenu label="Spaces menu" triggerTooltip="Your spaces" trigger={trigger} header="Your spaces" items={[
+    ...others.map(space => ({ label: `${space.name}${space.kind === 'community' ? ' · community' : ''}`, onSelect: () => onSwitch(space.slug) })),
+    ...(others.length ? [{ separator: true, label: '' }] : []),
+    { label: 'Browse communities', onSelect: () => router.push('/spaces') },
+    { separator: true, label: '' },
+    ...addMenu,
+  ]} />;
   const tiles = (list: Space[], kind: Space['kind']) => <SpaceTiles spaces={list} current={current} expanded={false} onSwitch={slug => { setSheet(false); onSwitch(slug); }} onOrder={ids => void saveOrder(ids, kind)} disabled={saving} />;
 
   return <>
-    <div className={`rail-switcher-width ${switcherOpen && spaces.length > 1 ? 'rail-switcher-width-open' : ''}`} aria-hidden={!switcherOpen || spaces.length < 2} inert={!switcherOpen || spaces.length < 2}>
+    <div className={`rail-switcher-width ${switcherOpen ? 'rail-switcher-width-open' : ''}`} aria-hidden={!switcherOpen} inert={!switcherOpen}>
       <nav aria-label="Spaces" className="on-dark space-switcher-strip" onKeyDown={arrows}>
         {work.length > 0 && <><h2 className="switcher-group-label">WORK</h2>{tiles(work, 'work')}</>}
         {work.length > 0 && social.length > 0 && <div role="separator" className="rail-divider" />}
         {social.length > 0 && <><h2 className="switcher-group-label">SOCIAL</h2>{tiles(social, 'community')}</>}
-        {createMenu(<UiButton type="button" aria-label="Add a space" className="rail-add"><Icon name="plus" /></UiButton>, 'Add a space')}
+        {spacesMenu(<UiButton type="button" aria-label="Your spaces" className="rail-add"><Icon name="plus" /></UiButton>)}
       </nav>
     </div>
     <div className="rail-shell">
       <nav aria-label="Main" className="on-dark space-rail" onKeyDown={arrows}>
-        <SpaceSwitcher current={selectedSpace} compact onOpenSwitcher={spaces.length > 1 ? onOpenSwitcher : undefined} />
+        <SpaceSwitcher current={selectedSpace} compact onOpenSwitcher={onOpenSwitcher} spaces={spaces} onSwitch={onSwitch} stripOpen={switcherOpen} onToggleStrip={onToggleSwitcher} />
         <div className="rail-global">{globalNav}</div>
         <div className="rail-spacer" />
         {createMenu(<UiButton type="button" aria-label="Create" className="rail-create"><Icon name="plus" size={21} /></UiButton>)}

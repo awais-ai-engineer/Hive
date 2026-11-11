@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { LoadingState } from '@hive/ui';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../../../../lib/auth';
@@ -45,7 +46,7 @@ export default function AppsPage() {
   const reload = async () => { try { await load(); } catch (cause) { setError(requestError(cause)); } };
   if (loading || !space || !allowed) return <main className="mx-auto max-w-3xl px-4 py-10">
     <Link href={`/s/${slug}`} className="text-sm text-brand">← Back to space</Link>
-    {error && <p role="alert" className="mt-4 text-rose-500">{error}</p>}
+    {error && (error.startsWith('Loading') ? <LoadingState label="Loading space apps" /> : <p role="alert" className="mt-4 text-rose-500">{error}</p>)}
   </main>;
 
   return <main className="mx-auto max-w-3xl space-y-6 px-4 py-10">

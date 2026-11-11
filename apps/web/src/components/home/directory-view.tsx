@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton, Input as UiInput } from '@hive/ui';
+import { Button as UiButton, Input as UiInput, LoadingState, EmptyState } from '@hive/ui';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
@@ -103,9 +103,10 @@ export function DirectoryView({ space, tab, onTab, onMessage, onOpenChannel }: {
     </label>
     <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1" aria-live="polite" aria-busy={list.state === 'loading'}>
       {list.state === 'error' && <p role="alert" className="text-sm text-rose-500">{list.error}</p>}
-      {list.state === 'loading' && !list.items.length && <p className="text-sm text-white/50">Loading…</p>}
-      {list.state === 'ready' && !list.items.length && <p className="rounded-xl border border-dashed border-white/15 p-6 text-center text-sm text-white/60">
-        {query.trim() ? 'Nothing matches your search.' : tab === 'people' ? 'Nobody else is here yet. Invite people to a space and they will show up.' : 'There are no channels to show yet.'}</p>}
+      {list.state === 'loading' && !list.items.length && <LoadingState label={tab === 'people' ? 'Loading people' : 'Loading channels'} />}
+      {list.state === 'ready' && !list.items.length && <EmptyState layout="compact"
+        title={query.trim() ? 'No matches' : tab === 'people' ? 'No other members yet' : 'No channels yet'}
+        description={query.trim() ? 'Try a different search.' : tab === 'people' ? 'Invite people to a space and they will show up here.' : 'Create a channel to start a conversation.'} />}
       {tab === 'people' && <ul className="space-y-0.5">{people.items.map(person => <PersonRow key={person.id} person={person} onMessage={onMessage} />)}</ul>}
       {tab === 'channels' && <ul className="space-y-0.5">{channels.items.map(channel => <li key={channel.id} className="flex flex-wrap items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-[var(--surface-2)]">
         <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand"><Icon name={channel.is_private ? 'lock' : channel.type === 'voice' ? 'volume' : 'hash'} size={18} /></span>

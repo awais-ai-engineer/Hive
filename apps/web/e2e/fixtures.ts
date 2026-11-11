@@ -11,7 +11,7 @@ export const makeSpace = (id: string, name: string, kind: Space['kind'], extra: 
 const fixtures = [makeSpace('studio', 'Studio Team', 'work'), makeSpace('design', 'Design Team', 'work'),
   makeSpace('garden', 'Garden Club', 'community', { unread: 4, unreadCount: 4, mentionCount: 2 })].map((space, index) => ({ ...space, position: index }));
 
-export async function mockApi(page: Page, initial: Space[] = fixtures) {
+export async function mockApi(page: Page, initial: Space[] = fixtures, withChannel = false) {
   let spaces = structuredClone(initial);
   let failOrder = false;
   const saved: string[][] = [];
@@ -36,7 +36,12 @@ export async function mockApi(page: Page, initial: Space[] = fixtures) {
     else if (path === '/api/push/settings') body = { quietStart: null, quietEnd: null };
     else if (path === '/api/push/config') body = { enabled: false };
     else if (path === '/api/me/unreads' || path === '/api/me/threads') body = { items: [], next_cursor: null };
-    else if (path === '/api/calls' || path === '/api/dms' || path === '/api/drafts' || path === '/api/scheduled' || path === '/api/reminders' || path === '/api/me/stars' || path === '/api/me/conversation-prefs' || path.endsWith('/channels')) body = [];
+    else if (path.endsWith('/channels')) {
+      const slug = path.split('/')[3];
+      body = withChannel ? [{ id: `${slug}-channel`, space_id: spaces.find(space => space.slug === slug)?.id ?? slug,
+        type: 'text', name: 'general', topic: null, position: 0, unread: 0, is_private: false }] : [];
+    } else if (/^\/api\/channels\/[^/]+\/messages$/.test(path)) body = { items: [], has_more: false };
+    else if (path === '/api/calls' || path === '/api/dms' || path === '/api/drafts' || path === '/api/scheduled' || path === '/api/reminders' || path === '/api/me/stars' || path === '/api/me/conversation-prefs') body = [];
     else return route.fulfill({ status: 404, json: { detail: 'Not found' } });
     return route.fulfill({ json: body });
   });

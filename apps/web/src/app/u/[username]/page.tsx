@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton } from '@hive/ui';
+import { Button as UiButton, LoadingState } from '@hive/ui';
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -72,7 +72,7 @@ export default function ProfilePage() {
     <p className="mt-2 text-white/60">Check the username, or they may have changed it.</p>
     <Link href="/spaces" className="auth-button mt-6">Explore spaces</Link>
   </main>;
-  if (!profile) return <main className="p-16 text-center text-white/60" role={error ? 'alert' : undefined}>{error || 'Loading…'}</main>;
+  if (!profile) return error ? <main role="alert" className="p-16 text-center text-white/60">{error}</main> : <LoadingState label="Loading profile" />;
 
   const own = user?.id === profile.id;
   const name = profile.display_name || profile.username;

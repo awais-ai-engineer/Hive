@@ -91,7 +91,7 @@ export function VoiceRecorder({ onReady, onError, disabled = false }: Props) {
   }
   if (!supported) return null;
   const button = 'btn-ghost rounded-lg px-2 py-1 text-xs';
-  if (phase === 'idle') return <UiButton type="button" className={button} disabled={disabled} tooltip="Record voice message" aria-label="Record voice message" onClick={() => void start()}><Icon name="volume" size={18} /></UiButton>;
+  if (phase === 'idle') return <UiButton type="button" className="flex h-9 min-w-9 items-center justify-center rounded-lg px-2 text-white/70 hover:bg-brand-soft hover:text-brand disabled:opacity-40" disabled={disabled} tooltip="Record a voice message" aria-label="Record a voice message" onClick={() => void start()}><Icon name="mic" size={18} /></UiButton>;
   return <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-xl bg-brand-soft p-2" aria-label="Voice recording">
     {phase === 'starting' && <span className="text-xs">Starting microphone…</span>}
     {phase === 'preparing' && <span className="text-xs">Preparing recording…</span>}

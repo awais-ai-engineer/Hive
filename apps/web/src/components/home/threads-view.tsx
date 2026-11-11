@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton } from '@hive/ui';
+import { Button as UiButton, EmptyState, LoadingState } from '@hive/ui';
 
 import { useCallback, useEffect, useState } from 'react';
 import { placeLabel, type ThreadItem } from '../../lib/home';
@@ -32,10 +32,10 @@ export function ThreadsView({ version, userId, onOpen }: Props) {
   }, []);
   useEffect(() => { void load(); }, [load, version]);
 
-  if (!ready) return <p className="text-white/50">Loading threads…</p>;
+  if (!ready) return <LoadingState label="Loading threads" />;
   return <div>
     {error && <p role="alert" className="mb-2 text-sm text-rose-400">{error}</p>}
-    {!items.length && <p className="mt-16 text-center text-white/50">No threads yet. Reply to a message to start one.</p>}
+    {!items.length && <EmptyState title="No threads yet" description="Reply to any message to start a thread. Replies will stay together here." />}
     <ul className="space-y-4">{items.map(item => {
       const fresh = item.unread_replies > 0;
       return <li key={item.parent.id}>

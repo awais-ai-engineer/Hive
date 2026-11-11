@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 import { fileHref, fileLocation, type FileItem } from '../../lib/files';
 import { Icon } from '../ui/icons';
+import { fixVideoDuration } from '../../lib/video-duration';
 
 /** Full-screen viewer for images and videos: arrows move, Esc closes, focus stays inside. */
 export function Lightbox({ items, index, onIndex, onClose }: {
@@ -55,7 +56,7 @@ export function Lightbox({ items, index, onIndex, onClose }: {
     <div className="relative flex min-h-0 flex-1 items-center justify-center px-4 pb-4" onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
       {items.length > 1 && <UiButton type="button" onClick={() => go(-1)} aria-label="Previous" tooltip="Previous" className={`${round} absolute left-3 z-10`}><Icon name="chevronLeft" /></UiButton>}
       {file.kind === 'video'
-        ? <video key={file.id} src={fileHref(file.url)} controls autoPlay playsInline className="max-h-full max-w-full" />
+        ? <video key={file.id} src={fileHref(file.url)} controls autoPlay playsInline onLoadedMetadata={fixVideoDuration} className="max-h-full max-w-full" />
         : <img key={file.id} src={fileHref(file.url)} alt={file.filename} className="max-h-full max-w-full object-contain" />}
       {items.length > 1 && <UiButton type="button" onClick={() => go(1)} aria-label="Next" tooltip="Next" className={`${round} absolute right-3 z-10`}><Icon name="chevronRight" /></UiButton>}
     </div>

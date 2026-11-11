@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton, Input as UiInput, Textarea as UiTextarea } from '@hive/ui';
+import { Button as UiButton, Input as UiInput, Textarea as UiTextarea, LoadingState } from '@hive/ui';
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -23,7 +23,7 @@ export default function SubmitPage() {
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  if (loading) return <p className="p-8">Loading…</p>;
+  if (loading) return <LoadingState label="Loading account" />;
   if (!user) return <main className="p-8"><Link className="text-amber-400" href={`/login?next=${encodeURIComponent(`/s/${slug}/submit`)}`}>Log in</Link> to create a post.</main>;
   return <main className="mx-auto max-w-2xl px-4 py-8">
     <h1 className="mb-6 text-2xl font-bold">Create post</h1>

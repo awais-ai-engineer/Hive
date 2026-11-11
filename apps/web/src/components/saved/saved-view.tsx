@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton } from '@hive/ui';
+import { Button as UiButton, EmptyState, LoadingState } from '@hive/ui';
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -71,12 +71,9 @@ export function SavedView() {
           className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${tab === value ? 'border-brand text-brand' : 'border-transparent text-white/60 hover:text-white'}`}>{label}</UiButton>)}
     </div>
     {error && <p role="alert" className="mb-3 text-sm text-rose-500">{error}</p>}
-    {!ready ? <div role="status" aria-label="Loading saved items" className="space-y-3">
-      {[1, 2, 3].map(index => <div key={index} className="h-24 animate-pulse rounded-xl bg-white/5" />)}
-    </div> : !shown.length ? <div className="mt-16 flex flex-col items-center gap-2 text-center text-white/55">
-      <Icon name="bookmark" size={36} />
-      <p>{tab === 'message' ? 'No saved messages. Use Save on a message to keep it here.' : 'No saved posts or comments. Use Save on a post or comment to keep it here.'}</p>
-    </div> : <ul className="space-y-3">
+    {!ready ? <LoadingState label="Loading saved items" /> : !shown.length ? <EmptyState icon={<Icon name="bookmark" size={28} />}
+      title={tab === 'message' ? 'No saved messages' : 'No saved posts or comments'}
+      description={tab === 'message' ? 'Use Save on a message to keep it here.' : 'Use Save on a post or comment to keep it here.'} /> : <ul className="space-y-3">
       {shown.map(item => <li key={item.id} className="card p-4">
         <p className="flex flex-wrap items-center gap-x-2 text-xs font-medium text-white/50">
           {item.author && <span className="flex items-center gap-1.5"><Avatar name={item.author.username} src={item.author.avatarUrl} size={18} />{item.author.displayName || item.author.username}</span>}
