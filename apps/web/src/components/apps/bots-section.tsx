@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, confirmAction as UiConfirm, Checkbox as UiCheckbox, Input as UiInput } from '@hive/ui';
+
 import { useState, type FormEvent } from 'react';
 import { botCreateSchema } from '@hive/shared';
 import { API_URL } from '../../lib/api';
@@ -54,35 +56,35 @@ export function BotsSection({ slug, channels, bots, reload, fail }: {
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xl" aria-hidden>{bot.emoji}</span>
           <div className="min-w-0 flex-1"><p className="truncate font-medium">{bot.name}</p><p className="text-xs text-white/60">{bot.description || 'No description'} · token ends in …{bot.tokenHint}</p></div>
-          <button type="button" className="btn-ghost" onClick={() => { if (window.confirm('The old token stops working immediately. Continue?')) void act(apiData<Bot>(`${base(slug)}/bots/${bot.id}/regenerate`, { method: 'POST' }).then(show)); }}>Regenerate token</button>
-          <button type="button" className="btn-ghost" onClick={() => void act(apiData<Bot>(`${base(slug)}/bots/${bot.id}/rotate-secret`, { method: 'POST' }).then(show))}>Rotate signing secret</button>
-          <button type="button" className="text-rose-500" onClick={() => { if (window.confirm(`Delete ${bot.name}? Its token and slash commands are removed.`)) void act(apiData(`${base(slug)}/bots/${bot.id}`, { method: 'DELETE' })); }}>Delete</button>
+          <UiButton type="button" className="btn-ghost" onClick={async () => { if (await UiConfirm('The old token stops working immediately. Continue?')) void act(apiData<Bot>(`${base(slug)}/bots/${bot.id}/regenerate`, { method: 'POST' }).then(show)); }}>Regenerate token</UiButton>
+          <UiButton type="button" className="btn-ghost" onClick={() => void act(apiData<Bot>(`${base(slug)}/bots/${bot.id}/rotate-secret`, { method: 'POST' }).then(show))}>Rotate signing secret</UiButton>
+          <UiButton type="button" className="text-rose-500" onClick={async () => { if (await UiConfirm(`Delete ${bot.name}? Its token and slash commands are removed.`)) void act(apiData(`${base(slug)}/bots/${bot.id}`, { method: 'DELETE' })); }}>Delete</UiButton>
         </div>
         <fieldset><legend className="text-sm font-medium">Channels this bot may use</legend>
           <div className="mt-1 flex flex-wrap gap-2">{channels.map(channel => {
             const on = bot.channels.some(item => item.id === channel.id);
             return <label key={channel.id} className={`flex cursor-pointer items-center gap-1 rounded-full border px-3 py-1 text-sm ${on ? 'border-brand bg-brand-soft' : 'border-white/15'}`}>
-              <input type="checkbox" checked={on} onChange={event => void toggleChannel(bot, channel.id, event.target.checked)} />#{channel.name}</label>;
+              <UiCheckbox checked={on} onChange={event => void toggleChannel(bot, channel.id, event.target.checked)} />#{channel.name}</label>;
           })}</div></fieldset>
         <label className="block text-sm">Address Hive sends events to (optional)
-          <input className="auth-input" type="url" defaultValue={bot.webhookUrl ?? ''} placeholder="https://example.com/hive" onBlur={event => void saveUrl(bot, event.target.value)} /></label>
-        {bot.webhookUrl && <div><button type="button" className="text-sm text-brand underline" onClick={async () => {
+          <UiInput className="auth-input" type="url" defaultValue={bot.webhookUrl ?? ''} placeholder="https://example.com/hive" onBlur={event => void saveUrl(bot, event.target.value)} /></label>
+        {bot.webhookUrl && <div><UiButton type="button" className="text-sm text-brand underline" onClick={async () => {
           if (log?.id === bot.id) { setLog(null); return; }
           try { setLog({ id: bot.id, rows: await apiData<Delivery[]>(`${base(slug)}/bots/${bot.id}/deliveries`) }); } catch (cause) { fail(requestError(cause)); }
-        }}>{log?.id === bot.id ? 'Hide' : 'Show'} recent deliveries</button>
+        }}>{log?.id === bot.id ? 'Hide' : 'Show'} recent deliveries</UiButton>
           {log?.id === bot.id && (log.rows.length ? <ul className="mt-2 space-y-1 text-xs">{log.rows.map(row => <li key={row.id}>
             <span className={row.status === 'ok' ? 'text-emerald-500' : row.status === 'failed' ? 'text-rose-500' : 'text-white/60'}>{row.status}</span> · {row.event} · {row.attempts} {row.attempts === 1 ? 'try' : 'tries'}{row.error ? ` · ${row.error}` : ''} · {new Date(row.createdAt).toLocaleString()}</li>)}</ul> : <p className="mt-2 text-xs text-white/60">Nothing sent yet.</p>)}</div>}
       </li>)}</ul>}
     <form onSubmit={create} className="space-y-3">
       <div className="flex flex-wrap items-end gap-3">
-        <label className="min-w-40 flex-1 text-sm">Name<input name="name" className="auth-input" maxLength={80} required placeholder="Helper" /></label>
-        <label className="w-24 text-sm">Icon<input name="emoji" className="auth-input" maxLength={16} defaultValue="🤖" /></label>
+        <label className="min-w-40 flex-1 text-sm">Name<UiInput name="name" className="auth-input" maxLength={80} required placeholder="Helper" /></label>
+        <label className="w-24 text-sm">Icon<UiInput name="emoji" className="auth-input" maxLength={16} defaultValue="🤖" /></label>
       </div>
-      <label className="block text-sm">What does it do?<input name="description" className="auth-input" maxLength={300} /></label>
-      <label className="block text-sm">Address Hive sends events to (optional)<input name="webhookUrl" type="url" className="auth-input" placeholder="https://example.com/hive" /></label>
+      <label className="block text-sm">What does it do?<UiInput name="description" className="auth-input" maxLength={300} /></label>
+      <label className="block text-sm">Address Hive sends events to (optional)<UiInput name="webhookUrl" type="url" className="auth-input" placeholder="https://example.com/hive" /></label>
       <fieldset><legend className="text-sm font-medium">Channels</legend><div className="mt-1 flex flex-wrap gap-2">{channels.map(channel =>
-        <label key={channel.id} className="flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-sm"><input type="checkbox" name="channelIds" value={channel.id} />#{channel.name}</label>)}</div></fieldset>
-      <button className="auth-button">Create bot</button>
+        <label key={channel.id} className="flex items-center gap-1 rounded-full border border-white/15 px-3 py-1 text-sm"><UiCheckbox name="channelIds" value={channel.id} />#{channel.name}</label>)}</div></fieldset>
+      <UiButton className="auth-button">Create bot</UiButton>
     </form>
     <details className="text-sm"><summary className="cursor-pointer font-medium">For developers: events and signatures</summary>
       <div className="mt-3 space-y-3">

@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import Link from 'next/link';
 import { useState } from 'react';
 import { apiData, requestError } from '../lib/spaces';
@@ -23,7 +25,7 @@ export function JoinPrompt({ space, loggedIn }: { space: { name: string; slug: s
       {loggedIn ? <>
         <h2 className="mt-4 text-lg font-bold">Join {space.name} to read and join the conversation</h2>
         <p className="mt-1 text-sm text-white/60">Chat in this community is for members. Posts are still open to everyone.</p>
-        <button type="button" disabled={busy} onClick={() => void join()} className="auth-button mt-5">{busy ? 'Joining…' : 'Join community'}</button>
+        <UiButton type="button" disabled={busy} onClick={() => void join()} className="auth-button mt-5">{busy ? 'Joining…' : 'Join community'}</UiButton>
       </> : <>
         <h2 className="mt-4 text-lg font-bold">Log in to read this community&apos;s chat</h2>
         <p className="mt-1 text-sm text-white/60">Chat is for members. Posts are still open to everyone.</p>

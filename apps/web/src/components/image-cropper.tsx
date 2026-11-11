@@ -1,5 +1,7 @@
 'use client';
 
+import { Slider as UiSlider, Button as UiButton, LoadingState } from '@hive/ui';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from './ui/icons';
 
@@ -71,7 +73,7 @@ export function ImageCropper({ file, shape, onCancel, onSave }: {
       context.rect(0, 0, width, height);
       context.arc(width / 2, height / 2, width / 2 - 2, 0, Math.PI * 2, true);
       context.fill('evenodd');
-      context.strokeStyle = '#fff';
+      context.strokeStyle = 'var(--rail-fg)';
       context.lineWidth = 2;
       context.beginPath();
       context.arc(width / 2, height / 2, width / 2 - 2, 0, Math.PI * 2);
@@ -178,18 +180,18 @@ export function ImageCropper({ file, shape, onCancel, onSave }: {
           className="cursor-grab rounded-xl bg-[var(--surface-2)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--ring)] active:cursor-grabbing"
           onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onKeyDown={key} />
       </div>
-      {!bitmap && !error && <p role="status" className="text-center text-sm text-white/60">Loading picture…</p>}
+      {!bitmap && !error && <LoadingState layout="inline" label="Loading picture" />}
       <div className="flex items-center gap-3">
         <label htmlFor="crop-zoom" className="text-sm font-medium">Zoom</label>
-        <input id="crop-zoom" type="range" min={1} max={MAX_ZOOM} step={0.01} value={zoom} disabled={!bitmap}
+        <UiSlider id="crop-zoom" min={1} max={MAX_ZOOM} step={0.01} value={zoom} disabled={!bitmap}
           className="flex-1 accent-[var(--brand)]" onChange={event => changeZoom(Number(event.target.value))} />
-        <button type="button" className="btn-ghost !px-2" aria-label="Rotate left" title="Rotate left" disabled={!bitmap} onClick={() => rotate(-1)}><Icon name="rotateLeft" size={18} /></button>
-        <button type="button" className="btn-ghost !px-2" aria-label="Rotate right" title="Rotate right (R)" disabled={!bitmap} onClick={() => rotate(1)}><Icon name="rotateRight" size={18} /></button>
+        <UiButton type="button" className="btn-ghost !px-2" aria-label="Rotate left" tooltip="Rotate left" disabled={!bitmap} onClick={() => rotate(-1)}><Icon name="rotateLeft" size={18} /></UiButton>
+        <UiButton type="button" className="btn-ghost !px-2" aria-label="Rotate right" tooltip="Rotate right (R)" disabled={!bitmap} onClick={() => rotate(1)}><Icon name="rotateRight" size={18} /></UiButton>
       </div>
       {error && <p role="alert" className="text-sm text-rose-500">{error}</p>}
       <div className="flex justify-end gap-2">
-        <button type="button" className="btn-ghost" onClick={onCancel} disabled={saving}>Cancel</button>
-        <button type="button" className="auth-button" onClick={() => void save()} disabled={!bitmap || saving}>{saving ? 'Saving…' : 'Save'}</button>
+        <UiButton type="button" className="btn-ghost" onClick={onCancel} disabled={saving}>Cancel</UiButton>
+        <UiButton type="button" className="auth-button" onClick={() => void save()} disabled={!bitmap || saving}>{saving ? 'Saving…' : 'Save'}</UiButton>
       </div>
     </div>
   </div>;

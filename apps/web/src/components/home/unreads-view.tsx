@@ -1,5 +1,9 @@
 'use client';
 
+import { Tooltip as UiTooltip } from '@hive/ui';
+
+import { Button as UiButton, Checkbox as UiCheckbox, EmptyState, LoadingState } from '@hive/ui';
+
 import { useEffect, useState } from 'react';
 import type { PriorityLevel } from '@hive/shared';
 import { aiPost, useAiStatus } from '../../lib/ai';
@@ -27,8 +31,8 @@ function Card({ item, userId, reason, onOpen, onMarkRead }: Pick<Props, 'userId'
       <h2 className="min-w-0 truncate font-semibold">{placeLabel(item.channel)}
         <span className="ml-2 rounded-full bg-amber-400 px-1.5 text-xs font-semibold text-black">{badge(item.unread)} new</span></h2>
       <div className="flex shrink-0 gap-3 text-sm">
-        <button type="button" onClick={() => onMarkRead(item)} className="text-white/60 hover:text-white">Mark as read</button>
-        <button type="button" onClick={() => onOpen(item.channel, item.items[0]?.parent_id ?? undefined)} className="text-amber-400">Open</button>
+        <UiButton type="button" onClick={() => onMarkRead(item)} className="text-white/60 hover:text-white">Mark as read</UiButton>
+        <UiButton type="button" onClick={() => onOpen(item.channel, item.items[0]?.parent_id ?? undefined)} className="text-amber-400">Open</UiButton>
       </div>
     </div>
     {reason && <p className="mb-2 text-sm text-white/65">{reason}</p>}
@@ -61,17 +65,16 @@ export function UnreadsView({ items, ready, userId, onOpen, onMarkRead }: Props)
     return () => { active = false; };
   }, [sorted, ai, key]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!ready) return <ul aria-busy="true" aria-label="Loading unread messages" className="space-y-4">{[0, 1].map(index =>
-    <li key={index} className="h-28 animate-pulse rounded-xl bg-white/5" />)}</ul>;
-  if (!items.length) return <p className="mt-16 text-center text-white/50">You&apos;re all caught up 🎉</p>;
+  if (!ready) return <LoadingState label="Loading unread messages" />;
+  if (!items.length) return <EmptyState icon="✓" title="All caught up" description="New mentions, replies and messages will appear here." />;
 
   const byChannel = new Map(items.map(item => [item.channel.id, item]));
   const shared = { userId, onOpen, onMarkRead };
   return <div>
     {ai && <div className="mb-4 flex flex-wrap items-start gap-x-4 gap-y-2">
       <CatchUp />
-      <label className="flex cursor-pointer items-center gap-1.5 py-1.5 text-sm text-white/70" title="Let AI sort your unread conversations by how soon they need you">
-        <input type="checkbox" checked={sorted} onChange={event => setSorted(event.target.checked)} />Sort by priority</label>
+      <UiTooltip content="Let AI sort your unread conversations by how soon they need you"><label className="flex cursor-pointer items-center gap-1.5 py-1.5 text-sm text-white/70">
+        <UiCheckbox checked={sorted} onChange={event => setSorted(event.target.checked)} />Sort by priority</label></UiTooltip>
     </div>}
     {error && <p role="alert" className="mb-3 text-sm text-rose-500">{error}</p>}
     {sorted && busy && <p aria-live="polite" className="mb-3 text-sm text-white/55">Sorting your conversations…</p>}

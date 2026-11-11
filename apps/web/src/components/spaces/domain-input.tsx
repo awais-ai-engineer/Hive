@@ -1,5 +1,7 @@
 'use client';
 
+import { Input as UiInput } from '@hive/ui';
+
 import { useState } from 'react';
 import { normalizeDomain, PUBLIC_EMAIL_DOMAINS } from '@hive/shared';
 
@@ -22,7 +24,7 @@ export function DomainInput({ defaultValue = '' }: { defaultValue?: string }) {
     tone = 'text-amber-500';
   }
   return <label className="block font-medium">Company email domain
-    <input className="auth-input" name="allowed_email_domain" value={value} onChange={event => setValue(event.target.value)}
+    <UiInput className="auth-input" name="allowed_email_domain" value={value} onChange={event => setValue(event.target.value)}
       placeholder="yourcompany.com" autoComplete="off" spellCheck={false} inputMode="url" />
     <span className={`text-sm font-normal ${tone}`} aria-live="polite">{hint}</span>
   </label>;

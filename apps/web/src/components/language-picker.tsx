@@ -1,5 +1,7 @@
 'use client';
 
+import { Select as UiSelect } from '@hive/ui';
+
 import { LOCALES, useT } from '../lib/i18n';
 
 export function LanguagePicker() {
@@ -14,7 +16,7 @@ export function LanguagePicker() {
         {t('settings.language')}
       </label>
 
-      <select
+      <UiSelect
         id="hive-language"
         name="language"
         aria-label={t('settings.language')}
@@ -29,7 +31,7 @@ export function LanguagePicker() {
             {item.name}
           </option>
         ))}
-      </select>
+      </UiSelect>
     </div>
   );
 }

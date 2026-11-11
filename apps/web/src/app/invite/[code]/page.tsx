@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, LoadingState } from '@hive/ui';
+
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -42,8 +44,8 @@ export default function InvitePage() {
         <p className="mt-1 capitalize text-white/50">{preview.space.type} · {preview.space.member_count} members</p>
         {preview.space.description && <p className="mt-3 text-white/70">{preview.space.description}</p>}
         {!preview.valid && <p className="mt-4 text-rose-400">This invite has expired, was revoked, or has been used up.</p>}
-        {preview.valid && (loading ? <p className="mt-4">Loading account…</p> : user ?
-          <button onClick={accept} disabled={busy} className="auth-button mt-5">{busy ? 'Joining…' : 'Accept invite'}</button> :
+        {preview.valid && (loading ? <LoadingState layout="inline" label="Loading account" /> : user ?
+          <UiButton onClick={accept} disabled={busy} className="auth-button mt-5">{busy ? 'Joining…' : 'Accept invite'}</UiButton> :
           <Link className="auth-button mt-5 inline-block" href={`/login?next=${encodeURIComponent(`/invite/${code}`)}`}>Log in to accept</Link>)}
       </>}
     </section>

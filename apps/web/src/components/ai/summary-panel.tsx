@@ -1,5 +1,7 @@
 'use client';
 
+import { Tooltip as UiTooltip } from '@hive/ui';
+
 import Link from 'next/link';
 import type { AiItem, AiSummary } from '@hive/shared';
 import { Icon } from '../ui/icons';
@@ -12,10 +14,10 @@ function Group({ title, items }: { title?: string; items: AiItem[] }) {
       <span aria-hidden className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />
       <span className="min-w-0 flex-1">
         <span className="[overflow-wrap:anywhere]">{item.text}</span>
-        {item.sources.map(source => <Link key={source.n} href={source.url} title={`Open the message from ${source.author}`}
+        {item.sources.map(source => <UiTooltip content={`Open the message from ${source.author}`} key={source.n}><Link key={source.n} href={source.url}
           aria-label={`Open the message from ${source.author}`}
           className="ml-1 inline-flex items-center gap-0.5 rounded-md bg-brand-soft px-1.5 py-0.5 align-middle text-xs font-medium text-brand hover:underline">
-          <Icon name="message" size={11} />{source.author}</Link>)}
+          <Icon name="message" size={11} />{source.author}</Link></UiTooltip>)}
       </span>
     </li>)}</ul>
   </section>;

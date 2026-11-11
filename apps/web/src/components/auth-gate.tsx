@@ -12,7 +12,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const path = usePathname() ?? '/';
-  const open = isPublic(path);
+  const open = isPublic(path) || (process.env.NODE_ENV === 'development' && path === '/components');
   const entry = path === '/' || path === '/login' || path === '/signup';
   useEffect(() => {
     if (loading) return;

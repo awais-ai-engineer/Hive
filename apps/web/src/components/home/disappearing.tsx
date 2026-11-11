@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { useState } from 'react';
 import { apiData, requestError } from '../../lib/spaces';
 import { Icon } from '../ui/icons';
@@ -25,9 +27,9 @@ export function TimerButton({ channelId, seconds, onChanged, onError }: {
     } catch (cause) { onError(requestError(cause)); }
   }
   return <>
-    <button type="button" aria-haspopup="menu" aria-expanded={!!menu} title={`Disappearing messages: ${timerText(current)}`} aria-label={`Disappearing messages: ${timerText(current)}`}
+    <UiButton type="button" aria-haspopup="menu" aria-expanded={!!menu} tooltip={`Disappearing messages: ${timerText(current)}`} aria-label={`Disappearing messages: ${timerText(current)}`}
       onClick={event => { const box = event.currentTarget.getBoundingClientRect(); setMenu({ x: box.right - 256, y: box.bottom + 4 }); }}
-      className={`rounded-lg p-1.5 hover:bg-[var(--surface-2)] ${current ? 'text-brand' : 'text-white/60 hover:text-white'}`}><Icon name="clock" size={18} /></button>
+      className={`rounded-lg p-1.5 hover:bg-[var(--surface-2)] ${current ? 'text-brand' : 'text-white/60 hover:text-white'}`}><Icon name="clock" size={18} /></UiButton>
     {menu && <PopupMenu at={menu} label="Disappearing messages" onClose={() => setMenu(null)} items={[
       { heading: 'Disappearing messages' },
       ...TIMER_CHOICES.map(([value, label]) => ({ label, checked: current === value, onSelect: () => void choose(value) })),

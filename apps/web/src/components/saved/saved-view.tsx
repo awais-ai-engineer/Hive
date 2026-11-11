@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, EmptyState, LoadingState } from '@hive/ui';
+
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { forgetSaved, type SavedKind } from '../../lib/saved';
@@ -65,16 +67,13 @@ export function SavedView() {
   return <div className="min-h-0 flex-1 overflow-y-auto pr-1">
     <div role="tablist" aria-label="Saved items" className="mb-4 flex gap-1 border-b border-white/10">
       {([['message', 'Messages'], ['post', 'Posts and comments']] as const).map(([value, label]) =>
-        <button key={value} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)}
-          className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${tab === value ? 'border-brand text-brand' : 'border-transparent text-white/60 hover:text-white'}`}>{label}</button>)}
+        <UiButton key={value} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)}
+          className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${tab === value ? 'border-brand text-brand' : 'border-transparent text-white/60 hover:text-white'}`}>{label}</UiButton>)}
     </div>
     {error && <p role="alert" className="mb-3 text-sm text-rose-500">{error}</p>}
-    {!ready ? <div role="status" aria-label="Loading saved items" className="space-y-3">
-      {[1, 2, 3].map(index => <div key={index} className="h-24 animate-pulse rounded-xl bg-white/5" />)}
-    </div> : !shown.length ? <div className="mt-16 flex flex-col items-center gap-2 text-center text-white/55">
-      <Icon name="bookmark" size={36} />
-      <p>{tab === 'message' ? 'No saved messages. Use Save on a message to keep it here.' : 'No saved posts or comments. Use Save on a post or comment to keep it here.'}</p>
-    </div> : <ul className="space-y-3">
+    {!ready ? <LoadingState label="Loading saved items" /> : !shown.length ? <EmptyState icon={<Icon name="bookmark" size={28} />}
+      title={tab === 'message' ? 'No saved messages' : 'No saved posts or comments'}
+      description={tab === 'message' ? 'Use Save on a message to keep it here.' : 'Use Save on a post or comment to keep it here.'} /> : <ul className="space-y-3">
       {shown.map(item => <li key={item.id} className="card p-4">
         <p className="flex flex-wrap items-center gap-x-2 text-xs font-medium text-white/50">
           {item.author && <span className="flex items-center gap-1.5"><Avatar name={item.author.username} src={item.author.avatarUrl} size={18} />{item.author.displayName || item.author.username}</span>}
@@ -84,11 +83,11 @@ export function SavedView() {
         {item.title && <p className="mt-1 font-semibold">{item.title}</p>}
         {item.snippet && <p className="mt-1 line-clamp-3 break-words text-white/80">{item.snippet}</p>}
         <div className="mt-3 flex gap-2">
-          <button type="button" className="auth-button text-sm" onClick={() => router.push(href(item))}>Open</button>
-          <button type="button" className="btn-ghost text-rose-500" onClick={() => void remove(item)}>Remove</button>
+          <UiButton type="button" className="auth-button text-sm" onClick={() => router.push(href(item))}>Open</UiButton>
+          <UiButton type="button" className="btn-ghost text-rose-500" onClick={() => void remove(item)}>Remove</UiButton>
         </div>
       </li>)}
-      {cursor && <li className="text-center"><button type="button" className="btn-ghost" disabled={more} onClick={() => void load(cursor)}>{more ? 'Loading…' : 'Load more'}</button></li>}
+      {cursor && <li className="text-center"><UiButton type="button" className="btn-ghost" disabled={more} onClick={() => void load(cursor)}>{more ? 'Loading…' : 'Load more'}</UiButton></li>}
     </ul>}
   </div>;
 }

@@ -1,5 +1,9 @@
 'use client';
 
+import { Tooltip as UiTooltip } from '@hive/ui';
+
+import { Button as UiButton } from '@hive/ui';
+
 import { calls } from '../../lib/call';
 import { useCall } from '../../lib/use-call';
 import { useHuddles } from '../../lib/huddles';
@@ -20,13 +24,13 @@ export function LiveHuddleBanner({ channelId, title }: { channelId: string; titl
       <p className="truncate text-xs text-white/60">{huddle.count} {huddle.count === 1 ? 'person' : 'people'} in {title}</p>
     </div>
     <span className="hidden -space-x-1.5 sm:flex">
-      {shown.map(user => <span key={user.id} title={user.username} className="rounded-full ring-2 ring-[var(--canvas)]"><Avatar name={user.username} src={user.avatarUrl} size={24} /></span>)}
+      {shown.map(user => <UiTooltip content={user.username} key={user.id}><span key={user.id} className="rounded-full ring-2 ring-[var(--canvas)]"><Avatar name={user.username} src={user.avatarUrl} size={24} /></span></UiTooltip>)}
       {huddle.count > shown.length && <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--surface-2)] text-[10px] font-semibold ring-2 ring-[var(--canvas)]">+{huddle.count - shown.length}</span>}
     </span>
-    <button type="button" onClick={() => { if (joined) calls.setStageOpen(true); else void calls.join(channelId, title).then(() => calls.setStageOpen(true)); }}
-      className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#15171c] px-3 py-1.5 text-sm font-semibold dark:bg-[#e8eaee]"
+    <UiButton type="button" onClick={() => { if (joined) calls.setStageOpen(true); else void calls.join(channelId, title).then(() => calls.setStageOpen(true)); }}
+      className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--rail)] px-3 py-1.5 text-sm font-semibold dark:bg-[var(--call-foreground)]"
       style={{ color: 'var(--canvas)' }}>
       <Icon name="headphones" size={15} />{joined ? 'Open huddle' : 'Join huddle'}
-    </button>
+    </UiButton>
   </div>;
 }

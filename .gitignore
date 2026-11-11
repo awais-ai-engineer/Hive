@@ -13,3 +13,6 @@ __pycache__/
 *.tsbuildinfo
 next-env.d.ts
 apps/server/uploads/
+
+output/playwright/
+apps/web/playwright-report/

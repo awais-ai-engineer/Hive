@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, confirmAction as UiConfirm, Input as UiInput, Select as UiSelect } from '@hive/ui';
+
 import { useState, type FormEvent } from 'react';
 import { webhookCreateSchema } from '@hive/shared';
 import { API_URL } from '../../lib/api';
@@ -33,15 +35,15 @@ export function WebhooksSection({ slug, channels, hooks, reload, fail }: {
         <span className="text-xl" aria-hidden>{hook.emoji}</span>
         <div className="min-w-0 flex-1"><p className="truncate font-medium">{hook.name}</p>
           <p className="text-xs text-white/60">Posts in #{hook.channelName} · ends in …{hook.tokenHint} · {hook.lastUsedAt ? `last used ${new Date(hook.lastUsedAt).toLocaleString()}` : 'never used'}</p></div>
-        <button type="button" className="btn-ghost" onClick={() => { if (window.confirm('The old address stops working immediately. Continue?')) void act(apiData<Webhook>(`${base(slug)}/webhooks/${hook.id}/regenerate`, { method: 'POST' }).then(setSecret)); }}>Regenerate</button>
-        <button type="button" className="text-rose-500" onClick={() => { if (window.confirm(`Delete ${hook.name}? Its address stops working.`)) void act(apiData(`${base(slug)}/webhooks/${hook.id}`, { method: 'DELETE' })); }}>Delete</button>
+        <UiButton type="button" className="btn-ghost" onClick={async () => { if (await UiConfirm('The old address stops working immediately. Continue?')) void act(apiData<Webhook>(`${base(slug)}/webhooks/${hook.id}/regenerate`, { method: 'POST' }).then(setSecret)); }}>Regenerate</UiButton>
+        <UiButton type="button" className="text-rose-500" onClick={async () => { if (await UiConfirm(`Delete ${hook.name}? Its address stops working.`)) void act(apiData(`${base(slug)}/webhooks/${hook.id}`, { method: 'DELETE' })); }}>Delete</UiButton>
       </li>)}</ul>}
     <form onSubmit={create} className="flex flex-wrap items-end gap-3">
-      <label className="min-w-40 flex-1 text-sm">Name<input name="name" className="auth-input" maxLength={80} required placeholder="Deploy notices" /></label>
-      <label className="text-sm">Post in<select name="channelId" className="auth-input" required defaultValue="">
-        <option value="" disabled>Choose a channel</option>{channels.map(channel => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></label>
-      <label className="w-24 text-sm">Icon<input name="emoji" className="auth-input" maxLength={16} defaultValue="🔔" /></label>
-      <button className="auth-button">Create webhook</button>
+      <label className="min-w-40 flex-1 text-sm">Name<UiInput name="name" className="auth-input" maxLength={80} required placeholder="Deploy notices" /></label>
+      <label className="text-sm">Post in<UiSelect aria-label="Post in" name="channelId" className="auth-input" required defaultValue="">
+        <option value="" disabled>Choose a channel</option>{channels.map(channel => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</UiSelect></label>
+      <label className="w-24 text-sm">Icon<UiInput name="emoji" className="auth-input" maxLength={16} defaultValue="🔔" /></label>
+      <UiButton className="auth-button">Create webhook</UiButton>
     </form>
   </Section>;
 }

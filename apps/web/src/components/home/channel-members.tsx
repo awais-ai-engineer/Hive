@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, Input as UiInput } from '@hive/ui';
+
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '../../lib/auth';
 import type { UserResult } from '../../lib/dms';
@@ -58,17 +60,17 @@ export function ChannelMembers({ space, channel, isAdmin, onLeft }: {
       {people.map(person => <li key={person.id} className="flex items-center gap-2 text-sm">
         <Avatar name={person.username} src={person.avatar_url} size={24} />
         <span className="min-w-0 flex-1 truncate">{person.username}</span>
-        {person.id === user?.id ? <button type="button" onClick={() => void remove(person)} className="text-xs text-rose-500 hover:underline">Leave channel</button>
-          : isAdmin && <button type="button" onClick={() => void remove(person)} aria-label={`Remove ${person.username}`} className="text-xs text-rose-500 hover:underline">Remove</button>}
+        {person.id === user?.id ? <UiButton type="button" onClick={() => void remove(person)} className="text-xs text-rose-500 hover:underline">Leave channel</UiButton>
+          : isAdmin && <UiButton tooltip={`Remove ${person.username}`} type="button" onClick={() => void remove(person)} aria-label={`Remove ${person.username}`} className="text-xs text-rose-500 hover:underline">Remove</UiButton>}
       </li>)}
     </ul>
     <form onSubmit={submit} className="mt-3 border-t border-white/10 pt-3">
       <label className="block text-xs font-medium">Add people
-        <input className="auth-input" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search by username" /></label>
+        <UiInput className="auth-input" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search by username" /></label>
       {found.length > 0 && <ul className="mt-1 max-h-32 overflow-y-auto rounded-xl border border-white/10">
-        {found.map(item => <li key={item.id}><button type="button" onClick={() => void add(item.username)}
-          className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-brand-soft">
-          <Avatar name={item.username} src={item.avatar_url} size={20} />{item.username}</button></li>)}
+        {found.map(item => <li key={item.id}><UiButton type="button" onClick={() => void add(item.username)}
+          className="flex w-full items-center gap-2 px-2 py-1.5 text-left justify-start text-sm hover:bg-brand-soft">
+          <Avatar name={item.username} src={item.avatar_url} size={20} />{item.username}</UiButton></li>)}
       </ul>}
     </form>
     {error && <p role="alert" className="mt-2 text-xs text-rose-500">{error}</p>}

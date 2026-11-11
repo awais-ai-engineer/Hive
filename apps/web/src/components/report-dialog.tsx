@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, Textarea as UiTextarea } from '@hive/ui';
+
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { apiData, requestError } from '../lib/spaces';
 
@@ -37,16 +39,16 @@ export function ReportDialog({ target, onClose }: { target: ReportTarget | null;
       <h2 id="report-title" className="text-lg font-bold">Report {target.label ?? target.type}</h2>
       {sent ? <>
         <p role="status" className="mt-3 text-white/80">Thanks, our moderators will review it.</p>
-        <button type="button" onClick={onClose} className="auth-button mt-5">Close</button>
+        <UiButton type="button" onClick={onClose} className="auth-button mt-5">Close</UiButton>
       </> : <form onSubmit={submit} className="mt-3">
         <label className="block text-sm font-medium">What is wrong?
-          <textarea ref={field} required maxLength={1000} rows={4} value={reason} onChange={event => setReason(event.target.value)}
+          <UiTextarea ref={field} required maxLength={1000} rows={4} value={reason} onChange={event => setReason(event.target.value)}
             className="auth-input resize-none" placeholder="Tell us what happened so we can look into it." />
         </label>
         {error && <p role="alert" className="mt-2 text-sm text-rose-500">{error}</p>}
         <div className="mt-4 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
-          <button disabled={busy || !reason.trim()} className="auth-button">{busy ? 'Sending…' : 'Send report'}</button>
+          <UiButton type="button" onClick={onClose} className="btn-ghost">Cancel</UiButton>
+          <UiButton disabled={busy || !reason.trim()} className="auth-button">{busy ? 'Sending…' : 'Send report'}</UiButton>
         </div>
       </form>}
     </div>

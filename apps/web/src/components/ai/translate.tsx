@@ -1,5 +1,9 @@
 'use client';
 
+import { Tooltip as UiTooltip } from '@hive/ui';
+
+import { Button as UiButton, Checkbox as UiCheckbox } from '@hive/ui';
+
 import { useEffect, useState } from 'react';
 import { aiPost, setTranslateAll, TRANSLATE_ALL_EVENT, translateAll, translateMessage, useAiStatus } from '../../lib/ai';
 import { useAuth } from '../../lib/auth';
@@ -48,14 +52,14 @@ export function TranslateLink({ targetType = 'message', targetId, channelId, ena
   if (!ai || !language || !enabled) return null;
   const name = ai.languages.find(item => item.code === language)?.name ?? language;
   return <div className="mt-0.5 text-xs">
-    {!open && <button type="button" onClick={() => shown ? setOpen(true) : void load()} disabled={busy}
-      title={`Translate into ${name}`} className="inline-flex items-center gap-1 font-medium text-brand hover:underline">
-      <Icon name="translate" size={12} />{busy ? 'Translating…' : 'Translate'}</button>}
+    {!open && <UiButton type="button" onClick={() => shown ? setOpen(true) : void load()} disabled={busy}
+      tooltip={`Translate into ${name}`} className="inline-flex items-center gap-1 font-medium text-brand hover:underline">
+      <Icon name="translate" size={12} />{busy ? 'Translating…' : 'Translate'}</UiButton>}
     {error && <span role="alert" className="ml-2 text-rose-500">{error}</span>}
     {open && shown && <div className="mt-1 rounded-lg border border-white/10 bg-[var(--surface-2)] px-3 py-2 text-sm">
       {shown.same ? <p className="text-white/60">This is already in {name}.</p>
         : <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{shown.text}</p>}
-      <button type="button" onClick={() => setOpen(false)} className="mt-1 text-xs font-medium text-brand hover:underline">Show original</button>
+      <UiButton type="button" onClick={() => setOpen(false)} className="mt-1 text-xs font-medium text-brand hover:underline">Show original</UiButton>
     </div>}
   </div>;
 }
@@ -68,7 +72,7 @@ export function TranslateAllToggle({ channelId }: { channelId: string }) {
   useEffect(() => setOn(translateAll(channelId)), [channelId]);
   if (!ai || !user?.translate_language) return null;
   const name = ai.languages.find(item => item.code === user.translate_language)?.name ?? '';
-  return <label className="flex cursor-pointer items-center gap-1.5 text-sm text-white/70" title={`Translate every message here into ${name}`}>
-    <input type="checkbox" checked={on} onChange={event => { setOn(event.target.checked); setTranslateAll(channelId, event.target.checked); }} />
-    Translate all</label>;
+  return <UiTooltip content={`Translate every message here into ${name}`}><label className="flex cursor-pointer items-center gap-1.5 text-sm text-white/70">
+    <UiCheckbox checked={on} onChange={event => { setOn(event.target.checked); setTranslateAll(channelId, event.target.checked); }} />
+    Translate all</label></UiTooltip>;
 }

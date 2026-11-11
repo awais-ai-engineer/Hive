@@ -1,5 +1,9 @@
 'use client';
 
+import { Tooltip as UiTooltip } from '@hive/ui';
+
+import { Button as UiButton, confirmAction as UiConfirm } from '@hive/ui';
+
 import { useT } from '../../lib/i18n';
 import Link from 'next/link';
 import { useState, type Dispatch, type MouseEvent as ReactMouseEvent, type SetStateAction } from 'react';
@@ -16,7 +20,6 @@ import { HuddlesSection, QuietHoursCard } from './sidebar-extras';
 import { calls } from '../../lib/call';
 import { useHuddles } from '../../lib/huddles';
 import { CreateChannelDialog } from './create-channel-dialog';
-import { FindConversation } from './find-conversation';
 import { NewConversation } from './new-conversation';
 import { PopupMenu, type MenuItem } from './popup-menu';
 import { SectionDialog } from './section-dialog';
@@ -36,6 +39,9 @@ type Props = {
   update: Dispatch<SetStateAction<SidebarData>>;
   onChanged: () => void;
   onSwitchSpace: (slug: string) => void;
+  onOpenSwitcher: () => void;
+  switcherOpen?: boolean;
+  onToggleSwitcher?: () => void;
   onOpen: (id: string) => void;
   /** A conversation was just started: show it right away, before any list refresh. */
   onConversation?: (conversation: Conversation) => void;
@@ -57,8 +63,8 @@ function NavItem({ icon, label, active, count, onClick, href }: {
   icon: IconName; label: string; active?: boolean; count?: number; onClick?: () => void; href?: string;
 }) {
   const body = <><Icon name={icon} size={17} className="shrink-0 opacity-80" /><span className="truncate">{label}</span><Count value={count ?? 0} /></>;
-  const style = `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[14px] transition ${active ? 'bg-[var(--sidebar-active)] font-semibold text-white' : 'text-white/80 hover:bg-white/10 hover:text-white'}`;
-  return <li>{href ? <Link href={href} className={style}>{body}</Link> : <button type="button" onClick={onClick} className={style}>{body}</button>}</li>;
+  const style = `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left justify-start text-[14px] transition ${active ? 'bg-[var(--sidebar-active)] font-semibold text-white' : 'text-white/80 hover:bg-white/10 hover:text-white'}`;
+  return <li>{href ? <Link href={href} className={style}>{body}</Link> : <UiButton type="button" onClick={onClick} className={style}>{body}</UiButton>}</li>;
 }
 
 const hint = (text: string) => <li className="px-2.5 py-0.5 text-xs text-white/50">{text}</li>;
@@ -133,8 +139,8 @@ export function Sidebar(props: Props) {
     props.update(current => ({ ...current, sections: all.map(id => current.sections.find(item => item.id === id)!) }));
     void run(() => sidebarApi.orderSections(all));
   }
-  function removeSection(section: CustomSection) {
-    if (!window.confirm(`Delete the section "${section.name}"? Its channels go back to their usual place; nothing else is deleted.`)) return;
+  async function removeSection(section: CustomSection) {
+    if (!await UiConfirm(`Delete the section "${section.name}"? Its channels go back to their usual place; nothing else is deleted.`)) return;
     void run(() => sidebarApi.deleteSection(section.id));
   }
 
@@ -180,26 +186,26 @@ export function Sidebar(props: Props) {
     const person = entry.conversation?.participants[0];
     return <li key={entry.id} onContextMenu={event => { event.preventDefault(); openMenu({ x: event.clientX, y: event.clientY }, `Actions for ${entry.label}`, entryMenu(entry)); }}
       className={`group flex items-center rounded-lg transition ${active ? 'bg-[var(--sidebar-active)] font-semibold' : 'hover:bg-white/[0.06]'} ${quiet && !active ? 'opacity-60' : ''}`}>
-      <button type="button" onClick={() => { props.onOpen(entry.id); if (entry.channel?.type === 'voice') void calls.join(entry.id, entry.label); }} aria-current={active ? 'page' : undefined}
-        title={quiet ? `Notifications: ${LEVEL_LABELS[level]}` : undefined}
-        className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[14px] ${active ? '' : entry.unread && !quiet ? 'font-semibold text-white' : 'text-white/75 hover:text-white'}`}>
+      <UiButton type="button" onClick={() => { props.onOpen(entry.id); if (entry.channel?.type === 'voice') void calls.join(entry.id, entry.label); }} aria-current={active ? 'page' : undefined}
+        tooltip={quiet ? `Notifications: ${LEVEL_LABELS[level]}` : undefined}
+        className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left justify-start text-[14px] ${active ? '' : entry.unread && !quiet ? 'font-semibold text-white' : 'text-white/75 hover:text-white'}`}>
         {entry.kind === 'channel' && <Icon name={entry.channel?.type === 'voice' ? 'volume' : entry.channel?.is_private ? 'lock' : 'hash'} size={16} className="shrink-0 opacity-70" />}
         {entry.kind === 'group' && <span aria-hidden className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white/15 text-[11px] font-semibold">{(entry.conversation?.participants.length ?? 0) + 1}</span>}
         {entry.kind === 'dm' && <Avatar name={person?.username ?? '?'} src={person?.avatar_url} size={22} online={!!person?.online} />}
         <span className="truncate">{entry.kind === 'dm' ? person?.username ?? 'Unknown' : entry.label}</span>
         {entry.kind === 'dm' && person && <StatusMark person={person} className="text-[13px]" />}
         {entry.conversation?.encrypted && <Icon name="lock" size={13} className="shrink-0 opacity-80" aria-label="Secret conversation" />}
-        {huddles[entry.id] && <span className="ml-1 flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-300" title={`In the huddle: ${huddles[entry.id].users.map(user => user.username).join(', ')}`}>
-          <Icon name="headphones" size={14} /><span aria-label={`${huddles[entry.id].count} in huddle`}>{huddles[entry.id].count}</span></span>}
+        {huddles[entry.id] && <UiTooltip content={`In the huddle: ${huddles[entry.id].users.map(user => user.username).join(', ')}`}><span className="ml-1 flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-300">
+          <Icon name="headphones" size={14} /><span aria-label={`${huddles[entry.id].count} in huddle`}>{huddles[entry.id].count}</span></span></UiTooltip>}
         {quiet && <Icon name="bellOff" size={13} className="shrink-0 opacity-70" aria-label={LEVEL_LABELS[level]} />}
         {drafts.has(entry.id) && !active && <Icon name="edit" size={13} aria-label="Unsent draft" className="ml-auto shrink-0 opacity-70" />}
         <Count value={active ? 0 : entry.unread} />
-      </button>
-      <button type="button" aria-label={`More actions for ${entry.label}`} aria-haspopup="menu" title="Star, move to a section, or change notifications"
+      </UiButton>
+      <UiButton type="button" aria-label={`More actions for ${entry.label}`} aria-haspopup="menu" tooltip="Star, move to a section, or change notifications"
         onClick={event => openMenu(below(event), `Actions for ${entry.label}`, entryMenu(entry))}
         className="mr-1 shrink-0 rounded p-1 text-white/60 hover:bg-white/10 hover:text-white focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
         <Icon name="more" size={15} />
-      </button>
+      </UiButton>
     </li>;
   }
 
@@ -209,22 +215,26 @@ export function Sidebar(props: Props) {
   ]);
   const heading = (key: BuiltInSection, label: string, add?: (event: ReactMouseEvent<HTMLElement>) => void, addLabel?: string) =>
     <div className="mb-1 mt-5 flex items-center justify-between px-2.5">
-      <button type="button" onClick={() => toggleBuiltIn(key)} aria-expanded={!collapsed(key)}
+      <UiButton type="button" onClick={() => toggleBuiltIn(key)} aria-expanded={!collapsed(key)}
         className="flex items-center gap-1 text-[13px] font-semibold text-white/60 hover:text-white">
         <Icon name={collapsed(key) ? 'chevronRight' : 'chevronDown'} size={14} />{label}
-      </button>
-      {add && <button type="button" onClick={add} aria-haspopup={key === 'channels' ? 'menu' : undefined} aria-label={addLabel} title={addLabel} className="rounded p-0.5 text-white/60 hover:bg-white/10 hover:text-white"><Icon name="plus" size={16} /></button>}
+      </UiButton>
+      {add && <UiButton type="button" onClick={add} aria-haspopup={key === 'channels' ? 'menu' : undefined} aria-label={addLabel} tooltip={addLabel} className="rounded p-0.5 text-white/60 hover:bg-white/10 hover:text-white"><Icon name="plus" size={16} /></UiButton>}
     </div>;
   const newForm = (kind: 'group' | 'direct') => composing === kind && <div className="on-surface mt-2">
     <NewConversation onOpened={(id, conversation) => { setComposing(null); props.onConversation?.(conversation); props.onOpen(id); }} onCancel={() => setComposing(null)} />
   </div>;
   const quickAction = (label: string, onClick: (event: ReactMouseEvent<HTMLElement>) => void) =>
-    <li><button type="button" onClick={onClick} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-white/60 hover:bg-white/10 hover:text-white">
-      <Icon name="plus" size={15} className="shrink-0" /><span className="truncate">{label}</span></button></li>;
+    <li><UiButton type="button" onClick={onClick} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left justify-start text-[13px] text-white/60 hover:bg-white/10 hover:text-white">
+      <Icon name="plus" size={15} className="shrink-0" /><span className="truncate">{label}</span></UiButton></li>;
 
   return <nav aria-label="Conversations" className="on-sidebar flex h-full min-h-0 flex-col border-r border-[var(--border)] bg-[var(--sidebar)] px-3 py-4">
-    <SpaceSwitcher spaces={props.spaces} current={space} onSwitch={props.onSwitchSpace} />
-    <div className="mt-3"><FindConversation /></div>
+    <SpaceSwitcher current={space} onOpenSwitcher={props.onOpenSwitcher} spaces={props.spaces} onSwitch={props.onSwitchSpace} stripOpen={props.switcherOpen} onToggleStrip={props.onToggleSwitcher} />
+    {!space && <div className="my-4 rounded-xl border border-white/15 p-4">
+      <p className="mb-3 text-sm text-white/70">Bring your team together or find a community.</p>
+      <Link href="/spaces/new" className="auth-button mb-2 min-h-11 w-full justify-center">Create a space</Link>
+      <Link href="/spaces" className="btn-ghost min-h-11 w-full justify-center">Browse communities</Link>
+    </div>}
     <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
       <ul className="space-y-0.5">
         <NavItem icon="threads" label={t('nav.threads')} active={view === 'threads'} count={props.threadsUnread} onClick={() => props.onView('threads')} />
@@ -233,7 +243,6 @@ export function Sidebar(props: Props) {
         <NavItem icon="send" label={t('nav.drafts')} active={view === 'drafts'} onClick={() => props.onView('drafts')} />
         <NavItem icon="bookmark" label={t('nav.saved')} active={view === 'saved'} onClick={() => props.onView('saved')} />
         <NavItem icon="folder" label={t('nav.allFiles')} active={view === 'files'} onClick={() => props.onView('files')} />
-        <NavItem icon="layers" label={t('nav.feed')} href="/feed" />
         {space && <NavItem icon="users" label={t('nav.members')} href={`/s/${space.slug}/members`} />}
       </ul>
 
@@ -245,14 +254,14 @@ export function Sidebar(props: Props) {
 
       {custom.map(({ section, items }) => <div key={section.id}>
         <div className="mb-1 mt-5 flex items-center justify-between px-2.5">
-          <button type="button" onClick={() => toggleCustom(section)} aria-expanded={!section.collapsed}
+          <UiButton type="button" onClick={() => toggleCustom(section)} aria-expanded={!section.collapsed}
             className="flex min-w-0 items-center gap-1 text-[13px] font-semibold text-white/60 hover:text-white">
             <Icon name={section.collapsed ? 'chevronRight' : 'chevronDown'} size={14} className="shrink-0" />
             {section.emoji && <span aria-hidden>{section.emoji}</span>}<span className="truncate">{section.name}</span>
-          </button>
-          <button type="button" aria-label={`Section options for ${section.name}`} aria-haspopup="menu" title="Rename, reorder or delete this section"
+          </UiButton>
+          <UiButton type="button" aria-label={`Section options for ${section.name}`} aria-haspopup="menu" tooltip="Rename, reorder or delete this section"
             onClick={event => openMenu(below(event), `Options for ${section.name}`, sectionMenu(section))}
-            className="rounded p-0.5 text-white/60 hover:bg-white/10 hover:text-white"><Icon name="more" size={16} /></button>
+            className="rounded p-0.5 text-white/60 hover:bg-white/10 hover:text-white"><Icon name="more" size={16} /></UiButton>
         </div>
         {!section.collapsed && <ul className="space-y-0.5">
           {items.map(row)}
@@ -278,7 +287,7 @@ export function Sidebar(props: Props) {
       {!collapsed('dms') && <ul className="space-y-0.5">
         {rest('dm').map(row)}
         {newForm('direct')}
-        {space && isAdmin && <li><Link href={`/s/${space.slug}/settings#invites`} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-white/60 hover:bg-white/10 hover:text-white">
+        {space && isAdmin && <li><Link href={`/s/${space.slug}/settings#invites`} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left justify-start text-[13px] text-white/60 hover:bg-white/10 hover:text-white">
           <Icon name="plus" size={15} className="shrink-0" />{t('sidebar.invitePeople')}</Link></li>}
       </ul>}
       <HuddlesSection huddles={Object.values(huddles).flatMap(huddle => {

@@ -14,7 +14,7 @@ from app.realtime.socket import broadcast_presence, sio
 from app.spaces import management
 from app.spaces.schemas import InterestsIn, MembershipPatch, SpaceOrderIn, SpaceOut
 from app.spaces.service import load_space, my_spaces, space_out
-from app.users import blocks
+from app.users import blocks, preferences
 from app.users.avatars import (
     avatar_redirect_url,
     clear_avatar,
@@ -42,6 +42,18 @@ async def me(user: CurrentUser, session: Session) -> User:
 @router.get("/me/spaces", response_model=list[SpaceOut])
 async def my_spaces_route(user: CurrentUser, session: Session) -> list[SpaceOut]:
     return await my_spaces(session, user)
+
+
+@router.get('/me/preferences', response_model=preferences.PreferencesOut)
+async def get_preferences(user: CurrentUser, session: Session):
+    return await preferences.get_preferences(session, user)
+
+
+@router.patch('/me/preferences', response_model=preferences.PreferencesOut)
+async def patch_preferences(data: preferences.PreferencesPatch, user: CurrentUser, session: Session):
+    result = await preferences.patch_preferences(session, user, data)
+    await sio.emit('spaces:updated', {}, room=f'user:{user.id}')
+    return result
 
 
 @router.get("/me/interests")

@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, Checkbox as UiCheckbox } from '@hive/ui';
+
 import { useState } from 'react';
 import type { AiSummary } from '@hive/shared';
 import { aiPost, useAiStatus } from '../../lib/ai';
@@ -37,9 +39,9 @@ export function HuddleNotes({ messageId, channelId, userId }: { messageId: strin
     } catch (cause) { setError(requestError(cause)); }
   }
   const toggle = (index: number) => setPicked(current => { const next = new Set(current); if (!next.delete(index)) next.add(index); return next; });
-  return <div className="mx-auto my-2 max-w-xl text-left">
-    <div className="text-center"><button type="button" onClick={() => void run()} disabled={state === 'busy'} className="rounded-lg px-2 py-1 text-xs font-medium text-brand hover:bg-brand-soft">
-      {state === 'busy' ? 'Reading the chat…' : state === 'done' ? 'Summarise again' : 'Summarise the chat during this huddle'}</button></div>
+  return <div className="mx-auto my-2 max-w-xl text-left justify-start">
+    <div className="text-center"><UiButton type="button" onClick={() => void run()} disabled={state === 'busy'} className="rounded-lg px-2 py-1 text-xs font-medium text-brand hover:bg-brand-soft">
+      {state === 'busy' ? 'Reading the chat…' : state === 'done' ? 'Summarise again' : 'Summarise the chat during this huddle'}</UiButton></div>
     {error && <p role="alert" className="mt-1 text-center text-xs text-rose-500">{error}</p>}
     {state !== 'idle' && <section aria-live="polite" className="card mt-2 p-4 text-sm">
       {state === 'busy' ? <Skeleton /> : summary && <>
@@ -47,8 +49,8 @@ export function HuddleNotes({ messageId, channelId, userId }: { messageId: strin
         {summary.actions.length > 0 && <fieldset className="mt-2 border-t border-white/10 pt-3">
           <legend className="mb-1 text-xs font-semibold text-white/60">Action items: pick the ones to keep</legend>
           {summary.actions.map((item, index) => <label key={index} className="flex items-start gap-2 py-0.5">
-            <input type="checkbox" checked={picked.has(index)} onChange={() => toggle(index)} className="mt-1" /><span>{item.text}</span></label>)}
-          <button type="button" onClick={() => void addTodos()} disabled={!picked.size || !userId} className="auth-button mt-2 !w-auto px-4 py-1.5 text-sm">Add action items to to-dos</button>
+            <UiCheckbox checked={picked.has(index)} onChange={() => toggle(index)} className="mt-1" /><span>{item.text}</span></label>)}
+          <UiButton type="button" onClick={() => void addTodos()} disabled={!picked.size || !userId} className="auth-button mt-2 !w-auto px-4 py-1.5 text-sm">Add action items to to-dos</UiButton>
           {notice && <p role="status" className="mt-1 text-xs text-emerald-600">{notice}</p>}
         </fieldset>}
       </>}

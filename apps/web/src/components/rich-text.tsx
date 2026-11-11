@@ -1,5 +1,9 @@
 'use client';
 
+import { Tooltip as UiTooltip } from '@hive/ui';
+
+import { Button as UiButton } from '@hive/ui';
+
 import { Fragment, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { parseMarkdown, type MarkdownNode } from '@hive/shared';
@@ -17,8 +21,8 @@ function CodeBlock({ value, language }: { value: string; language?: string }) {
   return <div className="my-2 overflow-hidden rounded-lg border border-white/10 bg-canvas">
     <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-1 text-xs text-white/55">
       <span>{language || 'Code'}</span>
-      <button type="button" onClick={() => void copy()} aria-label="Copy code" title="Copy code"
-        className="rounded px-2 py-1 hover:bg-white/10">{status}</button>
+      <UiButton type="button" onClick={() => void copy()} aria-label="Copy code" tooltip="Copy code"
+        className="rounded px-2 py-1 hover:bg-white/10">{status}</UiButton>
       <span className="sr-only" role="status">{status === 'Copy' ? '' : status}</span>
     </div>
     <pre className="overflow-x-auto p-3 text-sm"><code>{value}</code></pre>
@@ -35,8 +39,8 @@ export function RichText({ source, mentions = [], channels = [] }: Props) {
       if (!token) return part;
       if (token[1] === '@' && token[2] === 'user') {
         const user = users.get(token[3]);
-        return user ? <Link key={index} href={`/u/${encodeURIComponent(user.username)}`} title={user.displayName || user.username}
-          className="rounded bg-brand-soft px-1 font-medium text-brand hover:underline">@{user.username}</Link> : part;
+        return user ? <UiTooltip content={user.displayName || user.username} key={index}><Link key={index} href={`/u/${encodeURIComponent(user.username)}`}
+          className="rounded bg-brand-soft px-1 font-medium text-brand hover:underline">@{user.username}</Link></UiTooltip> : part;
       }
       if (token[1] !== '#' || token[2] !== 'channel') return part;
       const channel = destinations.get(token[3]);

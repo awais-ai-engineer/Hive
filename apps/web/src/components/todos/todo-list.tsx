@@ -1,5 +1,7 @@
 'use client';
 
+import { Checkbox as UiCheckbox, Input as UiInput, Button as UiButton, DatePicker as UiDatePicker, EmptyState, LoadingState } from '@hive/ui';
+
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react';
 import type { Person } from '../../lib/docs';
@@ -54,32 +56,32 @@ function Row({ task, userId, editable, onPatch, onDelete, onError }: {
   const chip = 'flex items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-xs hover:border-brand/50 disabled:cursor-default disabled:hover:border-white/10';
 
   return <li className="group flex items-start gap-3 rounded-xl px-2 py-2 hover:bg-[var(--surface-2)]">
-    <input type="checkbox" checked={done} disabled={!editable} aria-label={done ? `Mark "${task.title}" as not done` : `Mark "${task.title}" as done`}
+    <UiCheckbox checked={done} disabled={!editable} aria-label={done ? `Mark "${task.title}" as not done` : `Mark "${task.title}" as done`}
       onChange={() => onPatch(task, { status: done ? 'open' : 'done' })} className="mt-1 h-[18px] w-[18px] shrink-0 accent-[var(--brand)]" />
     <div className="min-w-0 flex-1">
       {editing
-        ? <input autoFocus aria-label="To-do title" value={draft} maxLength={200} onChange={event => setDraft(event.target.value)} onBlur={saveTitle}
+        ? <UiInput autoFocus aria-label="To-do title" value={draft} maxLength={200} onChange={event => setDraft(event.target.value)} onBlur={saveTitle}
           onKeyDown={event => { if (event.key === 'Enter') saveTitle(); if (event.key === 'Escape') { setDraft(task.title); setEditing(false); } }}
           className="auth-input !mt-0 !py-1" />
-        : <button type="button" disabled={!editable} onClick={() => { setDraft(task.title); setEditing(true); }} title={editable ? 'Click to edit' : undefined}
-          className={`block w-full break-words text-left [overflow-wrap:anywhere] disabled:cursor-default ${done ? 'text-white/45 line-through' : ''}`}>{task.title}</button>}
+        : <UiButton type="button" disabled={!editable} onClick={() => { setDraft(task.title); setEditing(true); }} tooltip={editable ? 'Click to edit' : undefined}
+          className={`block w-full break-words text-left justify-start [overflow-wrap:anywhere] disabled:cursor-default ${done ? 'text-white/45 line-through' : ''}`}>{task.title}</UiButton>}
       <div className="mt-1 flex flex-wrap items-center gap-1.5">
         {picking
-          ? <input type="date" autoFocus aria-label="Due date" defaultValue={task.due_at ? dayKey(new Date(task.due_at)) : ''} className="auth-input !mt-0 !w-auto !py-0.5 text-xs"
+          ? <UiDatePicker autoFocus aria-label="Due date" defaultValue={task.due_at ? dayKey(new Date(task.due_at)) : ''} className="auth-input !mt-0 !w-auto !py-0.5 text-xs"
             onChange={event => { if (event.target.value) { onPatch(task, { due_at: dueFromDay(event.target.value) }); setPicking(false); } }}
             onBlur={() => setPicking(false)} />
-          : <button type="button" disabled={!editable} onClick={open('due')} aria-haspopup="menu" aria-label={`Due date: ${dueLabel(task.due_at)}`}
-            className={`${chip} ${overdue ? '!border-rose-500/50 text-rose-500' : 'text-white/60'}`}><Icon name="calendar" size={12} />{task.due_at ? dueLabel(task.due_at) : 'Add date'}</button>}
-        {task.channel_id && <button type="button" disabled={!editable} onClick={open('who')} aria-haspopup="menu" aria-label={`Assigned to ${task.assignee?.username ?? 'no one'}`}
-          className={`${chip} text-white/60`}><Icon name="user" size={12} />{task.assignee ? (task.assignee.id === userId ? 'You' : task.assignee.username) : 'Unassigned'}</button>}
+          : <UiButton tooltip={`Due date: ${dueLabel(task.due_at)}`} type="button" disabled={!editable} onClick={open('due')} aria-haspopup="menu" aria-label={`Due date: ${dueLabel(task.due_at)}`}
+            className={`${chip} ${overdue ? '!border-rose-500/50 text-rose-500' : 'text-white/60'}`}><Icon name="calendar" size={12} />{task.due_at ? dueLabel(task.due_at) : 'Add date'}</UiButton>}
+        {task.channel_id && <UiButton tooltip={`Assigned to ${task.assignee?.username ?? 'no one'}`} type="button" disabled={!editable} onClick={open('who')} aria-haspopup="menu" aria-label={`Assigned to ${task.assignee?.username ?? 'no one'}`}
+          className={`${chip} text-white/60`}><Icon name="user" size={12} />{task.assignee ? (task.assignee.id === userId ? 'You' : task.assignee.username) : 'Unassigned'}</UiButton>}
         {task.place && <Link href={`${placeHref(task.place)}${task.source_message_id ? `&m=${task.source_message_id}` : ''}`}
           className="flex items-center gap-1 text-xs text-brand hover:underline">
           <Icon name={task.source_message_id ? 'message' : 'hash'} size={12} />{task.source_message_id ? `View message in ${placeLabel(task.place)}` : placeLabel(task.place)}</Link>}
         {task.created_by && task.created_by.id !== userId && <span className="text-xs text-white/45">from {task.created_by.username}</span>}
       </div>
     </div>
-    {editable && <button type="button" onClick={() => onDelete(task)} aria-label={`Delete "${task.title}"`}
-      className="shrink-0 rounded p-1 text-white/35 hover:bg-white/10 hover:text-rose-500 focus-visible:text-rose-500 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"><Icon name="trash" size={16} /></button>}
+    {editable && <UiButton tooltip={`Delete "${task.title}"`} type="button" onClick={() => onDelete(task)} aria-label={`Delete "${task.title}"`}
+      className="shrink-0 rounded p-1 text-white/35 hover:bg-white/10 hover:text-rose-500 focus-visible:text-rose-500 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"><Icon name="trash" size={16} /></UiButton>}
     {menu && <PopupMenu at={menu} label={menu.kind === 'due' ? 'Due date' : 'Assignee'} onClose={() => setMenu(null)} items={menu.kind === 'due' ? dueItems : whoItems} />}
   </li>;
 }
@@ -165,18 +167,15 @@ export function TodoList({ scope, channelId, userId, canWrite = true, emptyTitle
 
   return <div className="mx-auto w-full max-w-3xl">
     {canAdd && <form onSubmit={event => void add(event)} className="mb-4 flex gap-2">
-      <input ref={input} value={title} maxLength={200} onChange={event => setTitle(event.target.value)} aria-label="New to-do"
+      <UiInput ref={input} value={title} maxLength={200} onChange={event => setTitle(event.target.value)} aria-label="New to-do"
         placeholder="Add a to-do… press Enter" className="auth-input !mt-0" />
-      <button disabled={!title.trim()} className="auth-button !mt-0 shrink-0 !px-4">Add</button>
+      <UiButton disabled={!title.trim()} className="auth-button !mt-0 shrink-0 !px-4">Add</UiButton>
     </form>}
     {error && <p role="alert" className="mb-3 text-sm text-rose-500">{error}</p>}
-    {tasks === null && !error && <p className="text-white/55">Loading to-dos…</p>}
-    {tasks?.length === 0 && <div className="card flex flex-col items-center gap-2 p-8 text-center">
-      <Icon name="checkSquare" size={32} className="text-white/35" />
-      <p className="font-semibold">{emptyTitle}</p>
-      <p className="max-w-sm text-sm text-white/60">{emptyText}</p>
-      {canAdd && <button type="button" onClick={() => input.current?.focus()} className="auth-button !mt-2 !px-4 !py-2">Add a to-do</button>}
-    </div>}
+    {tasks === null && !error && <LoadingState label="Loading to-dos" />}
+    {tasks?.length === 0 && <EmptyState icon={<Icon name="checkSquare" size={24} />} title={emptyTitle} description={emptyText}>
+      {canAdd && <UiButton type="button" onClick={() => input.current?.focus()} className="auth-button !mt-2 !px-4 !py-2">Add a to-do</UiButton>}
+    </EmptyState>}
     {grouped && BUCKETS.map(bucket => {
       const items = open.filter(task => bucketOf(task, now) === bucket);
       return items.length > 0 && <section key={bucket} className="mb-4" aria-label={BUCKET_LABELS[bucket]}>
@@ -191,7 +190,7 @@ export function TodoList({ scope, channelId, userId, canWrite = true, emptyTitle
     </details>}
     {scope === 'done' && finished.length > 0 && <ul>{finished.map(row)}</ul>}
     {undo && <div role="status" className="on-surface fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-white/10 bg-surface px-4 py-2.5 text-sm shadow-[var(--shadow-pop)]">
-      <span>Marked done</span><button type="button" onClick={() => void undoDone()} className="font-semibold text-brand hover:underline">Undo</button>
+      <span>Marked done</span><UiButton type="button" onClick={() => void undoDone()} className="font-semibold text-brand hover:underline">Undo</UiButton>
     </div>}
   </div>;
 }

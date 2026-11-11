@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useCall } from '../../lib/use-call';
 import { CallStage } from './call-stage';
 import { IncomingCall } from './incoming-call';
+import { PrejoinDialog } from './prejoin-dialog';
 
 function PeerAudio({ stream }: { stream: MediaStream | null }) {
   const element = useRef<HTMLAudioElement>(null);
@@ -23,5 +24,6 @@ export function CallDock({ titleFor, onAccept }: { titleFor: (channelId: string,
     {call.peers.map(peer => <PeerAudio key={peer.sid} stream={peer.stream} />)}
     <CallStage />
     <IncomingCall titleFor={titleFor} onAccept={onAccept} />
+    <PrejoinDialog />
   </>;
 }

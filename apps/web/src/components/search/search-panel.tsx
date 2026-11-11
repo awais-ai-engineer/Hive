@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, Input as UiInput, Select as UiSelect, DatePicker as UiDatePicker } from '@hive/ui';
+
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { conversationTitle, DM_OPENED, type Conversation, type UserResult } from '../../lib/dms';
@@ -149,19 +151,19 @@ export function SearchPanel({ variant, initialQuery = '', onDone }: { variant: '
     index += 1;
     const position = index;
     const selected = position === active;
-    const style = `flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left text-sm ${selected ? 'bg-brand-soft' : 'hover:bg-[var(--surface-2)]'}`;
+    const style = `flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left justify-start text-sm ${selected ? 'bg-brand-soft' : 'hover:bg-[var(--surface-2)]'}`;
     if (row.kind !== 'hit') {
       return <li key={row.key} id={`search-row-${position}`} role="option" aria-selected={selected}>
-        <button type="button" className={style} onMouseMove={() => setActive(position)} onClick={() => void choose(row)}>
+        <UiButton type="button" className={style} onMouseMove={() => setActive(position)} onClick={() => void choose(row)}>
           <Icon name={row.kind === 'dm' ? 'message' : 'user'} size={16} className="mt-0.5 shrink-0 text-white/50" />
           <span className="min-w-0 flex-1 truncate font-medium">{row.label}</span>
           <span className="shrink-0 text-xs text-white/45">{row.kind === 'dm' ? 'Conversation' : 'Message'}</span>
-        </button>
+        </UiButton>
       </li>;
     }
     const hit = row.hit;
     return <li key={row.key} id={`search-row-${position}`} role="option" aria-selected={selected}>
-      <button type="button" className={style} onMouseMove={() => setActive(position)} onClick={() => void choose(row)}>
+      <UiButton type="button" className={style} onMouseMove={() => setActive(position)} onClick={() => void choose(row)}>
         {hit.type === 'person' && hit.author ? <Avatar name={hit.author.username} src={hit.author.avatarUrl} size={28} />
           : <Icon name={ICONS[hit.type]} size={16} className="mt-0.5 shrink-0 text-white/50" />}
         <span className="min-w-0 flex-1">
@@ -172,7 +174,7 @@ export function SearchPanel({ variant, initialQuery = '', onDone }: { variant: '
             {hitPlace(hit)}{hit.createdAt && hit.type !== 'person' && hit.type !== 'channel' ? ` · ${new Date(hit.createdAt).toLocaleDateString()}` : ''}
           </span>
         </span>
-      </button>
+      </UiButton>
     </li>;
   };
 
@@ -180,55 +182,55 @@ export function SearchPanel({ variant, initialQuery = '', onDone }: { variant: '
     <div className="flex items-center gap-2">
       <div className="relative flex-1">
         <Icon name="search" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/45" />
-        <input ref={input} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={onKey} maxLength={200}
+        <UiInput ref={input} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={onKey} maxLength={200}
           role="combobox" aria-expanded={rows.length > 0} aria-controls="search-results" aria-label="Search Hive"
           placeholder="Search messages, posts, people, channels and files" className={`${field} !pl-9`} />
       </div>
-      <button type="button" className={`btn-ghost ${filtered ? '!text-brand' : ''}`} aria-expanded={showFilters} aria-controls="search-filters" onClick={() => setShowFilters(value => !value)}>Filters</button>
-      {variant === 'palette' && <button type="button" className="btn-ghost !px-2" aria-label="Close search" title="Close" onClick={finish}><Icon name="x" size={16} /></button>}
+      <UiButton type="button" className={`btn-ghost ${filtered ? '!text-brand' : ''}`} aria-expanded={showFilters} aria-controls="search-filters" onClick={() => setShowFilters(value => !value)}>Filters</UiButton>
+      {variant === 'palette' && <UiButton type="button" className="btn-ghost !px-2" aria-label="Close search" tooltip="Close" onClick={finish}><Icon name="x" size={16} /></UiButton>}
     </div>
     <div role="tablist" aria-label="Result type" className="mt-3 flex gap-1 overflow-x-auto">
-      {TYPE_TABS.map(([value, label]) => <button key={value} type="button" role="tab" aria-selected={type === value} onClick={() => setType(value)}
-        className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${type === value ? 'bg-brand-soft text-brand' : 'text-white/60 hover:bg-[var(--surface-2)]'}`}>{label}</button>)}
+      {TYPE_TABS.map(([value, label]) => <UiButton key={value} type="button" role="tab" aria-selected={type === value} onClick={() => setType(value)}
+        className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${type === value ? 'bg-brand-soft text-brand' : 'text-white/60 hover:bg-[var(--surface-2)]'}`}>{label}</UiButton>)}
     </div>
     {showFilters && <div id="search-filters" className="mt-3 grid gap-2 sm:grid-cols-4">
       <label className="text-xs font-medium">Space
-        <select className={field} value={filters.spaceId} onChange={event => setFilters({ ...filters, spaceId: event.target.value })}>
+        <UiSelect aria-label="Space" className={field} value={filters.spaceId} onChange={event => setFilters({ ...filters, spaceId: event.target.value })}>
           <option value="">Any space</option>{spaces.map(space => <option key={space.id} value={space.id}>{space.name}</option>)}
-        </select></label>
+        </UiSelect></label>
       <label className="text-xs font-medium">From person
-        <input className={field} value={person} placeholder="username" maxLength={32} onChange={event => setPerson(event.target.value)} />
+        <UiInput className={field} value={person} placeholder="username" maxLength={32} onChange={event => setPerson(event.target.value)} />
         {person.trim() && !filters.authorId && <span className="text-[11px] font-normal text-white/50">No exact match yet</span>}</label>
       <label className="text-xs font-medium">From date
-        <input type="date" className={field} value={filters.from} max={filters.to || undefined} onChange={event => setFilters({ ...filters, from: event.target.value })} /></label>
+        <UiDatePicker label="From date" className={field} value={filters.from} max={filters.to || undefined} onChange={event => setFilters({ ...filters, from: event.target.value })} /></label>
       <label className="text-xs font-medium">To date
-        <input type="date" className={field} value={filters.to} min={filters.from || undefined} onChange={event => setFilters({ ...filters, to: event.target.value })} /></label>
+        <UiDatePicker label="To date" className={field} value={filters.to} min={filters.from || undefined} onChange={event => setFilters({ ...filters, to: event.target.value })} /></label>
     </div>}
     {error && <p role="alert" className="mt-3 text-sm text-rose-500">{error}</p>}
     <div className={`mt-3 overflow-y-auto ${variant === 'palette' ? 'max-h-[55vh]' : ''}`} aria-busy={busy}>
       {term.length < 2 && !rows.length ? <div className="py-6 text-sm text-white/55">
         {recent.length > 0 ? <>
           <div className="mb-1 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wide">Recent searches</p>
-            <button type="button" className="text-xs underline" onClick={() => { clearRecentSearches(); setRecent([]); }}>Clear</button></div>
-          <ul>{recent.map(item => <li key={item}><button type="button" className="w-full rounded-lg px-3 py-1.5 text-left hover:bg-[var(--surface-2)]" onClick={() => setQuery(item)}>
-            <Icon name="clock" size={14} className="mr-2 inline" />{item}</button></li>)}</ul>
+            <UiButton type="button" className="text-xs underline" onClick={() => { clearRecentSearches(); setRecent([]); }}>Clear</UiButton></div>
+          <ul>{recent.map(item => <li key={item}><UiButton type="button" className="w-full rounded-lg px-3 py-1.5 text-left justify-start hover:bg-[var(--surface-2)]" onClick={() => setQuery(item)}>
+            <Icon name="clock" size={14} className="mr-2 inline" />{item}</UiButton></li>)}</ul>
         </> : <p>Type at least two letters to search everything you can read.</p>}
       </div>
         : busy && !rows.length ? <div role="status" aria-label="Searching" className="space-y-2 py-2">{[1, 2, 3].map(item => <div key={item} className="h-12 animate-pulse rounded-lg bg-white/5" />)}</div>
         : !rows.length && term.length >= 2 ? <div className="flex flex-col items-center gap-2 py-10 text-center text-white/55">
           <Icon name="search" size={30} /><p>No results for “{term}”.</p>
-          {(filtered || type !== 'all') && <button type="button" className="btn-ghost" onClick={() => { setType('all'); setFilters(NO_FILTERS); setPerson(''); }}>Search everywhere</button>}
+          {(filtered || type !== 'all') && <UiButton type="button" className="btn-ghost" onClick={() => { setType('all'); setFilters(NO_FILTERS); setPerson(''); }}>Search everywhere</UiButton>}
         </div>
         : <ul id="search-results" role="listbox" aria-label="Search results">
           {grouped ? <>
             {rows.filter(row => row.kind !== 'hit').map(renderRow)}
             {Object.entries(grouped).filter(([, hits]) => hits.length).map(([name, hits]) => <li key={name} role="presentation">
               <p className="mt-2 flex items-center justify-between px-3 text-xs font-semibold uppercase tracking-wide text-white/50">{GROUP_LABELS[name]}
-                <button type="button" className="text-brand normal-case underline" onClick={() => setType(name as SearchType)}>See all</button></p>
+                <UiButton type="button" className="text-brand normal-case underline" onClick={() => setType(name as SearchType)}>See all</UiButton></p>
               <ul role="presentation">{hits.map(hit => renderRow({ key: `${hit.type}:${hit.id}`, kind: 'hit', hit }))}</ul>
             </li>)}
           </> : rows.map(renderRow)}
-          {cursor && <li role="presentation" className="py-2 text-center"><button type="button" className="btn-ghost" disabled={busy} onClick={() => void more()}>{busy ? 'Loading…' : 'Load more'}</button></li>}
+          {cursor && <li role="presentation" className="py-2 text-center"><UiButton type="button" className="btn-ghost" disabled={busy} onClick={() => void more()}>{busy ? 'Loading…' : 'Load more'}</UiButton></li>}
         </ul>}
     </div>
   </>;

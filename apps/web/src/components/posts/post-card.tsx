@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import Link from 'next/link';
 import { useState } from 'react';
 import { useAuth } from '../../lib/auth';
@@ -83,15 +85,15 @@ export function PostCard({ post, combined = false, full = false, reason, onChang
     <footer className="relative mt-3 flex flex-wrap items-center gap-1 text-sm text-white/60">
       <VoteButtons post={post} reason={reason} onChange={onChange} horizontal />
       <Link className={action} href={`/p/${post.id}#comments`}><Icon name="message" size={16} />{post.comment_count} {post.comment_count === 1 ? 'comment' : 'comments'}</Link>
-      {canRepost && <button type="button" className={action} onClick={() => setReposting(true)}>
-        🔁 Repost{post.repost_count ? ` · ${post.repost_count}` : ''}</button>}
+      {canRepost && <UiButton type="button" className={action} onClick={() => setReposting(true)}>
+        🔁 Repost{post.repost_count ? ` · ${post.repost_count}` : ''}</UiButton>}
       {!canRepost && post.repost_count > 0 && <span className={action}>🔁 {post.repost_count}</span>}
-      {!post.deleted && <button type="button" className={action} aria-haspopup="menu" aria-expanded={sharing}
-        onClick={() => setSharing(value => !value)}><Icon name="send" size={15} />Share</button>}
-      {!!user && !post.deleted && <button type="button" className={`${action} ${isSaved ? '!text-brand' : ''}`} aria-pressed={isSaved}
-        title={isSaved ? 'Remove from saved items' : 'Save for later'} onClick={() => void saved.toggle('post', post.id).catch(() => {})}>
-        <Icon name="bookmark" size={15} fill={isSaved ? 'currentColor' : 'none'} />{isSaved ? 'Saved' : 'Save'}</button>}
-      {!!user && !post.deleted && post.author && post.author.id !== user.id && <button type="button" className={action} onClick={() => setReporting(true)}><Icon name="flag" size={15} />Report</button>}
+      {!post.deleted && <UiButton type="button" className={action} aria-haspopup="menu" aria-expanded={sharing}
+        onClick={() => setSharing(value => !value)}><Icon name="send" size={15} />Share</UiButton>}
+      {!!user && !post.deleted && <UiButton type="button" className={`${action} ${isSaved ? '!text-brand' : ''}`} aria-pressed={isSaved}
+        tooltip={isSaved ? 'Remove from saved items' : 'Save for later'} onClick={() => void saved.toggle('post', post.id).catch(() => {})}>
+        <Icon name="bookmark" size={15} fill={isSaved ? 'currentColor' : 'none'} />{isSaved ? 'Saved' : 'Save'}</UiButton>}
+      {!!user && !post.deleted && post.author && post.author.id !== user.id && <UiButton type="button" className={action} onClick={() => setReporting(true)}><Icon name="flag" size={15} />Report</UiButton>}
       <ShareMenu post={post} isOpen={sharing} onClose={() => setSharing(false)} />
     </footer>
     <ReportDialog target={reporting ? { type: 'post', id: post.id, label: 'post' } : null} onClose={() => setReporting(false)} />

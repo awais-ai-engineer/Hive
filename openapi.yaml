@@ -1,0 +1,396 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Hive Space Navigation API",
+    "version": "1.0.0",
+    "description": "Space listing and navigation preferences. Other API endpoints are documented by the server at /openapi.json."
+  },
+  "paths": {
+    "/api/me/spaces": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "My Spaces Route",
+        "operationId": "my_spaces_route_api_me_spaces_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SpaceOut"
+                  },
+                  "type": "array",
+                  "title": "Response My Spaces Route Api Me Spaces Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/me/preferences": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Get Preferences",
+        "operationId": "get_preferences_api_me_preferences_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__users__preferences__PreferencesOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Patch Preferences",
+        "operationId": "patch_preferences_api_me_preferences_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferencesPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__users__preferences__PreferencesOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "MemberRole": {
+        "type": "string",
+        "enum": [
+          "owner",
+          "admin",
+          "moderator",
+          "member",
+          "guest"
+        ],
+        "title": "MemberRole"
+      },
+      "PreferencesPatch": {
+        "properties": {
+          "spaceOrder": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 26,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spaceorder"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PreferencesPatch"
+      },
+      "SpaceOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "$ref": "#/components/schemas/SpaceType"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "default": "other"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "allowed_email_domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Email Domain"
+          },
+          "public_chat": {
+            "type": "boolean",
+            "title": "Public Chat",
+            "default": false
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "member_count": {
+            "type": "integer",
+            "title": "Member Count"
+          },
+          "my_role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "muted": {
+            "type": "boolean",
+            "title": "Muted",
+            "default": false
+          },
+          "favorite": {
+            "type": "boolean",
+            "title": "Favorite",
+            "default": false
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "unread": {
+            "type": "integer",
+            "title": "Unread",
+            "default": 0
+          },
+          "mentionCount": {
+            "type": "integer",
+            "title": "Mentioncount",
+            "default": 0
+          },
+          "iconUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iconurl"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "work",
+              "community"
+            ],
+            "title": "Kind",
+            "readOnly": true
+          },
+          "unreadCount": {
+            "type": "integer",
+            "title": "Unreadcount",
+            "readOnly": true
+          },
+          "color": {
+            "type": "string",
+            "title": "Color",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "name",
+          "slug",
+          "description",
+          "allowed_email_domain",
+          "created_at",
+          "member_count",
+          "my_role",
+          "kind",
+          "unreadCount",
+          "color"
+        ],
+        "title": "SpaceOut"
+      },
+      "SpaceType": {
+        "type": "string",
+        "enum": [
+          "community",
+          "workspace"
+        ],
+        "title": "SpaceType"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "app__users__preferences__PreferencesOut": {
+        "properties": {
+          "spaceOrder": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Spaceorder"
+          }
+        },
+        "type": "object",
+        "required": [
+          "spaceOrder"
+        ],
+        "title": "PreferencesOut"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

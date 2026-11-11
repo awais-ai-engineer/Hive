@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, Input as UiInput, LoadingState } from '@hive/ui';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SaveRejected, docHref, docsApi, makeBlock, timeAgo, type Block, type Doc, type DocUpdate } from '../../lib/docs';
 import { socket, chatRequest } from '../../lib/socket';
@@ -142,8 +144,8 @@ export function DocEditor({ docId, channelId, slug, userId, canWrite, onBack, on
   }
 
   if (!doc) return <div className="flex flex-1 items-center justify-center p-8">
-    {error ? <div className="text-center"><p role="alert" className="mb-3 text-rose-500">{error}</p><button type="button" onClick={onBack} className="btn-ghost">Back to docs</button></div>
-      : <p className="text-white/55">Loading doc…</p>}
+    {error ? <div className="text-center"><p role="alert" className="mb-3 text-rose-500">{error}</p><UiButton type="button" onClick={onBack} className="btn-ghost">Back to docs</UiButton></div>
+      : <LoadingState label="Loading document" />}
   </div>;
 
   const status = state === 'saving' ? 'Saving…' : state === 'dirty' ? 'Unsaved changes' : state === 'error' ? 'Not saved' : savedAt ? `Saved · ${timeAgo(savedAt)}` : 'Saved';
@@ -151,36 +153,36 @@ export function DocEditor({ docId, channelId, slug, userId, canWrite, onBack, on
 
   return <div className="flex min-h-0 flex-1 flex-col">
     <div className="mb-3 flex flex-wrap items-center gap-2">
-      <button type="button" onClick={onBack} className={button}><Icon name="chevronRight" size={16} className="rotate-180" />All docs</button>
+      <UiButton type="button" onClick={onBack} className={button}><Icon name="chevronRight" size={16} className="rotate-180" />All docs</UiButton>
       <span role="status" aria-live="polite" className={`text-xs ${state === 'error' ? 'text-rose-500' : 'text-white/55'}`}>{canWrite ? status : 'View only'}</span>
       {editor && <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand">{editor} is editing</span>}
       <span className="flex-1" />
       {notice && <span role="status" className="text-xs text-emerald-600">{notice}</span>}
-      <button type="button" onClick={() => setHistory(true)} className={button}><Icon name="clock" size={16} />History</button>
-      {canWrite && <button type="button" onClick={() => void share()} className={button}><Icon name="share" size={16} />Share in chat</button>}
+      <UiButton type="button" onClick={() => setHistory(true)} className={button}><Icon name="clock" size={16} />History</UiButton>
+      {canWrite && <UiButton type="button" onClick={() => void share()} className={button}><Icon name="share" size={16} />Share in chat</UiButton>}
       {canWrite && (confirming
         ? <span className="flex items-center gap-1 text-sm">Delete this doc?
-          <button type="button" onClick={() => void remove()} className="rounded-lg bg-rose-600 px-2.5 py-1 font-medium" style={{ color: '#fff' }}>Delete</button>
-          <button type="button" onClick={() => setConfirming(false)} className="btn-ghost !py-1">Keep</button></span>
-        : <button type="button" onClick={() => setConfirming(true)} className={button}><Icon name="trash" size={16} />Delete</button>)}
+          <UiButton type="button" onClick={() => void remove()} className="rounded-lg bg-rose-600 px-2.5 py-1 font-medium" style={{ color: 'var(--rail-fg)' }}>Delete</UiButton>
+          <UiButton type="button" onClick={() => setConfirming(false)} className="btn-ghost !py-1">Keep</UiButton></span>
+        : <UiButton type="button" onClick={() => setConfirming(true)} className={button}><Icon name="trash" size={16} />Delete</UiButton>)}
     </div>
     {conflict && <div role="alert" className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/40 bg-brand-soft p-3 text-sm">
       <span className="min-w-0 flex-1">Someone else edited this doc ({conflict.updated_by?.username ?? 'another person'}, {timeAgo(conflict.updated_at)}). Reload to see their version, or keep yours and overwrite theirs.</span>
-      <button type="button" onClick={() => apply(conflict)} className="btn-ghost">Reload</button>
-      <button type="button" onClick={keepMine} className="auth-button !mt-0 !px-4 !py-1.5">Keep mine (overwrite)</button>
+      <UiButton type="button" onClick={() => apply(conflict)} className="btn-ghost">Reload</UiButton>
+      <UiButton type="button" onClick={keepMine} className="auth-button !mt-0 !px-4 !py-1.5">Keep mine (overwrite)</UiButton>
     </div>}
     {error && !conflict && <p role="alert" className="mb-3 text-sm text-rose-500">{error}</p>}
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-3xl pb-24">
         <div className="relative mb-4 flex items-start gap-2">
-          <button type="button" disabled={!canWrite} aria-label="Choose an emoji" aria-expanded={picker} onClick={() => setPicker(open => !open)}
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-3xl hover:bg-[var(--surface-2)] disabled:hover:bg-transparent">{emoji ?? <Icon name="smile" size={26} className="text-white/35" />}</button>
-          <input aria-label="Doc title" value={title} readOnly={!canWrite} maxLength={200} placeholder="Untitled"
+          <UiButton tooltip="Choose an emoji" type="button" disabled={!canWrite} aria-label="Choose an emoji" aria-expanded={picker} onClick={() => setPicker(open => !open)}
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-3xl hover:bg-[var(--surface-2)] disabled:hover:bg-transparent">{emoji ?? <Icon name="smile" size={26} className="text-white/35" />}</UiButton>
+          <UiInput aria-label="Doc title" value={title} readOnly={!canWrite} maxLength={200} placeholder="Untitled"
             onChange={event => setTitleEdited(event.target.value)}
             className="min-w-0 flex-1 border-0 bg-transparent py-1 text-3xl font-bold outline-none placeholder:text-white/30" />
           {picker && canWrite && <div className="on-surface absolute left-0 top-14 z-20 flex w-72 max-w-[85vw] flex-wrap gap-1 rounded-xl border border-white/10 bg-surface p-2 shadow-[var(--shadow-pop)]">
-            {EMOJI.map(item => <button key={item} type="button" onClick={() => { setEmojiEdited(item); setPicker(false); }} className="h-9 w-9 rounded-lg text-xl hover:bg-[var(--surface-2)]">{item}</button>)}
-            <button type="button" onClick={() => { setEmojiEdited(null); setPicker(false); }} className="btn-ghost !py-1 text-sm">No emoji</button>
+            {EMOJI.map(item => <UiButton key={item} type="button" onClick={() => { setEmojiEdited(item); setPicker(false); }} className="h-9 w-9 rounded-lg text-xl hover:bg-[var(--surface-2)]">{item}</UiButton>)}
+            <UiButton type="button" onClick={() => { setEmojiEdited(null); setPicker(false); }} className="btn-ghost !py-1 text-sm">No emoji</UiButton>
           </div>}
         </div>
         <BlockEditor blocks={blocks} onChange={setBlocksEdited} readOnly={!canWrite} />

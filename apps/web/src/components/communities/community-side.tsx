@@ -30,7 +30,7 @@ export function CommunityGames({ slug }: { slug: string }) {
       <div className="mt-3 grid grid-cols-5 gap-1.5" aria-hidden>
         {Array.from({ length: 5 }, (_, index) => <span key={index} className={`aspect-square rounded-md border ${summary.word.status === 'won' ? 'border-emerald-600 bg-emerald-600' : 'border-[var(--border)] bg-[var(--surface-2)]'}`} />)}
       </div>
-      <Link href={href} className="mt-3 flex w-full items-center justify-center rounded-xl bg-[#15171c] py-2 text-sm font-semibold dark:bg-[#e8eaee]" style={{ color: 'var(--canvas)' }}>
+      <Link href={href} className="mt-3 flex w-full items-center justify-center rounded-xl bg-[var(--rail)] py-2 text-sm font-semibold dark:bg-[var(--call-foreground)]" style={{ color: 'var(--canvas)' }}>
         {summary.word.status === 'playing' ? (summary.word.guesses ? 'Continue playing' : 'Play now') : 'See results'}</Link>
     </section>
     {(summary.newQuizzes > 0 || summary.openPredictions > 0) && <section className="card p-4">

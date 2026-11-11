@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, Input as UiInput, LoadingState, EmptyState } from '@hive/ui';
+
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { apiData, requestError, type Space } from '../../lib/spaces';
@@ -65,8 +67,8 @@ function PersonRow({ person, onMessage }: { person: Person; onMessage: (username
       </p>
     </div>
     <div className="flex shrink-0 gap-2">
-      <button type="button" onClick={() => onMessage(person.username)} className="auth-button !px-3 !py-1.5 text-sm">
-        <Icon name="message" size={15} />Message</button>
+      <UiButton type="button" onClick={() => onMessage(person.username)} className="auth-button !px-3 !py-1.5 text-sm">
+        <Icon name="message" size={15} />Message</UiButton>
       <Link href={`/u/${person.username}`} className="btn-ghost !py-1.5"><Icon name="user" size={15} />View profile</Link>
     </div>
   </li>;
@@ -84,9 +86,9 @@ export function DirectoryView({ space, tab, onTab, onMessage, onOpenChannel }: {
   const list = tab === 'people' ? people : channels;
 
   const tabButton = (value: DirectoryTab, label: string, icon: 'users' | 'hash') =>
-    <button type="button" role="tab" aria-selected={tab === value} onClick={() => onTab(value)}
+    <UiButton type="button" role="tab" aria-selected={tab === value} onClick={() => onTab(value)}
       className={`flex items-center gap-2 border-b-2 px-1 pb-2.5 pt-1 text-sm font-medium transition ${tab === value ? 'border-brand text-brand' : 'border-transparent text-white/55 hover:text-white'}`}>
-      <Icon name={icon} size={16} />{label}</button>;
+      <Icon name={icon} size={16} />{label}</UiButton>;
 
   return <div className="flex min-h-0 flex-1 flex-col">
     <p className="mb-3 text-sm text-white/60">{tab === 'people' ? 'Everyone who shares a space with you.' : space ? `All channels you can open in ${space.name}.` : 'Choose a space to see its channels.'}</p>
@@ -96,14 +98,15 @@ export function DirectoryView({ space, tab, onTab, onMessage, onOpenChannel }: {
     <label className="relative mt-3 block">
       <span className="sr-only">{tab === 'people' ? 'Search people' : 'Search channels'}</span>
       <Icon name="search" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/45" />
-      <input type="search" className="auth-input !mt-0 pl-9" value={query} maxLength={50} onChange={event => setQuery(event.target.value)}
+      <UiInput type="search" className="auth-input !mt-0 pl-9" value={query} maxLength={50} onChange={event => setQuery(event.target.value)}
         placeholder={tab === 'people' ? 'Search by name or username' : 'Search channels'} />
     </label>
     <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1" aria-live="polite" aria-busy={list.state === 'loading'}>
       {list.state === 'error' && <p role="alert" className="text-sm text-rose-500">{list.error}</p>}
-      {list.state === 'loading' && !list.items.length && <p className="text-sm text-white/50">Loading…</p>}
-      {list.state === 'ready' && !list.items.length && <p className="rounded-xl border border-dashed border-white/15 p-6 text-center text-sm text-white/60">
-        {query.trim() ? 'Nothing matches your search.' : tab === 'people' ? 'Nobody else is here yet. Invite people to a space and they will show up.' : 'There are no channels to show yet.'}</p>}
+      {list.state === 'loading' && !list.items.length && <LoadingState label={tab === 'people' ? 'Loading people' : 'Loading channels'} />}
+      {list.state === 'ready' && !list.items.length && <EmptyState layout="compact"
+        title={query.trim() ? 'No matches' : tab === 'people' ? 'No other members yet' : 'No channels yet'}
+        description={query.trim() ? 'Try a different search.' : tab === 'people' ? 'Invite people to a space and they will show up here.' : 'Create a channel to start a conversation.'} />}
       {tab === 'people' && <ul className="space-y-0.5">{people.items.map(person => <PersonRow key={person.id} person={person} onMessage={onMessage} />)}</ul>}
       {tab === 'channels' && <ul className="space-y-0.5">{channels.items.map(channel => <li key={channel.id} className="flex flex-wrap items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-[var(--surface-2)]">
         <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand"><Icon name={channel.is_private ? 'lock' : channel.type === 'voice' ? 'volume' : 'hash'} size={18} /></span>
@@ -112,9 +115,9 @@ export function DirectoryView({ space, tab, onTab, onMessage, onOpenChannel }: {
             {channel.is_private && <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand">Private</span>}</p>
           <p className="truncate text-sm text-white/60">{channel.topic || 'No topic yet'} · {channel.member_count} {channel.member_count === 1 ? 'member' : 'members'}</p>
         </div>
-        <button type="button" onClick={() => onOpenChannel(channel.id)} className="btn-ghost !py-1.5" title="You are already part of this space, so you can open any channel here">Open</button>
+        <UiButton type="button" onClick={() => onOpenChannel(channel.id)} className="btn-ghost !py-1.5" tooltip="You are already part of this space, so you can open any channel here">Open</UiButton>
       </li>)}</ul>}
-      {list.hasMore && <button type="button" onClick={() => void list.more()} className="btn-ghost mx-auto mt-3 flex">Show more</button>}
+      {list.hasMore && <UiButton type="button" onClick={() => void list.more()} className="btn-ghost mx-auto mt-3 flex">Show more</UiButton>}
     </div>
   </div>;
 }

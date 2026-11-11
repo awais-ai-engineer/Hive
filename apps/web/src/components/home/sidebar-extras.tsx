@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { apiData } from '../../lib/spaces';
@@ -13,8 +15,8 @@ export function HuddlesSection({ huddles, onJoin }: { huddles: LiveHuddle[]; onJ
   return <div className="mt-5">
     <p className="mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-white/50">Huddles</p>
     <ul className="space-y-0.5">{huddles.map(huddle => <li key={huddle.id}>
-      <button type="button" onClick={() => onJoin(huddle)} title={`Join the huddle in ${huddle.place}`}
-        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left hover:bg-white/[0.06]">
+      <UiButton type="button" onClick={() => onJoin(huddle)} tooltip={`Join the huddle in ${huddle.place}`}
+        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left justify-start hover:bg-white/[0.06]">
         <Icon name="headphones" size={16} className="shrink-0 opacity-75" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[14px] font-semibold">{huddle.title}</span>
@@ -22,7 +24,7 @@ export function HuddlesSection({ huddles, onJoin }: { huddles: LiveHuddle[]; onJ
         </span>
         <span className="flex shrink-0 items-center gap-1 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Live</span>
-      </button>
+      </UiButton>
     </li>)}</ul>
   </div>;
 }

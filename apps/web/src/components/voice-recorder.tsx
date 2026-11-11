@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from './ui/icons';
 
@@ -89,18 +91,18 @@ export function VoiceRecorder({ onReady, onError, disabled = false }: Props) {
   }
   if (!supported) return null;
   const button = 'btn-ghost rounded-lg px-2 py-1 text-xs';
-  if (phase === 'idle') return <button type="button" className={button} disabled={disabled} title="Record voice message" aria-label="Record voice message" onClick={() => void start()}><Icon name="volume" size={18} /></button>;
+  if (phase === 'idle') return <UiButton type="button" className="flex h-9 min-w-9 items-center justify-center rounded-lg px-2 text-white/70 hover:bg-brand-soft hover:text-brand disabled:opacity-40" disabled={disabled} tooltip="Record a voice message" aria-label="Record a voice message" onClick={() => void start()}><Icon name="mic" size={18} /></UiButton>;
   return <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-xl bg-brand-soft p-2" aria-label="Voice recording">
     {phase === 'starting' && <span className="text-xs">Starting microphone…</span>}
     {phase === 'preparing' && <span className="text-xs">Preparing recording…</span>}
-    {phase === 'recording' && <><span role="timer" className="text-xs tabular-nums">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</span><meter min={0} max={100} value={level} aria-label="Microphone level" className="w-16" /><button type="button" className={button} onClick={() => { if (recorder.current?.state === 'recording') { setPhase('preparing'); recorder.current.stop(); } }}>Stop and review</button></>}
-    {phase === 'review' && ready && <><audio src={ready.url} controls className="h-8 w-44 max-w-full" /><button type="button" className={`${button} text-brand`} disabled={disabled || sending} onClick={async () => {
+    {phase === 'recording' && <><span role="timer" className="text-xs tabular-nums">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</span><meter min={0} max={100} value={level} aria-label="Microphone level" className="w-16" /><UiButton type="button" className={button} onClick={() => { if (recorder.current?.state === 'recording') { setPhase('preparing'); recorder.current.stop(); } }}>Stop and review</UiButton></>}
+    {phase === 'review' && ready && <><audio src={ready.url} controls className="h-8 w-44 max-w-full" /><UiButton type="button" className={`${button} text-brand`} disabled={disabled || sending} onClick={async () => {
       if (sending) return;
       setSending(true);
       try { const result = await onReady(ready.file, ready.duration, ready.peaks); if (result !== false && mounted.current) cancel(); }
       catch { if (mounted.current) onError('Could not send the recording. Please try again.'); }
       finally { if (mounted.current) setSending(false); }
-    }}>{sending ? 'Sending…' : 'Send recording'}</button></>}
-    <button type="button" className={button} disabled={sending} onClick={cancel}>Cancel</button>
+    }}>{sending ? 'Sending…' : 'Send recording'}</UiButton></>}
+    <UiButton type="button" className={button} disabled={sending} onClick={cancel}>Cancel</UiButton>
   </div>;
 }

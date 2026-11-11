@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, LoadingState } from '@hive/ui';
+
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -70,12 +72,12 @@ export default function ProfilePage() {
     <p className="mt-2 text-white/60">Check the username, or they may have changed it.</p>
     <Link href="/spaces" className="auth-button mt-6">Explore spaces</Link>
   </main>;
-  if (!profile) return <main className="p-16 text-center text-white/60" role={error ? 'alert' : undefined}>{error || 'Loading…'}</main>;
+  if (!profile) return error ? <main role="alert" className="p-16 text-center text-white/60">{error}</main> : <LoadingState label="Loading profile" />;
 
   const own = user?.id === profile.id;
   const name = profile.display_name || profile.username;
   const joined = new Date(profile.created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-  const item = 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--surface-2)]';
+  const item = 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left justify-start text-sm hover:bg-[var(--surface-2)]';
   return <main className="mx-auto max-w-2xl px-4 py-6">
     <article className="card overflow-hidden">
       <div className="relative h-32 overflow-hidden bg-gradient-to-br from-[#fcd77f] via-[#f2a516] to-[#15171c] sm:h-40">
@@ -88,12 +90,12 @@ export default function ProfilePage() {
           <div className="flex items-center gap-2 pb-1">
             {own ? <Link href="/settings" className="btn-ghost"><Icon name="edit" size={16} />Edit profile</Link>
               : user && <>
-                {!profile.blocked_by_me && <button type="button" onClick={message} disabled={busy} className="auth-button"><Icon name="message" size={16} />Message</button>}
+                {!profile.blocked_by_me && <UiButton type="button" onClick={message} disabled={busy} className="auth-button"><Icon name="message" size={16} />Message</UiButton>}
                 <div ref={menuRef} className="relative">
-                  <button type="button" aria-label="More actions" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(value => !value)} className="btn-ghost !px-2.5"><Icon name="more" /></button>
+                  <UiButton tooltip="More actions" type="button" aria-label="More actions" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(value => !value)} className="btn-ghost !px-2.5"><Icon name="more" /></UiButton>
                   {menu && <div role="menu" className="card animate-in absolute right-0 z-20 mt-2 w-44 p-1 shadow-[var(--shadow-pop)]">
-                    <button role="menuitem" className={item} onClick={() => { setMenu(false); setConfirmBlock(true); }}>{profile.blocked_by_me ? 'Unblock' : 'Block'}</button>
-                    <button role="menuitem" className={item} onClick={() => { setMenu(false); setReporting(true); }}>Report</button>
+                    <UiButton role="menuitem" className={item} onClick={() => { setMenu(false); setConfirmBlock(true); }}>{profile.blocked_by_me ? 'Unblock' : 'Block'}</UiButton>
+                    <UiButton role="menuitem" className={item} onClick={() => { setMenu(false); setReporting(true); }}>Report</UiButton>
                   </div>}
                 </div></>}
           </div>
@@ -111,8 +113,8 @@ export default function ProfilePage() {
         {confirmBlock && <div role="alertdialog" aria-label={profile.blocked_by_me ? 'Unblock' : 'Block'} className="mt-4 rounded-xl border border-white/10 bg-[var(--surface-2)] p-4">
           <p className="text-sm">{profile.blocked_by_me ? `Unblock ${name}? They’ll be able to message you again.` : `Block ${name}? They won’t be able to message you.`}</p>
           <div className="mt-3 flex gap-2">
-            <button type="button" onClick={toggleBlock} disabled={busy} className="auth-button text-sm">{profile.blocked_by_me ? 'Unblock' : 'Block'}</button>
-            <button type="button" onClick={() => setConfirmBlock(false)} className="btn-ghost">Cancel</button>
+            <UiButton type="button" onClick={toggleBlock} disabled={busy} className="auth-button text-sm">{profile.blocked_by_me ? 'Unblock' : 'Block'}</UiButton>
+            <UiButton type="button" onClick={() => setConfirmBlock(false)} className="btn-ghost">Cancel</UiButton>
           </div>
         </div>}
 

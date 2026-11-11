@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, Checkbox as UiCheckbox, Input as UiInput, Textarea as UiTextarea } from '@hive/ui';
+
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { spaceRulesSchema } from '@hive/shared';
@@ -23,7 +25,7 @@ export function RulesCard({ slug }: { slug: string }) {
   };
   useEffect(() => { setRules(null); setError(''); void load(); return () => { generation.current++; }; }, [slug]);
   return <section className="mt-6 border-t border-white/10 pt-5"><h2 className="mb-3 font-semibold">Community rules</h2>
-    {error ? <p role="alert" className="text-sm">{error} <button type="button" onClick={() => void load()} className="text-brand underline">Retry</button></p>
+    {error ? <p role="alert" className="text-sm">{error} <UiButton type="button" onClick={() => void load()} className="text-brand underline">Retry</UiButton></p>
       : rules === null ? <div role="status" aria-label="Fetching rules" className="h-20 animate-pulse rounded-xl bg-white/5" />
       : rules.length ? <RulesList rules={rules} /> : <p className="flex items-start gap-2 text-sm text-white/60"><Icon name="file" />No extra rules here. Read the <a className="underline" href="/policies/guidelines">Community Guidelines</a>.</p>}
   </section>;
@@ -54,13 +56,13 @@ export function JoinCommunity({ space, onJoined }: { space: Space; onJoined: (sp
     finally { setBusy(false); }
   }
   return <>
-    <button type="button" className="auth-button" disabled={busy} onClick={() => void open()}>Join community</button>
+    <UiButton type="button" className="auth-button" disabled={busy} onClick={() => void open()}>Join community</UiButton>
     <dialog ref={dialog} onCancel={event => { if (busy) event.preventDefault(); }} aria-labelledby={`join-${space.id}`} className="m-auto max-h-[85dvh] w-[calc(100%_-_2rem)] max-w-lg overflow-y-auto rounded-2xl border border-white/10 bg-surface p-5 text-white shadow-xl backdrop:bg-[rgb(0_0_0/0.5)]">
       <h2 id={`join-${space.id}`} className="text-xl font-bold">Join {space.name}</h2><p className="my-4 text-sm text-white/70">Read the community rules before taking part.</p>
       {rules === null && !error && <div role="status" aria-label="Fetching rules" className="h-24 animate-pulse rounded-xl bg-white/5" />}
-      {rules && (rules.length ? <><RulesList rules={rules} /><label className="mt-5 flex items-center gap-3"><input type="checkbox" checked={agreed} onChange={event => setAgreed(event.target.checked)} />I agree to these rules</label></> : <p className="text-sm text-white/70">This community follows the <a href="/policies/guidelines" className="text-brand underline">Community Guidelines</a>.</p>)}
+      {rules && (rules.length ? <><RulesList rules={rules} /><label className="mt-5 flex items-center gap-3"><UiCheckbox checked={agreed} onChange={event => setAgreed(event.target.checked)} />I agree to these rules</label></> : <p className="text-sm text-white/70">This community follows the <a href="/policies/guidelines" className="text-brand underline">Community Guidelines</a>.</p>)}
       {error && <p role="alert" className="mt-3 text-sm text-rose-500">{error}</p>}
-      <div className="mt-5 flex flex-wrap gap-3"><button type="button" className="auth-button" disabled={busy || rules === null || (rules.length > 0 && !agreed)} onClick={() => void join()}>{busy ? 'Joining…' : 'Join community'}</button><button type="button" className="btn-ghost" disabled={busy} onClick={() => dialog.current?.close()}>Cancel</button></div>
+      <div className="mt-5 flex flex-wrap gap-3"><UiButton type="button" className="auth-button" disabled={busy || rules === null || (rules.length > 0 && !agreed)} onClick={() => void join()}>{busy ? 'Joining…' : 'Join community'}</UiButton><UiButton type="button" className="btn-ghost" disabled={busy} onClick={() => dialog.current?.close()}>Cancel</UiButton></div>
     </dialog>
   </>;
 }
@@ -83,19 +85,19 @@ export function RulesEditor({ slug }: { slug: string }) {
     {rules === null ? !error && <div role="status" aria-label="Fetching rules" className="h-20 animate-pulse rounded-xl bg-white/5" /> : <>
       <p className="text-sm text-white/60">{rules.length} of 15</p>
       {rules.map((rule, index) => <fieldset key={rule.id ?? index} disabled={busy} className="space-y-2 rounded-xl border border-white/10 p-3"><legend className="px-1 text-sm">Rule {index+1}</legend>
-        <label className="block text-sm">Title<input className="auth-input" value={rule.title} required maxLength={80} onChange={event => update(index, { title: event.target.value })} /></label>
-        <label className="block text-sm">Description<textarea className="auth-input" value={rule.description} maxLength={500} onChange={event => update(index, { description: event.target.value })} /></label>
-        <div className="flex flex-wrap gap-2"><button type="button" className="btn-ghost" title={`Move rule ${index+1} up`} aria-label={`Move rule ${index+1} up`} disabled={!index} onClick={() => move(index, -1)}>Move up</button><button type="button" className="btn-ghost" title={`Move rule ${index+1} down`} aria-label={`Move rule ${index+1} down`} disabled={index === rules.length-1} onClick={() => move(index, 1)}>Move down</button><button type="button" className="btn-ghost" onClick={() => { setRules(rules.filter((_, i) => i !== index)); setSaved(false); }}>Remove</button></div>
+        <label className="block text-sm">Title<UiInput className="auth-input" value={rule.title} required maxLength={80} onChange={event => update(index, { title: event.target.value })} /></label>
+        <label className="block text-sm">Description<UiTextarea className="auth-input" value={rule.description} maxLength={500} onChange={event => update(index, { description: event.target.value })} /></label>
+        <div className="flex flex-wrap gap-2"><UiButton type="button" className="btn-ghost" tooltip={`Move rule ${index+1} up`} aria-label={`Move rule ${index+1} up`} disabled={!index} onClick={() => move(index, -1)}>Move up</UiButton><UiButton type="button" className="btn-ghost" tooltip={`Move rule ${index+1} down`} aria-label={`Move rule ${index+1} down`} disabled={index === rules.length-1} onClick={() => move(index, 1)}>Move down</UiButton><UiButton type="button" className="btn-ghost" onClick={() => { setRules(rules.filter((_, i) => i !== index)); setSaved(false); }}>Remove</UiButton></div>
       </fieldset>)}
       {!rules.length && <p className="flex items-center gap-2 text-sm text-white/60"><Icon name="file" />Add a rule to help people feel welcome.</p>}
-      <div className="flex flex-wrap items-center gap-3"><button type="button" className="btn-ghost" disabled={rules.length >= 15 || busy} onClick={() => { setRules([...rules, { id: crypto.randomUUID(), title: '', description: '' }]); setSaved(false); }}>Add rule</button>
-        <button type="button" className="auth-button" disabled={busy} onClick={async () => {
+      <div className="flex flex-wrap items-center gap-3"><UiButton type="button" className="btn-ghost" disabled={rules.length >= 15 || busy} onClick={() => { setRules([...rules, { id: crypto.randomUUID(), title: '', description: '' }]); setSaved(false); }}>Add rule</UiButton>
+        <UiButton type="button" className="auth-button" disabled={busy} onClick={async () => {
           const parsed = spaceRulesSchema.safeParse({ rules });
           if (!parsed.success) { setError(parsed.error.issues[0].message); return; }
           setBusy(true); setError(''); setSaved(false);
           try { setRules((await apiData<{ rules: CommunityRule[] }>(`/api/spaces/${slug}/rules`, { method: 'PUT', body: JSON.stringify(parsed.data) })).rules); setSaved(true); }
           catch (cause) { setError(requestError(cause)); } finally { setBusy(false); }
-        }}>Save rules</button>{saved && <span role="status" className="text-sm text-brand">Rules saved</span>}</div>
+        }}>Save rules</UiButton>{saved && <span role="status" className="text-sm text-brand">Rules saved</span>}</div>
     </>}{error && <p role="alert" className="text-sm text-rose-500">{error}</p>}
   </section>;
 }

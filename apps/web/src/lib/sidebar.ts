@@ -30,11 +30,28 @@ export const LEVEL_LABELS: Record<NotifyLevel, string> = {
 };
 
 const EMPTY: SidebarData = { stars: [], sections: [], collapsed: [], prefs: {} };
+const sidebarCache = new Map<string, SidebarData>();
+function readSidebarCache(userId: string): SidebarData | undefined {
+  const memory = sidebarCache.get(userId);
+  if (memory) return memory;
+  try {
+    const raw = sessionStorage.getItem(`hive:sidebar:v1:${userId}`);
+    if (!raw) return undefined;
+    const data = JSON.parse(raw) as SidebarData;
+    if (!Array.isArray(data.stars) || !Array.isArray(data.sections)) return undefined;
+    sidebarCache.set(userId, data);
+    return data;
+  } catch { return undefined; }
+}
+function writeSidebarCache(userId: string, data: SidebarData) {
+  sidebarCache.set(userId, data);
+  try { sessionStorage.setItem(`hive:sidebar:v1:${userId}`, JSON.stringify(data)); } catch { /* session cache is best-effort */ }
+}
 const json = (method: string, body?: object): RequestInit => ({ method, body: body ? JSON.stringify(body) : undefined });
 
 /** Stars, custom sections, collapsed state and notification levels; refreshed when another tab changes them. */
-export function useSidebarData(enabled: boolean) {
-  const [data, setData] = useState<SidebarData>(EMPTY);
+export function useSidebarData(enabled: boolean, userId?: string) {
+  const [data, setData] = useState<SidebarData>(() => userId ? readSidebarCache(userId) ?? EMPTY : EMPTY);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const load = useCallback(async () => {
     try {
@@ -43,12 +60,14 @@ export function useSidebarData(enabled: boolean) {
         apiData<{ sections: CustomSection[]; collapsed: string[] }>('/api/me/sidebar'),
         apiData<{ channel_id: string; level: NotifyLevel }[]>('/api/me/conversation-prefs'),
       ]);
-      setData({
+      const next = {
         stars: stars.map(star => star.channel_id), sections: sidebar.sections, collapsed: sidebar.collapsed,
         prefs: Object.fromEntries(prefs.map(pref => [pref.channel_id, pref.level])),
-      });
+      };
+      setData(next);
+      if (userId) writeSidebarCache(userId, next);
     } catch { /* the sidebar keeps what it has */ }
-  }, []);
+  }, [userId]);
   const reload = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => void load(), 150);
@@ -62,6 +81,7 @@ export function useSidebarData(enabled: boolean) {
       if (timer.current) clearTimeout(timer.current);
     };
   }, [enabled, load, reload]);
+  useEffect(() => { if (userId) writeSidebarCache(userId, data); }, [data, userId]);
   return { data, setData, reload };
 }
 

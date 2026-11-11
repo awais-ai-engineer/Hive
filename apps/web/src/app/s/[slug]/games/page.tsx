@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -40,10 +42,10 @@ export default function CommunityGames() {
         {summary.badges.wordStreak > 1 && <span className="rounded-full bg-brand-soft px-3 py-1 font-semibold text-brand">{summary.badges.wordStreak}-day Daily Word streak</span>}</p>}</div>
     <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
       <div className="min-w-0">
-        <div role="tablist" aria-label="Games" className="mb-4 flex gap-1 overflow-x-auto">{TABS.map(([value, label]) => <button key={value} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)}
+        <div role="tablist" aria-label="Games" className="mb-4 flex gap-1 overflow-x-auto">{TABS.map(([value, label]) => <UiButton key={value} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)}
           className={`whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium ${tab === value ? 'bg-brand-soft text-brand' : 'text-white/65 hover:bg-[var(--surface-2)]'}`}>{label}
           {value === 'trivia' && !!summary?.newQuizzes && <span className="ml-1.5 rounded-full bg-brand px-1.5 text-xs" style={{ color: 'var(--on-brand)' }}>{summary.newQuizzes}</span>}
-          {value === 'predictions' && !!summary?.openPredictions && <span className="ml-1.5 rounded-full bg-brand px-1.5 text-xs" style={{ color: 'var(--on-brand)' }}>{summary.openPredictions}</span>}</button>)}</div>
+          {value === 'predictions' && !!summary?.openPredictions && <span className="ml-1.5 rounded-full bg-brand px-1.5 text-xs" style={{ color: 'var(--on-brand)' }}>{summary.openPredictions}</span>}</UiButton>)}</div>
         {tab === 'word' && <WordGame slug={slug} onFinished={refresh} />}
         {tab === 'trivia' && <Trivia slug={slug} canManage={!!summary?.canManage} onScored={refresh} />}
         {tab === 'predictions' && <Predictions slug={slug} canManage={!!summary?.canManage} onScored={refresh} />}

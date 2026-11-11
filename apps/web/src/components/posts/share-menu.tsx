@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, Input as UiInput, Textarea as UiTextarea, LoadingState } from '@hive/ui';
+
 import { useEffect, useRef, useState } from 'react';
 import type { Post } from '../../lib/posts';
 import { apiData, requestError, type Space, type Channel } from '../../lib/spaces';
@@ -175,7 +177,7 @@ export function ShareMenu({ post, isOpen, onClose }: Props) {
         <div className="w-full max-w-md rounded-xl border border-white/10 bg-surface p-5 shadow-2xl">
           <div className="flex items-center justify-between border-b border-white/10 pb-3">
             <h3 className="font-semibold text-white">↗ Send to chat</h3>
-            <button
+            <UiButton
               onClick={() => {
                 setChatPickerOpen(false);
                 onClose();
@@ -183,7 +185,7 @@ export function ShareMenu({ post, isOpen, onClose }: Props) {
               className="rounded p-1 text-white/40 hover:bg-white/10 hover:text-white"
             >
               ✕
-            </button>
+            </UiButton>
           </div>
 
           {chatSuccess ? (
@@ -199,7 +201,7 @@ export function ShareMenu({ post, isOpen, onClose }: Props) {
               )}
 
               <div>
-                <input
+                <UiInput
                   type="text"
                   placeholder="Search channels or DMs…"
                   value={searchQuery}
@@ -210,16 +212,16 @@ export function ShareMenu({ post, isOpen, onClose }: Props) {
 
               <div className="max-h-48 overflow-y-auto rounded border border-white/10 bg-canvas p-1">
                 {busy && destinations.length === 0 ? (
-                  <p className="p-3 text-center text-xs text-white/40">Loading chats…</p>
+                  <LoadingState layout="inline" label="Loading chats" className="px-3" />
                 ) : filtered.length === 0 ? (
                   <p className="p-3 text-center text-xs text-white/40">No conversations found</p>
                 ) : (
                   filtered.map(dest => (
-                    <button
+                    <UiButton
                       type="button"
                       key={dest.id}
                       onClick={() => setSelectedDestId(dest.id)}
-                      className={`flex w-full items-center justify-between rounded px-3 py-2 text-left text-xs transition-colors ${
+                      className={`flex w-full items-center justify-between rounded px-3 py-2 text-left justify-start text-xs transition-colors ${
                         selectedDestId === dest.id
                           ? 'bg-amber-400/20 text-amber-400'
                           : 'text-white/80 hover:bg-white/5'
@@ -227,7 +229,7 @@ export function ShareMenu({ post, isOpen, onClose }: Props) {
                     >
                       <span className="font-medium">{dest.title}</span>
                       <span className="text-white/40">{dest.subtitle}</span>
-                    </button>
+                    </UiButton>
                   ))
                 )}
               </div>
@@ -236,7 +238,7 @@ export function ShareMenu({ post, isOpen, onClose }: Props) {
                 <label className="block text-xs font-medium text-white/70">
                   Add a note (optional)
                 </label>
-                <textarea
+                <UiTextarea
                   rows={2}
                   value={note}
                   onChange={e => setNote(e.target.value)}
@@ -246,20 +248,20 @@ export function ShareMenu({ post, isOpen, onClose }: Props) {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button
+                <UiButton
                   type="button"
                   onClick={() => setChatPickerOpen(false)}
                   className="rounded px-3 py-1.5 text-xs text-white/60 hover:text-white"
                 >
                   Back
-                </button>
-                <button
+                </UiButton>
+                <UiButton
                   type="submit"
                   disabled={busy || !selectedDestId}
                   className="rounded bg-amber-400 px-4 py-1.5 text-xs font-semibold text-black hover:bg-amber-300 disabled:opacity-50"
                 >
                   {busy ? 'Sending…' : 'Send'}
-                </button>
+                </UiButton>
               </div>
             </form>
           )}
@@ -274,37 +276,37 @@ export function ShareMenu({ post, isOpen, onClose }: Props) {
       role="menu"
       className="absolute right-0 top-full z-30 mt-1 min-w-44 rounded-lg border border-white/15 bg-surface p-1 shadow-xl text-xs"
     >
-      <button
+      <UiButton
         type="button"
         role="menuitem"
         onClick={handleCopy}
-        className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-white/80 hover:bg-white/10 hover:text-white"
+        className="flex w-full items-center gap-2 rounded px-3 py-2 text-left justify-start text-white/80 hover:bg-white/10 hover:text-white"
       >
         <span>🔗</span>
         <span>{copied ? 'Copied link!' : 'Copy link'}</span>
-      </button>
+      </UiButton>
 
       {canNativeShare && (
-        <button
+        <UiButton
           type="button"
           role="menuitem"
           onClick={handleNativeShare}
-          className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-white/80 hover:bg-white/10 hover:text-white"
+          className="flex w-full items-center gap-2 rounded px-3 py-2 text-left justify-start text-white/80 hover:bg-white/10 hover:text-white"
         >
           <span>↗</span>
           <span>Share…</span>
-        </button>
+        </UiButton>
       )}
 
-      <button
+      <UiButton
         type="button"
         role="menuitem"
         onClick={() => setChatPickerOpen(true)}
-        className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-white/80 hover:bg-white/10 hover:text-white"
+        className="flex w-full items-center gap-2 rounded px-3 py-2 text-left justify-start text-white/80 hover:bg-white/10 hover:text-white"
       >
         <span>💬</span>
         <span>Send to chat…</span>
-      </button>
+      </UiButton>
     </div>
   );
 }

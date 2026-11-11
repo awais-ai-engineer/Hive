@@ -1,24 +1,7 @@
 import type { StatusFields } from './status';
 
-export type Space = {
-  id: string;
-  type: 'community' | 'workspace';
-  name: string;
-  slug: string;
-  description: string | null;
-  category: string;
-  tags: string[];
-  role: 'owner' | 'admin' | 'moderator' | 'member' | 'guest' | null;
-  muted: boolean;
-  favorite: boolean;
-  position: number | null;
-  unread: number;
-  allowed_email_domain: string | null;
-  created_at: string;
-  member_count: number;
-  public_chat: boolean;
-  my_role: 'owner' | 'admin' | 'moderator' | 'member' | 'guest' | null;
-};
+import type { Space } from '@hive/shared';
+export type { Space } from '@hive/shared';
 
 export type Channel = {
   id: string;

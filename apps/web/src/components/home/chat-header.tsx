@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton } from '@hive/ui';
+
 import { AskHive } from '../ai/ask-panel';
 import { LiveHuddleBanner } from '../call/live-huddle-banner';
 import { useT } from '../../lib/i18n';
@@ -55,12 +57,12 @@ function Controls({ starred, onStar, level = 'all', onLevel }: Pick<Props, 'star
   if (!onStar && !onLevel) return null;
   const button = 'rounded-lg p-1.5 text-white/60 hover:bg-[var(--surface-2)] hover:text-white';
   return <div className="flex shrink-0 items-center">
-    {onStar && <button type="button" onClick={onStar} aria-pressed={!!starred} title={starred ? 'Remove from starred' : 'Star this conversation to pin it at the top of your sidebar'}
+    {onStar && <UiButton type="button" onClick={onStar} aria-pressed={!!starred} tooltip={starred ? 'Remove from starred' : 'Star this conversation to pin it at the top of your sidebar'}
       aria-label={starred ? 'Remove from starred' : 'Star this conversation'} className={`${button} ${starred ? '!text-amber-500' : ''}`}>
-      <Icon name="star" size={18} fill={starred ? 'currentColor' : 'none'} /></button>}
-    {onLevel && <button type="button" aria-haspopup="menu" aria-expanded={!!menu} title={`Notifications: ${LEVEL_LABELS[level]}`} aria-label={`Notifications: ${LEVEL_LABELS[level]}`}
+      <Icon name="star" size={18} fill={starred ? 'currentColor' : 'none'} /></UiButton>}
+    {onLevel && <UiButton type="button" aria-haspopup="menu" aria-expanded={!!menu} tooltip={`Notifications: ${LEVEL_LABELS[level]}`} aria-label={`Notifications: ${LEVEL_LABELS[level]}`}
       onClick={event => { const box = event.currentTarget.getBoundingClientRect(); setMenu({ x: box.right - 256, y: box.bottom + 4 }); }} className={button}>
-      <Icon name={level === 'all' ? 'bell' : 'bellOff'} size={18} /></button>}
+      <Icon name={level === 'all' ? 'bell' : 'bellOff'} size={18} /></UiButton>}
     {menu && onLevel && <PopupMenu at={menu} label="Notifications" onClose={() => setMenu(null)} items={[
       { heading: 'Notify me about' },
       ...(['all', 'mentions', 'nothing'] as NotifyLevel[]).map(value => ({ label: LEVEL_LABELS[value], checked: level === value, onSelect: () => onLevel(value) })),
@@ -69,10 +71,10 @@ function Controls({ starred, onStar, level = 'all', onLevel }: Pick<Props, 'star
 }
 
 function Tab({ active, icon, label, onClick }: { active: boolean; icon: IconName; label: string; onClick: () => void }) {
-  return <button type="button" role="tab" aria-selected={active} onClick={onClick}
+  return <UiButton type="button" role="tab" aria-selected={active} onClick={onClick}
     className={`flex items-center gap-2 border-b-2 px-1 pb-2.5 pt-1 text-sm font-medium transition ${active ? 'border-brand text-brand' : 'border-transparent text-white/55 hover:text-white'}`}>
     <Icon name={icon} size={16} />{label}
-  </button>;
+  </UiButton>;
 }
 
 /** Top of the main area: what is open, who is in it, and the Messages/Posts tabs for space channels. */
@@ -89,7 +91,8 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
     return () => { active = false; };
   }, [space?.slug, channel?.id]);
 
-  const menu = <button type="button" onClick={onMenu} aria-label="Open sidebar" className="rounded-lg p-1 text-white/70 hover:bg-[var(--surface-2)] md:hidden"><Icon name="menu" size={22} /></button>;
+  const menu = <>
+    <UiButton tooltip="Open sidebar" type="button" onClick={onMenu} aria-label="Open sidebar" className="rounded-lg p-1 text-white/70 hover:bg-[var(--surface-2)] min-[760px]:hidden"><Icon name="menu" size={22} /></UiButton></>;
   const shell = 'mb-3 border-b border-white/10';
 
   if (conversation) {
@@ -138,8 +141,8 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
         {channel.type !== 'voice' && onTimerChanged && (space.my_role === 'owner' || space.my_role === 'admin') && <TimerButton channelId={channel.id} seconds={channel.disappear_after} onChanged={onTimerChanged} onError={onError ?? (() => {})} />}
         <Controls {...controls} />
         {channel.is_private && <div className="relative">
-          <button type="button" onClick={() => setPanel(open => !open)} aria-expanded={panel} className="btn-ghost flex items-center gap-1.5 text-sm">
-            <Icon name="users" size={15} />Members</button>
+          <UiButton type="button" onClick={() => setPanel(open => !open)} aria-expanded={panel} className="btn-ghost flex items-center gap-1.5 text-sm">
+            <Icon name="users" size={15} />Members</UiButton>
           {panel && <ChannelMembers space={space} channel={channel} isAdmin={space.my_role === 'owner' || space.my_role === 'admin'}
             onLeft={() => { setPanel(false); onLeft?.(); }} />}
         </div>}

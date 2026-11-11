@@ -1,5 +1,7 @@
 'use client';
 
+import { Button as UiButton, LoadingState } from '@hive/ui';
+
 import { useEffect, useState } from 'react';
 import { docsApi, timeAgo, type Doc, type DocVersion, type DocVersionSummary } from '../../lib/docs';
 import { requestError } from '../../lib/spaces';
@@ -37,23 +39,23 @@ export function DocHistory({ docId, canWrite, currentVersion, onRestored, onClos
   }
 
   return <div className="on-surface fixed inset-0 z-50 flex justify-end">
-    <button type="button" aria-label="Close history" onClick={onClose} className="fixed inset-0 bg-[rgb(0_0_0/0.5)]" />
+    <UiButton tooltip="Close history" type="button" aria-label="Close history" onClick={onClose} className="fixed inset-0 bg-[rgb(0_0_0/0.5)]" />
     <aside role="dialog" aria-modal="true" aria-label="Version history" className="relative flex h-full w-full max-w-3xl flex-col bg-surface shadow-[var(--shadow-pop)] sm:flex-row">
       <div className="flex max-h-[40%] w-full shrink-0 flex-col border-b border-white/10 sm:max-h-none sm:w-64 sm:border-b-0 sm:border-r">
         <div className="flex items-center justify-between p-4 pb-2">
           <h2 className="font-bold">Version history</h2>
-          <button type="button" onClick={onClose} aria-label="Close history" className="rounded p-1 text-white/60 hover:bg-white/10"><Icon name="x" size={18} /></button>
+          <UiButton tooltip="Close history" type="button" onClick={onClose} aria-label="Close history" className="rounded p-1 text-white/60 hover:bg-white/10"><Icon name="x" size={18} /></UiButton>
         </div>
         <p className="px-4 pb-2 text-xs text-white/55">The last 20 saves. Pick one to look at it before you restore it.</p>
         <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-3">
-          {versions === null && !error && <li className="px-2 text-sm text-white/55">Loading…</li>}
+          {versions === null && !error && <li><LoadingState layout="inline" label="Loading history" /></li>}
           {versions?.map(version => <li key={version.id}>
-            <button type="button" onClick={() => void show(version)} aria-current={preview?.id === version.id}
-              className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${preview?.id === version.id ? 'bg-brand-soft' : 'hover:bg-[var(--surface-2)]'}`}>
+            <UiButton type="button" onClick={() => void show(version)} aria-current={preview?.id === version.id}
+              className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left justify-start text-sm ${preview?.id === version.id ? 'bg-brand-soft' : 'hover:bg-[var(--surface-2)]'}`}>
               <Avatar name={version.saved_by?.username ?? '?'} src={version.saved_by?.avatar_url} size={28} />
               <span className="min-w-0"><span className="block truncate font-medium">{version.saved_by?.username ?? 'Someone'}{version.version === currentVersion ? ' · current' : ''}</span>
                 <span className="block text-xs text-white/55">{timeAgo(version.created_at)}</span></span>
-            </button>
+            </UiButton>
           </li>)}
         </ul>
       </div>
@@ -62,8 +64,8 @@ export function DocHistory({ docId, canWrite, currentVersion, onRestored, onClos
         {preview ? <>
           <div className="flex items-center justify-between gap-2 border-b border-white/10 p-4">
             <p className="min-w-0 truncate font-semibold">{preview.emoji} {preview.title || 'Untitled'}</p>
-            {canWrite && preview.version !== currentVersion && <button type="button" disabled={busy} onClick={() => void restore()} className="auth-button !mt-0 shrink-0 !px-4 !py-1.5 text-sm">
-              {busy ? 'Restoring…' : 'Restore this version'}</button>}
+            {canWrite && preview.version !== currentVersion && <UiButton type="button" disabled={busy} onClick={() => void restore()} className="auth-button !mt-0 shrink-0 !px-4 !py-1.5 text-sm">
+              {busy ? 'Restoring…' : 'Restore this version'}</UiButton>}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-4"><BlockEditor readOnly blocks={preview.body.length ? preview.body : []} onChange={() => {}} /></div>
         </> : <p className="m-auto max-w-xs p-6 text-center text-sm text-white/55">Select a version on the left to preview it here.</p>}

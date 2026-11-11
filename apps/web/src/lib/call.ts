@@ -129,7 +129,7 @@ class CallManager {
     // After a reconnect the server has forgotten this socket: join again with fresh connections.
     socket.on('connect', () => {
       const channelId = this.state.channelId;
-      if (channelId && this.state.status === 'connected') { this.resetLinks(); void this.join(channelId); }
+      if (channelId && this.state.status === 'connected') { this.resetLinks(); void this.joinNow(channelId, this.state.title); }
     });
   }
 
@@ -143,7 +143,21 @@ class CallManager {
 
   setStageOpen(stageOpen: boolean) { this.emit({ stageOpen }); }
 
+  /** Set by the pre-join screen: resolves with the chosen mic and camera state, or null to stay out. */
+  beforeJoin: ((channelId: string, title: string) => Promise<{ muted: boolean; camera: boolean } | null>) | null = null;
+
   async join(channelId: string, title = '') {
+    if (this.state.channelId === channelId && this.state.status !== 'idle' && this.state.status !== 'error') return;
+    const choice = this.beforeJoin ? await this.beforeJoin(channelId, title) : { muted: false, camera: false };
+    if (!choice) return;
+    await this.joinNow(channelId, title);
+    if (this.state.status !== 'connected') return;
+    if (choice.muted && !this.state.muted) this.toggleMute();
+    if (choice.camera && !this.state.camera) await this.toggleCamera();
+  }
+
+  /** Joins without the pre-join screen (reconnects and confirmed joins). */
+  async joinNow(channelId: string, title = '') {
     if (this.state.channelId === channelId && this.state.status !== 'idle' && this.state.status !== 'error') return;
     if (this.state.channelId && this.state.channelId !== channelId) await this.leave();
     this.emit({ channelId, title, status: 'joining', error: '' });
