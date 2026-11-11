@@ -22,6 +22,10 @@ services:
           property: connectionString
       - key: WEB_ORIGIN
         sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: GAME_SECRET
@@ -57,6 +61,8 @@ services:
         sync: false
       - key: NEXT_PUBLIC_AUTH_PROXY
         value: "1"
+      - key: NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED
+        sync: false
 
   - type: keyvalue
     name: hive-redis

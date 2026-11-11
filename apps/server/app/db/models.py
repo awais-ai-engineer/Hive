@@ -112,6 +112,9 @@ class User(Base):
     id: Mapped[str] = pk()
     username: Mapped[str] = mapped_column(String(32), unique=True)
     email: Mapped[str] = mapped_column(String(255), unique=True)
+    google_sub: Mapped[str | None] = mapped_column(
+        String(255), unique=True, name="uq_users_google_sub"
+    )
     password_hash: Mapped[str] = mapped_column(Text)
     avatar_url: Mapped[str | None] = mapped_column(Text)
     # Storage key of the current avatar object (avatar_url is the public, versioned link to it).

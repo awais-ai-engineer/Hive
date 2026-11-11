@@ -71,6 +71,17 @@ its login family; replay revokes the entire family. Family operations are
 serialized to prevent concurrent rotation from escaping reuse detection.
 Signup and login allow 10 requests per IP per endpoint per minute using Redis.
 
+Google sign-in uses the OAuth 2.0 authorization-code flow and stores the verified Google
+subject on the Hive account. Existing accounts with a matching verified email are connected
+on first Google sign-in. To enable it, create a Google OAuth client of type **Web application**,
+add `WEB_ORIGIN/api/auth/google/callback` as an authorized redirect URI, then configure
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` on the API and set
+`NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED=true` on the web service. The web variable is baked in at
+build time, so rebuild the web service after changing it. For local development, set
+`API_PROXY_TARGET=http://localhost:4000` so the OAuth callback and refresh cookie remain
+first-party. Apply the new `users.google_sub` migration with `pnpm --filter @hive/server db:migrate`
+before deploying the API change.
+
 Configure `JWT_SECRET`, `ACCESS_TOKEN_MINUTES`, `REFRESH_TOKEN_DAYS`, and
 `COOKIE_SECURE` in `apps/server/.env` (see `.env.example`). Replace the development
 secret and enable secure cookies when serving over HTTPS.

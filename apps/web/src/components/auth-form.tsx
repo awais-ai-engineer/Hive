@@ -4,7 +4,7 @@ import { Input as UiInput, Button as UiButton } from '@hive/ui';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { loginSchema, signupSchema } from '@hive/shared';
 import { useAuth } from '../lib/auth';
 import { Icon, Logo, type IconName } from './ui/icons';
@@ -14,8 +14,16 @@ export default function AuthForm({ mode }: { mode: 'signup' | 'login' }) {
   const router = useRouter();
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const googleEnabled = process.env.NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED === 'true';
   const signup = mode === 'signup';
   const title = signup ? 'Sign up' : 'Log in';
+
+  useEffect(() => {
+    const reason = new URLSearchParams(window.location.search).get('authError');
+    if (reason === 'unavailable') setError('Google sign-in is not configured yet.');
+    else if (reason === 'account') setError('This email is connected to a different Google account. Try that account or log in with email and password.');
+    else if (reason === 'failed') setError('Google sign-in could not be completed. Please try again.');
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,6 +58,12 @@ export default function AuthForm({ mode }: { mode: 'signup' | 'login' }) {
     try { await auth.login({ email: demoEmail, password: demoPassword }); router.push('/home'); }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'Demo is unavailable right now.'); }
     finally { setSubmitting(false); }
+  }
+
+  function googleLogin() {
+    const next = new URLSearchParams(window.location.search).get('next');
+    const query = next ? `?${new URLSearchParams({ next })}` : '';
+    window.location.assign(`/api/auth/google/start${query}`);
   }
 
   const features: [IconName, string, string][] = [
@@ -90,6 +104,12 @@ export default function AuthForm({ mode }: { mode: 'signup' | 'login' }) {
             <UiButton className="auth-button h-11 w-full" disabled={submitting || auth.loading}>
               {submitting ? 'Please wait…' : title}
             </UiButton>
+            {googleEnabled && <>
+              <div className="flex items-center gap-3 py-1 text-xs text-white/45"><span className="h-px flex-1 bg-white/10" /><span>or continue with</span><span className="h-px flex-1 bg-white/10" /></div>
+              <UiButton type="button" onClick={googleLogin} disabled={submitting || auth.loading} className="btn-ghost h-11 w-full justify-center gap-3">
+                <GoogleMark />Continue with Google
+              </UiButton>
+            </>}
             {!signup && demoEmail && <UiButton type="button" onClick={demo} disabled={submitting || auth.loading} className="btn-ghost h-11 w-full justify-center">Try the demo</UiButton>}
             {signup && <p className="text-xs leading-relaxed text-white/65">By signing up you agree to the <Link href="/policies/terms" target="_blank" rel="noopener" className="text-brand underline">Terms of Service</Link> and <Link href="/policies/privacy" target="_blank" rel="noopener" className="text-brand underline">Privacy Policy</Link>, and confirm you have read the <Link href="/policies/guidelines" target="_blank" rel="noopener" className="text-brand underline">Community Guidelines</Link>.</p>}
           </form>
@@ -102,4 +122,13 @@ export default function AuthForm({ mode }: { mode: 'signup' | 'login' }) {
       </section>
     </main>
   );
+}
+
+function GoogleMark() {
+  return <svg aria-hidden="true" width="18" height="18" viewBox="0 0 48 48">
+    <path fill="rgb(66 133 244)" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5h6.6c3.9-3.6 6.1-8.8 6.1-14.9Z" />
+    <path fill="rgb(52 168 83)" d="M24 44c5.5 0 10.1-1.8 13.5-4.8l-6.6-5c-1.8 1.2-4.1 2-6.9 2-5.3 0-9.8-3.6-11.4-8.4h-6.8v5.2A20 20 0 0 0 24 44Z" />
+    <path fill="rgb(251 188 5)" d="M12.6 27.8a12 12 0 0 1 0-7.6V15H5.8a20 20 0 0 0 0 18Z" />
+    <path fill="rgb(234 67 53)" d="M24 11.8c3 0 5.7 1 7.8 3.1l5.8-5.8C34.1 5.8 29.5 4 24 4A20 20 0 0 0 5.8 15l6.8 5.2c1.6-4.8 6.1-8.4 11.4-8.4Z" />
+  </svg>;
 }

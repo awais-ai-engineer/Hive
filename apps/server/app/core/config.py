@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6380"
     socketio_channel: str = "hive-socketio"
     moderation_url: str = "http://localhost:8000"
+    google_client_id: str = ""
+    google_client_secret: str = ""
     jwt_secret: str = "dev-change-me"
     access_token_minutes: int = 15
     refresh_token_days: int = 30
