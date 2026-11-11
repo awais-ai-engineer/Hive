@@ -79,8 +79,8 @@ add `WEB_ORIGIN/api/auth/google/callback` as an authorized redirect URI, then co
 `NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED=true` on the web service. The web variable is baked in at
 build time, so rebuild the web service after changing it. For local development, set
 `API_PROXY_TARGET=http://localhost:4000` so the OAuth callback and refresh cookie remain
-first-party. Apply the new `users.google_sub` migration with `pnpm --filter @hive/server db:migrate`
-before deploying the API change.
+first-party. The Render API build applies pending Alembic migrations before starting the new
+server. For local development, apply the migration with `pnpm --filter @hive/server db:migrate`.
 
 Configure `JWT_SECRET`, `ACCESS_TOKEN_MINUTES`, `REFRESH_TOKEN_DAYS`, and
 `COOKIE_SECURE` in `apps/server/.env` (see `.env.example`). Replace the development
