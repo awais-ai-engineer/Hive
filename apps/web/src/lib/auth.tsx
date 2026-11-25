@@ -1,5 +1,8 @@
 'use client';
 
+import { configureSounds, suppressSounds, type SoundPreferences } from './sounds';
+import { apiData } from './spaces';
+import { socket } from './socket';
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { LoginInput, SignupInput } from '@hive/shared';
 import { unsubscribeThisDevice } from './push';
@@ -30,6 +33,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshSession().finally(() => { if (active) setLoading(false); });
     return () => { active = false; unsubscribe(); };
   }, []);
+
+  useEffect(() => {
+    if (!session?.user.id) { suppressSounds(true); return; }
+    let active = true;
+    const refreshAvailability = async () => {
+      try {
+        const state = await apiData<{ sounds: SoundPreferences; suppress: boolean }>('/api/me/communication-state');
+        if (active) { configureSounds(state.sounds); suppressSounds(state.suppress); }
+      } catch { /* keep the current suppression choice on transient errors */ }
+    };
+    void refreshAvailability();
+    const timer = setInterval(() => void refreshAvailability(), 15000);
+    socket.on('availability:changed', refreshAvailability).on('connect', refreshAvailability);
+    return () => { active = false; clearInterval(timer); socket.off('availability:changed', refreshAvailability).off('connect', refreshAvailability); };
+  }, [session?.user.id]);
 
   async function authenticate(endpoint: string, input: LoginInput | SignupInput) {
     const response = await apiFetch(`/api/auth/${endpoint}`, {

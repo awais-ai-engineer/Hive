@@ -14,7 +14,7 @@ from app.ai.provider import AIError, AIMessage, AIResult
 from app.ai.schemas import HuddleNotesIn, SummarizeIn
 from app.core.config import settings
 from app.core.limits import hit
-from app.db.models import AiUsage, Channel, Message, User
+from app.db.models import AiUsage, Channel, Doc, Message, User
 from app.db.session import redis
 from app.messages.service import readable
 
@@ -36,12 +36,12 @@ CATCH_UP_TASK = (
     "Never invent anything that is not in the messages."
 )
 HUDDLE_TASK = (
-    "You write notes about the chat that happened while a voice huddle was running. Every message "
+    "You write notes from the consented multi-speaker transcript of a voice huddle. Every message "
     "is a numbered line such as `[3] name: text`. Write short bullet points ('- ...') under these "
     "'## ' sections, only when they have content: 'Key points', 'Decisions', 'Action items'. "
     "Action items are things somebody agreed or was asked to do; write each as a short task and "
     "cite the message it comes from by number in square brackets, for example [2]. "
-    "Never invent anything that is not in the messages."
+    "Include assigned responsibilities and deadlines only when explicitly stated. Never invent anything that is not in the messages."
 )
 PRIORITY_TASK = (
     "You help a person decide which unread conversations to open first. Each conversation is a "
@@ -142,6 +142,18 @@ async def huddle_notes(session: AsyncSession, user: User, data: HuddleNotesIn) -
         raise HTTPException(422, "This huddle was recorded before chat summaries were available.")
     snippets = await context.channel_window(
         session, user, message.channel_id, message.huddle_started_at, message.created_at)
+    # The saved transcript is the source of spoken discussion, independent of chat messages.
+    linked_doc = re.search(r"[?&]doc=([0-9A-Za-z]{26})", message.body or "")
+    if linked_doc:
+        doc = await session.get(Doc, linked_doc.group(1))
+        if doc is not None and doc.channel_id == message.channel_id:
+            transcript = [block.get("text", "") for block in doc.body
+                          if str(block.get("id", "")).startswith("t") and block.get("type") == "paragraph"]
+            if sum(len(line) for line in transcript) > settings.ai_max_input_chars:
+                raise HTTPException(422, "This transcript exceeds the summary limit. Read the complete meeting notes document.")
+            snippets = [Snippet(n=index + 1, message_id=message.id, channel_id=message.channel_id,
+                        parent_id=None, author="Transcript", created_at=message.created_at, text=line)
+                        for index, line in enumerate(transcript)]
     base = {"scope": "huddle", "messageCount": len(snippets), "channelId": message.channel_id}
     if not snippets:
         return {**base, **EMPTY, "empty": True}

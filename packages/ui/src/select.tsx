@@ -1,5 +1,6 @@
 'use client';
 
+import { Chevron } from './chevron';
 import { Children, Fragment, forwardRef, isValidElement, useEffect, useId, useRef, useState, type ChangeEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
 import * as Primitive from '@radix-ui/react-select';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
@@ -30,7 +31,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
       const next = selected === empty ? '' : selected; setLocal(next);
       if (sink.current) { sink.current.value = next; onChange?.({ target: sink.current, currentTarget: sink.current, type: 'change' } as ChangeEvent<HTMLSelectElement>); }
     }}>
-      <Primitive.Trigger id={id} aria-label={label} aria-describedby={props['aria-describedby']} aria-invalid={props['aria-invalid']} className={`ui-select-trigger ${className}`}><Primitive.Value /><Primitive.Icon aria-hidden>⌄</Primitive.Icon></Primitive.Trigger>
+      <Primitive.Trigger id={id} aria-label={label} aria-describedby={props['aria-describedby']} aria-invalid={props['aria-invalid']} className={`ui-select-trigger ${className}`}><Primitive.Value /><Primitive.Icon asChild><Chevron /></Primitive.Icon></Primitive.Trigger>
       <Primitive.Portal><Primitive.Content position="popper" sideOffset={5} className="ui-select-content"><Primitive.ScrollUpButton className="ui-select-scroll">↑</Primitive.ScrollUpButton><Primitive.Viewport>{options.map(option => <Primitive.Item key={option.value} value={option.value || empty} disabled={option.disabled} className="ui-select-item"><Primitive.ItemText>{option.label || 'None'}</Primitive.ItemText><Primitive.ItemIndicator aria-hidden>✓</Primitive.ItemIndicator></Primitive.Item>)}</Primitive.Viewport><Primitive.ScrollDownButton className="ui-select-scroll">↓</Primitive.ScrollDownButton></Primitive.Content></Primitive.Portal>
     </Primitive.Root>
   </>;
@@ -52,7 +53,7 @@ export const Combobox = forwardRef<HTMLButtonElement, ComboboxProps>(function Co
     return () => { controller.abort(); clearTimeout(timer); };
   }, [query, open, loadOptions]);
   const choose = (option: SelectOption) => { if (option.disabled) return; setSelectedLabel(option.label); onValueChange(option.value); setOpen(false); setQuery(''); };
-  return <PopoverPrimitive.Root open={open} onOpenChange={setOpen}><PopoverPrimitive.Trigger asChild><Button ref={ref} type="button" variant="secondary" disabled={disabled} role="combobox" aria-label={label} aria-controls={open ? id : undefined} aria-haspopup="listbox" aria-expanded={open} className={className}>{options.find(option => option.value === value)?.label ?? (selectedLabel || placeholder)} ⌄</Button></PopoverPrimitive.Trigger><PopoverPrimitive.Portal><PopoverPrimitive.Content className="ui-popover" sideOffset={5} onOpenAutoFocus={event => { event.preventDefault(); input.current?.focus(); }}>
+  return <PopoverPrimitive.Root open={open} onOpenChange={setOpen}><PopoverPrimitive.Trigger asChild><Button ref={ref} type="button" variant="secondary" disabled={disabled} role="combobox" aria-label={label} aria-controls={open ? id : undefined} aria-haspopup="listbox" aria-expanded={open} className={className}>{options.find(option => option.value === value)?.label ?? (selectedLabel || placeholder)}<Chevron /></Button></PopoverPrimitive.Trigger><PopoverPrimitive.Portal><PopoverPrimitive.Content className="ui-popover" sideOffset={5} onOpenAutoFocus={event => { event.preventDefault(); input.current?.focus(); }}>
     <Input ref={input} role="combobox" aria-label={`Search ${label}`} aria-expanded={open} aria-autocomplete="list" aria-controls={id} aria-activedescendant={list[active] ? `${id}-${active}` : undefined} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
       if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { event.preventDefault(); let next = event.key === 'Home' ? 0 : event.key === 'End' ? list.length - 1 : (active + (event.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length; for (let i = 0; i < list.length && list[next]?.disabled; i++) next = (next + (event.key === 'ArrowUp' ? -1 : 1) + list.length) % list.length; setActive(next); }
       if (event.key === 'Enter') { event.preventDefault(); if (list[active]) choose(list[active]); }

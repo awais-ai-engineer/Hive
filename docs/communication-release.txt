@@ -1,0 +1,155 @@
+Hive communication reliability development report
+
+Implementation status
+Changes are proposed on feature/production-communication. This report is not a claim that production has been fixed or that every real-device acceptance test has passed. Production deployment, actual microphone recognition across independent devices, and an authenticated reproduction of the reported Render upload error remain necessary.
+
+Architecture inspected
+Next.js 15 / React 19 frontend; shared React/Radix controls; FastAPI Python API; async SQLAlchemy/PostgreSQL with Alembic; authenticated Socket.IO backed by Redis; WebRTC mesh with a six-socket cap; browser speech recognition; local-development or private Supabase object storage; refresh-cookie authentication and first-party auth proxy; channel/workspace/DM access checks; scheduled delivery; notifications and web push; Render Blueprint and CI.
+
+1. Captions and meeting notes
+Confirmed defects: the browser inspected only the last recognition result, used locally generated display IDs rather than stable result IDs, overwrote interim captions by speaker alone, and did not stop browser recognition when the Hive mic was muted. The server accepted repeated finalized segments without idempotency or transcription consent. Reconnection invoked a join function whose connected-state guard prevented rejoining. AI Huddle notes summarized text chat from the meeting window instead of the saved spoken transcript.
+Changes: process every result from resultIndex; stable IDs per recognition run/result; separate interim/final handling; ignore late interim updates after finalization; per-speaker attribution and timestamps; server-controlled identities; explicit transcription consent UI and server state; a Redis lease permits only one consenting transcription socket per user per meeting; muted speech is rejected and the browser recognizer stops when muted. Reconnection can rebuild peer links and rejoin. Finalized results have a bounded in-memory retry buffer; replay occurs only after rejoin/consent and uses the same idempotency keys. Disabling transcription clears pending local speech. Long recognition results are split without losing characters or splitting Unicode pairs. Finalized segments persist in PostgreSQL with a composite primary key, and meeting document generation reads that durable source. AI summaries use the linked transcript and explicitly retain only stated responsibilities/deadlines. Oversized AI input is rejected instead of silently summarizing a partial transcript.
+Limits: each participant must opt in on a supported Chrome/Edge browser. No participant is silently recorded. Browser speech recognition may use the browser provider's servers and cannot be represented as universally reliable or offline. The synchronization tests inject transcript events; they do not measure actual speech accuracy or simultaneous physical microphones. Existing single-process startup clears live call state; persisted finalized rows survive, but interrupted meetings need recovery of their transcript if no final notes document was created. No paid transcription service was added.
+
+2. Media and voice
+Confirmed defects: attachment rows were committed before playback URL signing; failed signing could remove the object after the row had already committed. Missing signed URLs could become an unhelpful exception. Safari-style audio MP4 containers were treated as video unless they used the M4A brand. Frontend video limits were fixed at 100 MB while Render specifies 50 MB. Upload errors lacked a retry action.
+Changes: save and sign first, commit the attachment only with a usable URL, roll back records and clean objects on failure; validate actual content and media-specific availability; inspect MP4 track handlers and support recognized WAV/MP3/FLAC signatures; trim storage configuration whitespace; distinguish provider authorization/size failures without logging credentials or provider response bodies; expose safe upload size limits; add retry controls while preserving preview/cancel/progress and existing authenticated upload authorization.
+Live provider verification: the locally saved service credential was used in a temporary process; its project metadata resolved the Supabase origin. The private hive-media bucket exists, allows 50 MB, and has no MIME allowlist. A streamed probe upload, a short-lived signed URL, and an independent-client download all succeeded. The probe object was deleted. This establishes that the saved credential and bucket work. It does not prove that Render's current environment uses the same values, nor establish the exact cause of the user's production error. No production user attachments were read.
+Persistent storage stays in Supabase for production. Local disk remains a development option. Signed URLs are short-lived bearer capabilities issued only after the application authorizes access; credentials remain on the API server.
+
+3. Invitations
+Confirmed defect: the settings page explicitly generated http://localhost:3000/invite/....
+Changes: central publicUrl helper uses optional NEXT_PUBLIC_WEB_URL or the browser's current origin. Existing login next-path handling is retained. Creation/acceptance refresh membership navigation and enter /home?s=...; new tokens contain 192 bits of randomness and fit the widened database column. Existing atomic use counts, expiration, revocation, ban checks, and membership uniqueness remain in place. Invalid/revoked previews no longer disclose private space names, descriptions or slugs.
+Production frontend https://hive-web-duzu.onrender.com returned HTTP 200 during direct verification. Workspace email-domain self-join policy remains distinct from an explicit administrator-issued invite; existing behavior was preserved.
+
+4. Workspace header
+The prior sidebar header separated the name from action controls and did not use the shared management menu. The header now groups the space icon, truncated name and chevron inside the shared menu trigger, with search and a dedicated space-strip toggle immediately alongside it. The full name is available as a tooltip. Existing management/switching actions and keyboard shortcuts remain available.
+
+5. Huddle UI
+Confirmed defects: speaking rings used rounded-full while shared avatars use a rounded square with 27% corner radii; the level detector had no release hysteresis; narrow control captions could compress.
+Changes: speaking outlines follow actual avatar corner geometry; local/remote mute state suppresses speaking; 500 ms release reduces flicker; hand control captions have stable minimum width and no wrapping; the container uses a continuous halo with reduced-motion support; participant singular is corrected; active transcription has explicit state indicators. Mini/expanded state continues to reuse CallManager rather than creating a new session.
+
+6. Dropdowns
+Confirmed defects: shared select/submenu/combobox controls and the composer used text arrow glyphs; ordinary SVG icons could shrink in flex containers.
+Changes: shared fixed-aspect SVG Chevron, fixed icon shrink behavior and aspect ratio, consistent stroke geometry, and replacement of composer/select/submenu/combobox text arrows. Radix continues to own keyboard behavior, focus restoration, portal positioning, collision handling and Escape/outside dismissal. Semantic vote arrows are not dropdown controls.
+
+7. Communities
+Confirmed defect: creation and acceptance entered the standalone /s route and did not consistently invalidate membership/navigation state.
+Changes: creation/acceptance emits membership changes and enters the existing unified Home layout. Signed-in members following a /s deep link are redirected into that layout, preserving channel/post context. Public landing pages remain available for discovery. Existing Explore and feed queries already query persisted communities and enforce the established public-community/private-workspace model; their permission architecture was retained. This change does not introduce a separate new private-community visibility type beyond Hive's existing private workspaces.
+
+8. Sounds
+The application already had a small device-local message chime and ringtone module, rather than no audio implementation. It lacked account preferences, categories, volume and comprehensive lifecycle events.
+Changes: extend the central manager using original synthesized tones, account persistence, category switches and previews, user-gesture unlock, safe AudioContext error handling, throttling, bounded recent-event storage, BroadcastChannel/Web Locks deduplication and overlapping-playback protection. Wire message success/failure, notification types, and key Huddle participant/control/connection events. Ring invitation IDs permit cross-tab suppression. Quiet hours, legacy out-of-office state and configured availability suppress local audio; availability also suppresses live notification delivery and web push while preserving inbox history.
+Limits: event coverage is tied to events Hive currently emits. Dedicated sounds for future join requests or other absent features were not fabricated. Physical listening tests and browser autoplay behavior on independent mobile devices remain production/manual checks.
+
+9. Availability
+Confirmed gap: timed profile text and out-of-office decoration did not enforce direct-contact restrictions.
+Changes: durable UTC schedules, timezone validation, valid-range database constraint, status/message/start/end, configurable message/media/voice/Huddle restrictions, explicit exception users, editing/cancellation and automatic effective expiration. Overlapping restrictions combine and the remaining schedules naturally resume when another is cancelled or expires. Policy is computed from PostgreSQL on each direct-contact attempt, independent of browser timers and API restarts. Plain messages, previously uploaded attachments, detected audio attachments and Huddle invitations/join attempts are checked at the backend. Shared channels remain usable. No blocked request is queued for later delivery. Unauthorized schedule mutation is rejected. Recipient banners and Huddle controls consume an authenticated conversation policy endpoint. Profile/directory/member/DM response objects overlay active statuses without overwriting saved profile state. Account settings synchronize via authenticated events and periodic refresh; effective expiration is reflected within the polling interval.
+Frontend synchronization is at most approximately 15 seconds after a scheduled boundary; backend enforcement evaluates the actual UTC instant on every request. A network error cannot bypass backend policy.
+
+Database changes
+c4f8a901b527, parent baf82d16c4e1:
+- widen invites.code from 16 to 64 characters without changing existing tokens;
+- nullable users.sound_preferences JSONB;
+- availability_schedules: ID, owner FK, status/message, starts_at/ends_at timestamptz, timezone, JSONB restrictions/exceptions, notification suppression and cancellation timestamp;
+- ends_at > starts_at constraint and owner/window index.
+d571a2b4e608, parent c4f8a901b527:
+- huddle_segments with channel/meeting-start/user/segment composite primary key, speaker, text and server timestamp;
+- cascading foreign keys follow existing channel/user ownership lifecycle.
+No production database was reset or altered. Migrations were applied to a separately created local scratch database and checked against model metadata.
+
+API and realtime changes
+GET/POST /api/me/availability; PUT/DELETE /api/me/availability/{id}; GET /api/channels/{id}/availability; GET/PUT /api/me/sounds; GET /api/me/communication-state; GET /api/uploads/limits.
+call:state gains explicit captions consent. call:caption requires segmentId, and outbound captions include segmentId, authenticated userId, speaker and timestamp. availability:changed is delivered to the owner and DM partners. call:incoming includes invitationId. Existing message/media APIs enforce policy through shared services. Deploy the web and API together because old caption clients do not supply the required stable identifier.
+
+Deployment setup
+1. Apply reviewed migrations with: cd apps/server && python -m uv run alembic upgrade head. Existing Render build configuration already runs migrations before starting the API.
+2. In Render's API service set STORAGE_DRIVER=supabase, SUPABASE_URL to the project's HTTPS origin, SUPABASE_SERVICE_KEY to the server-only service credential, SUPABASE_BUCKET=hive-media, MAX_VIDEO_MB=50, and retain appropriate MAX_IMAGE_MB/MAX_AUDIO_MB/MAX_FILE_MB settings. Set WEB_ORIGIN=https://hive-web-duzu.onrender.com (or the intended custom domain). Never put the service credential in NEXT_PUBLIC variables.
+3. In Supabase create/retain a PRIVATE hive-media bucket with an appropriate file-size cap (the inspected bucket already exists at 50 MB). Uploads go through the authenticated API; no public bucket policy is required. Existing backend service credentials perform object writes and signing.
+4. Web configuration: retain NEXT_PUBLIC_API_URL, API_PROXY_TARGET and NEXT_PUBLIC_AUTH_PROXY as appropriate. Optionally set NEXT_PUBLIC_WEB_URL to the canonical HTTPS frontend origin. If unset, invitations follow the current site's origin. Rebuild after changing NEXT_PUBLIC variables.
+5. Redeploy API and frontend; smoke-test real account uploads in a channel and DM, refresh, restart API and play the same media. Compare a failing deployed request's sanitized status with the provider probe; verify actual Render values privately.
+6. Test consenting microphones on two/three/five physical devices; verify every speaker appears and opts out cleanly; compare saved transcript with AI notes. Paid ASR was not configured.
+7. Availability/sound settings require no new service. Keep PostgreSQL persistent and Redis configured as before. Availability enforcement does not depend on a scheduler job.
+
+Validation record
+- Local backend: the broad run completed with 532 passes and one UTC/local-date-sensitive fixture failure. The fixture now uses UTC. The subsequent status/communication/audio/AI run passed 71 tests, call tests passed 18, and invitation tests passed 5, including revoked-preview privacy. CI initially passed 535 tests and found one old incoming-call payload assertion, now updated to validate invitationId. The complete final regression result is available under PR #41 checks.
+- Shared package: 25 tests passed, including long Unicode captions without truncation and caption identifier validation.
+- Browser checks: 9 settings/workspace flows passed against a production build; 4 component gallery checks passed in development, including both themes, axe accessibility, keyboard select/combobox, dialogs and calendar controls. The gallery is intentionally not exposed in production. Tests use controlled HTTP fixtures and keep component-test sockets offline; backend integration tests use real authenticated sockets and independent accounts.
+- Backend Ruff, frontend shared-UI lint and TypeScript checks passed. Optimized Next.js builds completed and generated all 27 static pages. Final CI performs a fresh build and full backend regression on the branch.
+- Both migrations applied to a separate scratch PostgreSQL database; Alembic reported no new upgrade operations/model drift. Existing ltree reflection warnings were informational.
+- Live external verification: production frontend returned HTTP 200. The saved private Supabase bucket passed streamed object save, fresh signing and download from an independent client. Temporary probe cleanup completed.
+- Not verified: physical two/three/five-device speech recognition, actual microphone/speaker quality or simultaneous acoustic speakers, live mobile autoplay behavior, the deployed Render environment, or the user's authenticated production upload failure. These remain release verification requirements. No application deployment or production migration was performed.
+
+PR and CI: https://github.com/awais-ai-engineer/Hive/pull/41
+
+Changed file inventory
+apps/server/alembic/versions/c4f8a901b527_communication_preferences.py
+apps/server/alembic/versions/d571a2b4e608_durable_huddle_segments.py
+apps/server/app/ai/service.py
+apps/server/app/availability/__init__.py
+apps/server/app/availability/router.py
+apps/server/app/availability/service.py
+apps/server/app/calls/schemas.py
+apps/server/app/calls/service.py
+apps/server/app/core/config.py
+apps/server/app/db/models.py
+apps/server/app/directory/service.py
+apps/server/app/dms/service.py
+apps/server/app/invites/service.py
+apps/server/app/main.py
+apps/server/app/messages/service.py
+apps/server/app/notifications/service.py
+apps/server/app/push/service.py
+apps/server/app/realtime/socket.py
+apps/server/app/spaces/router.py
+apps/server/app/spaces/service.py
+apps/server/app/storage/media.py
+apps/server/app/storage/supabase.py
+apps/server/app/uploads/router.py
+apps/server/app/users/profiles.py
+apps/server/tests/test_ai.py
+apps/server/tests/test_calls.py
+apps/server/tests/test_communication_policy.py
+apps/server/tests/test_invites.py
+apps/server/tests/test_status.py
+apps/server/tests/test_voice.py
+apps/web/.env.example
+apps/web/e2e/communication.spec.ts
+apps/web/e2e/components.spec.ts
+apps/web/e2e/fixtures.ts
+apps/web/e2e/space-rail.spec.ts
+apps/web/src/app/feed/page.tsx
+apps/web/src/app/globals.css
+apps/web/src/app/home/page.tsx
+apps/web/src/app/invite/[code]/page.tsx
+apps/web/src/app/s/[slug]/page.tsx
+apps/web/src/app/s/[slug]/settings/page.tsx
+apps/web/src/app/settings/page.tsx
+apps/web/src/app/spaces/new/page.tsx
+apps/web/src/components/ai/huddle-notes.tsx
+apps/web/src/components/call/call-bar.tsx
+apps/web/src/components/call/call-stage.tsx
+apps/web/src/components/call/huddle-button.tsx
+apps/web/src/components/call/incoming-call.tsx
+apps/web/src/components/call/prejoin-dialog.tsx
+apps/web/src/components/channel-chat.tsx
+apps/web/src/components/communication-settings.tsx
+apps/web/src/components/composer.tsx
+apps/web/src/components/home/space-switcher.tsx
+apps/web/src/components/nav.tsx
+apps/web/src/components/ui/icons.tsx
+apps/web/src/components/upload-picker.tsx
+apps/web/src/lib/auth.tsx
+apps/web/src/lib/availability.ts
+apps/web/src/lib/call.ts
+apps/web/src/lib/public-url.ts
+apps/web/src/lib/sounds.ts
+apps/web/src/lib/use-channel-messages.ts
+docs/communication-release.txt
+packages/shared/src/captions.ts
+packages/shared/src/events.ts
+packages/shared/src/index.ts
+packages/shared/test/captions.test.mjs
+packages/ui/src/chevron.tsx
+packages/ui/src/menus.tsx
+packages/ui/src/select.tsx

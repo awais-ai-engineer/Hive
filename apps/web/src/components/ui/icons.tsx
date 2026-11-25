@@ -85,7 +85,8 @@ export type IconName = keyof typeof paths;
 
 export function Icon({ name, size = 18, ...props }: { name: IconName; size?: number } & SVGProps<SVGSVGElement>) {
   return <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...props}
+    style={{ flexShrink: 0, aspectRatio: '1 / 1', ...props.style }}>
     <path d={paths[name]} />
   </svg>;
 }

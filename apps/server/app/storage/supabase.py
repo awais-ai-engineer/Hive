@@ -29,6 +29,14 @@ class SupabaseStorage:
                     response = await client.request(method, url, headers=headers, **kwargs)
             response.raise_for_status()
             return response
+        except httpx.HTTPStatusError as error:
+            # Only status and a fixed operation label are logged; provider bodies/keys stay private.
+            log.warning("Media storage request rejected: method=%s status=%s", method, error.response.status_code)
+            if error.response.status_code in (401, 403):
+                raise StorageError("Media storage access is not configured correctly. Contact your administrator.") from None
+            if error.response.status_code == 413:
+                raise StorageError("The storage provider rejected this file's size.") from None
+            raise StorageError("Storage unavailable") from None
         except (httpx.HTTPError, ValueError):
             raise StorageError("Storage unavailable") from None
 

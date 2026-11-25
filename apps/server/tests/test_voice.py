@@ -85,3 +85,16 @@ async def test_voice_upload(client, setup_chat, monkeypatch):
     monkeypatch.setattr(settings, 'max_audio_mb', 1)
     too_large = {'file': ('large.ogg', b'OggS' + b'x' * 1048576, 'audio/ogg')}
     assert (await client.post(path, files=too_large, data=metadata, headers=setup_chat[3])).status_code == 413
+
+
+def test_audio_mp4_uses_track_handlers_not_declared_type():
+    def box(kind, body):
+        return (len(body) + 8).to_bytes(4, "big") + kind + body
+    def track(kind):
+        return box(b"trak", box(b"mdia", box(b"hdlr", b"\0" * 8 + kind)))
+    header = box(b"ftyp", b"isom" + b"\0" * 4)
+    audio = header + box(b"moov", track(b"soun"))
+    video = header + box(b"moov", track(b"soun") + track(b"vide"))
+    assert detect_kind(audio, "audio/mp4") == ("audio", "audio/mp4")
+    assert detect_kind(video, "audio/mp4") == ("video", "video/mp4")
+    assert detect_kind(audio[:-1], "audio/mp4") == ("video", "video/mp4")

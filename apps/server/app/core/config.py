@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -43,6 +44,11 @@ class Settings(BaseSettings):
     vapid_public_key: str = ""
     vapid_private_key: str = ""
     vapid_subject: str = "mailto:admin@example.com"
+
+    @field_validator("web_origin", "supabase_url", "supabase_service_key", "supabase_bucket", mode="before")
+    @classmethod
+    def trim_configuration(cls, value):
+        return value.strip().rstrip("/") if isinstance(value, str) else value
 
     def validate_storage(self):
         if self.storage_driver not in ("local", "supabase"):

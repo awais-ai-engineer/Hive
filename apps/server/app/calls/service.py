@@ -20,11 +20,12 @@ import time
 
 from fastapi import HTTPException
 from redis.exceptions import WatchError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.db.models import ChannelType, MemberRole, User
-from app.db.session import redis
+from app.db.models import ChannelType, HuddleSegment, MemberRole, User
+from app.db.session import SessionLocal, redis
 from app.messages.service import check_not_blocked, readable
 from app.spaces.permissions import require_role
 
@@ -76,6 +77,9 @@ async def check_access(session: AsyncSession, channel_id: str, user: User):
     channel, member = await readable(session, channel_id, user.id)
     if channel.type == ChannelType.dm:
         await check_not_blocked(session, channel.id, user.id)
+        from app.availability.service import enforce
+
+        await enforce(session, channel.id, user.id, "huddles")
         return channel
     require_role(member.role if member else None, MemberRole.member)
     return channel
@@ -154,8 +158,14 @@ async def finish_if_empty(channel_id: str) -> dict | None:
         start, names, notes, _ = await pipe.execute()
     if start is None:
         return None
+    async with SessionLocal() as session:
+        segments = list(await session.scalars(select(HuddleSegment).where(
+            HuddleSegment.channel_id == channel_id, HuddleSegment.meeting_start == int(start),
+        ).order_by(HuddleSegment.created_at, HuddleSegment.user_id, HuddleSegment.segment_id)))
+    durable = [{"who": item.speaker, "text": item.text, "at": item.created_at.isoformat(),
+                "userId": item.user_id, "segmentId": item.segment_id} for item in segments]
     return {"seconds": max(0, int((time.time() * 1000 - int(start)) / 1000)), "names": list(names),
-            "notes": [json.loads(line) for line in notes]}
+            "notes": durable or [json.loads(line) for line in notes]}
 
 
 def format_duration(seconds: int) -> str:
@@ -210,3 +220,21 @@ async def active_summaries(session: AsyncSession, user: User) -> list[dict]:
         if info["count"]:
             summaries.append(info)
     return summaries
+
+
+async def caption_consent(channel_id: str, sid: str, user_id: str, enabled: bool):
+    key = f"{settings.socketio_channel}:caption-owner:{channel_id}:{user_id}"
+    script = """
+    local owner = redis.call('GET', KEYS[1])
+    if ARGV[2] == 'on' then
+        if owner and owner ~= ARGV[1] and redis.call('HEXISTS', KEYS[2], owner) == 1 then
+            return 0
+        end
+        redis.call('SET', KEYS[1], ARGV[1], 'EX', 43200)
+    elseif owner == ARGV[1] then
+        redis.call('DEL', KEYS[1])
+    end
+    return 1
+    """
+    if not await redis.eval(script, 2, key, room_key(channel_id), sid, "on" if enabled else "off"):
+        raise HTTPException(409, "Transcription is already active on another device")

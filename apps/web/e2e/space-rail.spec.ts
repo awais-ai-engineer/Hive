@@ -48,7 +48,9 @@ test('space shortcuts do not steal key presses from text fields', async ({ page 
   await mockApi(page, undefined, true);
   await page.goto('/home?s=studio');
   const message = page.getByRole('textbox', { name: 'Message' });
+  await expect(message).toHaveAttribute('contenteditable', 'true');
   await message.focus();
+  await expect(message).toBeFocused();
   await page.keyboard.press('Meta+2');
   await expect(page).toHaveURL(/s=studio/);
   await message.fill('hello');
@@ -73,7 +75,11 @@ test('keyboard sorting persists within a group; rail and strip pass axe', async 
   await page.goto('/home');
   const strip = page.getByRole('navigation', { name: 'Spaces' });
   await strip.getByRole('button', { name: 'Studio Team' }).focus();
-  await page.keyboard.press('Space'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Space');
+  await page.keyboard.press('Space');
+  await expect(strip.getByRole('button', { name: 'Studio Team' })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('ArrowDown');
+  await expect(strip.getByRole('status').first()).toContainText('design');
+  await page.keyboard.press('Space');
   await expect.poll(() => api.saved.length).toBe(1);
   expect(api.saved[0]).toEqual(['design', 'studio', 'garden']);
   await page.reload();

@@ -36,7 +36,7 @@ async def people(
     more = len(rows) > limit
     rows = rows[:limit]
     online = await visible_online(session, [user.id for user in rows])
-    return PeoplePage(
+    result = PeoplePage(
         items=[
             PersonOut(**{field: getattr(user, field) for field in (
                 "id", "username", "display_name", "avatar_url", "status_emoji", "status_text",
@@ -45,6 +45,10 @@ async def people(
         ],
         next_cursor=rows[-1].username if more else None,
     )
+    from app.availability.service import decorate_status
+
+    await decorate_status(session, result.items)
+    return result
 
 
 async def space_channels(

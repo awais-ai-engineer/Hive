@@ -17,6 +17,7 @@ class StateIn(CallIn):
     camera: bool | None = None
     screen: bool | None = None
     hand: bool | None = None
+    captions: bool | None = None
 
 
 REACTIONS = ("👍", "👏", "😂", "🎉", "❤️", "🤔")
@@ -27,7 +28,8 @@ class ReactIn(CallIn):
 
 
 class CaptionIn(CallIn):
-    text: str = Field(min_length=1, max_length=300)
+    segmentId: str = Field( min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_-]+$")
+    text: str = Field(min_length=1, max_length=4000)
     final: bool = False
 
 

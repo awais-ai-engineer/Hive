@@ -1,80 +1,106 @@
 'use client';
 
-/*
- * Notification sounds made with the Web Audio API, so there are no audio files to load.
- * Browsers only allow sound after the person has interacted with the page, so the audio
- * context is created (or resumed) on the first click or key press.
- */
-const KEY = 'hive:sounds';
+import { apiFetch, responseData } from './api';
+
+export type SoundPreferences = { enabled: boolean; volume: number; messages: boolean; huddles: boolean; activity: boolean; feedback: boolean };
+export type SoundCategory = 'messages' | 'huddles' | 'activity' | 'feedback';
+const defaults: SoundPreferences = { enabled: true, volume: 0.35, messages: true, huddles: true, activity: true, feedback: true };
+let preferences = { ...defaults };
 let context: AudioContext | null = null;
+let unlocked = false;
+let suppressed = false;
+let lastPlayback = 0;
 let ringTimer: ReturnType<typeof setInterval> | null = null;
-let lastMessage = 0;
+const seen = new Map<string, number>();
+const tabId = typeof crypto !== 'undefined' ? crypto.randomUUID() : '';
+const bus = typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('hive:sound-events') : null;
+if (bus) bus.onmessage = ({ data }) => {
+  if (typeof data?.id !== 'string') return;
+  seen.set(data.id, Date.now());
+  const oldest = seen.keys().next().value;
+  if (seen.size > 1000 && oldest !== undefined) seen.delete(oldest);
+};
 
-export function soundsEnabled() {
-  try { return localStorage.getItem(KEY) !== 'off'; } catch { return true; }
+export function soundPreferences() { return { ...preferences }; }
+export function configureSounds(value: Partial<SoundPreferences>) {
+  preferences = { ...preferences, ...value };
+  preferences.volume = Math.max(0, Math.min(1, preferences.volume));
+  try { localStorage.setItem('hive:sound-preferences', JSON.stringify(preferences)); } catch { /* storage may be disabled */ }
+  if (!preferences.enabled) stopRing();
 }
-
-export function setSoundsEnabled(on: boolean) {
-  try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch { /* the choice still applies until reload */ }
-  if (!on) stopRing();
+export async function loadSounds() {
+  configureSounds(await responseData<SoundPreferences>(await apiFetch('/api/me/sounds')));
 }
+export async function saveSounds(value: SoundPreferences) {
+  const saved = await responseData<SoundPreferences>(await apiFetch('/api/me/sounds', { method: 'PUT', body: JSON.stringify(value) }));
+  configureSounds(saved);
+}
+export function suppressSounds(value: boolean) { suppressed = value; if (value) stopRing(); }
+export function soundsEnabled() { return preferences.enabled; }
+export function setSoundsEnabled(on: boolean) { configureSounds({ enabled: on }); void saveSounds(preferences).catch(() => {}); }
 
-function audio(): AudioContext | null {
-  if (typeof window === 'undefined') return null;
-  if (!context) {
+function audio() {
+  if (!unlocked || typeof window === 'undefined') return null;
+  try {
     const Context = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Context) return null;
-    context = new Context();
-  }
-  if (context.state === 'suspended') void context.resume().catch(() => {});
-  return context;
+    context ??= new Context();
+    if (context.state === 'suspended') void context.resume().catch(() => {});
+    return context;
+  } catch { return null; }
 }
-
 if (typeof window !== 'undefined') {
-  const unlock = () => { audio(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };
-  window.addEventListener('pointerdown', unlock);
-  window.addEventListener('keydown', unlock);
+  const unlock = () => { unlocked = true; audio(); };
+  window.addEventListener('pointerdown', unlock, { once: true });
+  window.addEventListener('keydown', unlock, { once: true });
 }
 
-function tone(ctx: AudioContext, frequency: number, start: number, length: number, volume = 0.18) {
-  const osc = ctx.createOscillator();
+/** Original synthesized tones; no third-party recordings or asset licences required. */
+function tone(ctx: AudioContext, frequency: number, start: number, length: number) {
+  const oscillator = ctx.createOscillator();
   const gain = ctx.createGain();
-  osc.type = 'sine';
-  osc.frequency.value = frequency;
+  oscillator.type = 'sine'; oscillator.frequency.value = frequency;
   gain.gain.setValueAtTime(0, start);
-  gain.gain.linearRampToValueAtTime(volume, start + 0.015);
+  gain.gain.linearRampToValueAtTime(preferences.volume * 0.18, start + 0.015);
   gain.gain.exponentialRampToValueAtTime(0.0001, start + length);
-  osc.connect(gain).connect(ctx.destination);
-  osc.start(start);
-  osc.stop(start + length + 0.05);
+  oscillator.connect(gain).connect(ctx.destination);
+  oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
+  oscillator.start(start); oscillator.stop(start + length + 0.02);
 }
 
-/** A short two-note chime for a new message. Rapid bursts play once. */
-export function playMessageSound() {
-  if (!soundsEnabled() || Date.now() - lastMessage < 1500) return;
+export function playSound(event: string, category: SoundCategory = 'feedback', id?: string, preview = false) {
+  const now = Date.now();
+  if (!preferences.enabled || preferences.volume <= 0 || !preferences[category] || (!preview && suppressed) || now - lastPlayback < 350) return;
+  if (id && seen.has(id)) return;
   const ctx = audio();
   if (!ctx || ctx.state !== 'running') return;
-  lastMessage = Date.now();
-  const now = ctx.currentTime;
-  tone(ctx, 880, now, 0.18);
-  tone(ctx, 1320, now + 0.11, 0.28);
-}
-
-/** Repeats a ringtone until stopRing() is called (or 30 seconds pass). */
-export function startRing() {
-  if (!soundsEnabled() || ringTimer) return;
-  const ring = () => {
-    const ctx = audio();
-    if (!ctx || ctx.state !== 'running') return;
-    const now = ctx.currentTime;
-    for (const offset of [0, 0.25]) { tone(ctx, 660, now + offset, 0.2, 0.22); tone(ctx, 990, now + offset, 0.2, 0.12); }
+  const perform = () => {
+    if (id) {
+      try {
+        const key = 'hive:sound-recent';
+        const recent = JSON.parse(localStorage.getItem(key) || '{}') as Record<string, number>;
+        if (recent[id] > now - 60000) return;
+        const pruned = Object.fromEntries(Object.entries(recent).filter(([, time]) => time > now - 60000).slice(-100));
+        localStorage.setItem(key, JSON.stringify({ ...pruned, [id]: now }));
+      } catch { /* same-tab deduplication remains available */ }
+      seen.set(id, now); bus?.postMessage({ id, tabId });
+    }
+    lastPlayback = now;
+    for (const [key, time] of seen) if (now - time > 60000) seen.delete(key);
+    const down = /leave|stop|off|end|mute|error|failed|lost/.test(event);
+    const base = category === 'huddles' ? 660 : category === 'messages' ? 880 : category === 'activity' ? 740 : 520;
+    tone(ctx, down ? base * 1.25 : base, ctx.currentTime, 0.13);
+    tone(ctx, down ? base : base * 1.5, ctx.currentTime + 0.10, 0.20);
   };
-  ring();
-  ringTimer = setInterval(ring, 2000);
+  if (id && navigator.locks) void navigator.locks.request('hive:sound-playback', perform).catch(() => {});
+  else perform();
+}
+export function playMessageSound(id?: string) { playSound('incoming', 'messages', id); }
+export function startRing(id?: string) {
+  if (ringTimer || suppressed || !preferences.enabled || !preferences.huddles) return;
+  const started = Date.now();
+  playSound('invitation', 'huddles', id ? `${id}:0` : undefined);
+  ringTimer = setInterval(() => playSound('invitation', 'huddles', id ? `${id}:${Math.round((Date.now() - started) / 2000)}` : undefined), 2000);
   setTimeout(stopRing, 30000);
 }
-
-export function stopRing() {
-  if (ringTimer) clearInterval(ringTimer);
-  ringTimer = null;
-}
+export function stopRing() { if (ringTimer) clearInterval(ringTimer); ringTimer = null; }

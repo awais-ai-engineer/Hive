@@ -34,7 +34,9 @@ OptionalUser = Annotated[User | None, Depends(get_optional_user)]
 
 @router.post("", response_model=SpaceOut, status_code=201)
 async def post_space(data: SpaceCreate, session: Session, user: CurrentUser):
-    return await create_space(session, user, data)
+    space = await create_space(session, user, data)
+    await sio.emit("spaces:updated", {}, room=f"user:{user.id}")
+    return space
 
 
 @router.get("")

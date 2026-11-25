@@ -20,7 +20,7 @@ from app.messages.service import readable, view_states, writable
 from app.spaces.permissions import require_role
 from app.spaces.service import load_space
 from app.storage import get_storage
-from app.storage.base import SignRequest
+from app.storage.base import SignRequest, StorageError
 from app.storage.local import path_for, verify
 from app.storage.media import detect_kind, limit_mb
 from app.uploads.schemas import AudioMetadata
@@ -40,12 +40,21 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
+@router.get("/uploads/limits")
+async def upload_limits():
+    return {kind: limit_mb(kind) for kind in ("image", "video", "audio", "file")}
+
+
 async def store_upload(file, session, user, channel_id=None, space_id=None,
                        requested_kind=None, duration_ms=None, waveform=None):
     first = await file.read(CHUNK)
     if not first:
         raise HTTPException(422, "File is empty")
     kind, content_type = detect_kind(first, file.content_type or "")
+    if channel_id:
+        from app.availability.service import enforce
+
+        await enforce(session, channel_id, user.id, "voice" if kind == "audio" else "media")
     metadata = None
     if requested_kind == "audio":
         if kind != "audio":
@@ -89,10 +98,13 @@ async def store_upload(file, session, user, channel_id=None, space_id=None,
             duration_ms=metadata.durationMs if metadata else None,
             waveform=metadata.waveform if metadata else None,
         )
+        urls = await storage.signed_urls([SignRequest(key, attachment.filename, kind != "file")])
+        if key not in urls:
+            raise StorageError("Uploaded media could not be prepared for playback")
         session.add(attachment)
         await session.commit()
-        urls = await storage.signed_urls([SignRequest(key, attachment.filename, kind != "file")])
     except BaseException:
+        await session.rollback()
         await storage.delete([key])
         raise
     return AttachmentOut(
@@ -112,7 +124,10 @@ async def upload(channel_id: str, file: UploadFile, session: Session, user: Curr
                  kind: Annotated[str | None, Form()] = None,
                  durationMs: Annotated[int | None, Form()] = None,
                  waveform: Annotated[str | None, Form()] = None):
-    channel = await writable(session, channel_id, user.id)
+    channel = await writable(session, channel_id, user.id, "voice" if kind == "audio" else "media")
+    from app.availability.service import enforce
+
+    await enforce(session, channel_id, user.id, "voice" if kind == "audio" else "media")
     if channel.encrypted:
         raise HTTPException(422, "Attachments aren't available in secret conversations")
     return await store_upload(file, session, user, channel_id=channel_id,

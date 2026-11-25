@@ -17,6 +17,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from socketio.exceptions import ConnectionRefusedError
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 
 from app.auth.security import decode_access_token
 from app.calls import service as calls
@@ -28,6 +29,7 @@ from app.db.models import (
     ChannelType,
     Doc,
     DocVersion,
+    HuddleSegment,
     Message,
     Post,
     Space,
@@ -145,7 +147,7 @@ def chat_event(name, schema):
                 return {"ok": False, "error": {"code": "invalid", "message": "Invalid input"}}
             except HTTPException as error:
                 code = ERROR_CODES.get(error.status_code, "invalid")
-                return {"ok": False, "error": {"code": code, "message": error.detail}}
+                return {"ok": False, "error": {"code": code, "message": error.detail.get("message", "Request rejected") if isinstance(error.detail, dict) else error.detail}}
         sio.on(name)(wrapped)
         return wrapped
     return decorate
@@ -538,6 +540,10 @@ async def call_signal(sid, data, session, user):
 
 @chat_event("call:state", StateIn)
 async def call_state(sid, data, session, user):
+    if sid not in await calls.participants(data.channelId):
+        raise HTTPException(403, "You are not in this call")
+    if data.captions is not None:
+        await calls.caption_consent(data.channelId, sid, user.id, data.captions)
     changes = data.model_dump(exclude_none=True, exclude={"channelId"})
     entry = await calls.update_state(data.channelId, sid, changes)
     if entry is None:
@@ -570,14 +576,39 @@ async def call_react(sid, data, session, user):
 @chat_event("call:caption", CaptionIn)
 async def call_caption(sid, data, session, user):
     """Live captions: each browser transcribes its own speaker and shares the text with the call only."""
-    if sid not in await calls.participants(data.channelId):
+    room = await calls.participants(data.channelId)
+    if sid not in room:
         raise HTTPException(403, "You are not in this call")
-    if _call_limited(sid, "caption", 120):
+    if room[sid].get("muted"):
+        raise HTTPException(409, "Unmute before sharing captions")
+    if not room[sid].get("captions"):
+        raise HTTPException(403, "Enable transcription before sharing captions")
+    if _call_limited(sid, "caption", 240):
         raise HTTPException(429, "Too many captions")
+    text = data.text.strip()
+    if not text:
+        raise HTTPException(422, "Caption is empty")
+    segment_id = data.segmentId
+    await calls.caption_consent(data.channelId, sid, user.id, True)
+    call_start = await redis.hget(calls.meta_key(data.channelId), "start")
+    if call_start is None:
+        raise HTTPException(409, "This Huddle has expired. Rejoin before sharing captions.")
+    final_key = f"{settings.socketio_channel}:caption-final:{data.channelId}:{call_start}:{user.id}:{segment_id}"
     if data.final:
-        await calls.add_note(data.channelId, user.username, data.text.strip())
+        inserted = await session.scalar(insert(HuddleSegment).values(
+            channel_id=data.channelId, meeting_start=int(call_start), user_id=user.id,
+            segment_id=segment_id, speaker=user.display_name or user.username, text=text,
+        ).on_conflict_do_nothing().returning(HuddleSegment.segment_id))
+        await session.commit()
+        if inserted is None:
+            return
+        await redis.set(final_key, 1, ex=12 * 3600)
+        await calls.add_note(data.channelId, user.username, text)
+    elif await redis.exists(final_key):
+        return
     await sio.emit("call:caption", {"channelId": data.channelId, "sid": sid, "userId": user.id,
-                                    "username": user.username, "text": data.text.strip(), "final": data.final},
+                                    "segmentId": segment_id, "timestamp": datetime.now(UTC).isoformat(),
+                                    "username": user.display_name or user.username, "text": text, "final": data.final},
                    room=f"call:{data.channelId}", skip_sid=sid)
 
 
@@ -587,11 +618,14 @@ async def call_ring(sid, data, session, user):
     channel = await calls.check_access(session, data.channelId, user)
     if channel.type != ChannelType.dm:
         raise HTTPException(422, "Only conversations can ring")
+    from app.availability.service import enforce
+
+    await enforce(session, channel.id, user.id, "huddles")
     if not await redis.set(f"{settings.socketio_channel}:ring:{channel.id}:{user.id}", 1, nx=True, ex=5):
         raise HTTPException(429, "Hold on a moment before ringing again")
     for participant in await participant_ids(session, channel.id):
         if participant != user.id and not await blocked_among(session, user.id, [participant]):
-            await sio.emit("call:incoming", {"channelId": channel.id,
+            await sio.emit("call:incoming", {"channelId": channel.id, "invitationId": new_id(),
                                              "from": {"id": user.id, "username": user.username}},
                            room=f"user:{participant}")
 

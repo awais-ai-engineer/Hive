@@ -4,7 +4,7 @@ import { Tooltip as UiTooltip } from '@hive/ui';
 
 import { Button as UiButton } from '@hive/ui';
 
-import { playMessageSound } from '../lib/sounds';
+import { playMessageSound, playSound } from '../lib/sounds';
 import { currentUserId } from '../lib/api';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -46,14 +46,17 @@ export default function Nav() {
     };
     refresh();
     // On pages other than Home (which plays its own), chime for new direct messages.
-    const chime = (data: { authorId?: string; parentId?: string }) => {
-      if (!location.pathname.startsWith('/home') && data.authorId && data.authorId !== currentUserId() && !data.parentId) playMessageSound();
+    const chime = (data: { authorId?: string; parentId?: string; messageId?: string }) => {
+      if (!location.pathname.startsWith('/home') && data.authorId && data.authorId !== currentUserId() && !data.parentId) playMessageSound(data.messageId ? `message:${data.messageId}` : undefined);
     };
+    const notificationSound = (data: { id: string; type: string }) => playSound(data.type, data.type === 'mention' || data.type === 'reply' || data.type === 'dm' ? 'messages' : 'activity', `notification:${data.id}`);
+    socket.on('notification:new', notificationSound);
     socket.on('dm:activity', chime);
     socket.on('dm:activity', refresh).on('space:activity', refresh).on('spaces:updated', refresh).on('read:updated', refresh).on('connect', refresh);
     window.addEventListener(DMS_CHANGED, refresh);
     return () => {
       active = false; clearTimeout(timer);
+      socket.off('notification:new', notificationSound);
       socket.off('dm:activity', chime);
       socket.off('dm:activity', refresh).off('space:activity', refresh).off('spaces:updated', refresh).off('read:updated', refresh).off('connect', refresh);
       window.removeEventListener(DMS_CHANGED, refresh);

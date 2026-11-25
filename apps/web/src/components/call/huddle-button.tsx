@@ -3,6 +3,7 @@
 import { Button as UiButton } from '@hive/ui';
 
 import { useState } from 'react';
+import { useAvailability, availabilityMessage } from '../../lib/availability';
 import { calls } from '../../lib/call';
 import { useHuddles } from '../../lib/huddles';
 import { useCall } from '../../lib/use-call';
@@ -17,6 +18,7 @@ import { Icon } from '../ui/icons';
  */
 export function HuddleButton({ channelId, title, ring = false }: { channelId: string; title: string; ring?: boolean }) {
   const call = useCall();
+  const restricted = useAvailability(channelId, ring).find(person => person.blocked.includes('huddles'));
   const huddle = useHuddles()[channelId];
   const [error, setError] = useState('');
   const inThis = call.channelId === channelId && call.status !== 'idle' && call.status !== 'error';
@@ -36,7 +38,7 @@ export function HuddleButton({ channelId, title, ring = false }: { channelId: st
 
   const label = inThis ? 'Open the huddle window' : count ? `Join the huddle with ${huddle.users.map(user => user.username).join(', ')}` : 'Start a huddle';
   return <div className="relative shrink-0">
-    <UiButton type="button" onClick={() => void toggle()} aria-label={label} tooltip={label} aria-pressed={inThis}
+    <UiButton type="button" onClick={() => void toggle()} disabled={!!restricted && !inThis} aria-label={label} tooltip={restricted && !inThis ? availabilityMessage(restricted) : label} aria-pressed={inThis}
       className={count || inThis
         ? 'flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1.5 text-sm font-semibold transition hover:bg-emerald-700'
         : 'btn-ghost !px-2.5 !py-1.5'}

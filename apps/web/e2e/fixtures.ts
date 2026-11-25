@@ -18,10 +18,16 @@ export async function mockApi(page: Page, initial: Space[] = fixtures, withChann
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') { const location = message.location(); errors.push(`${message.text()} (${location.url}:${location.lineNumber})`); } });
+  // Component tests deliberately keep realtime offline; backend suites exercise real sockets.
+  await page.route(/\/socket\.io\//, route => route.fulfill({ status: 200, contentType: 'text/plain', body: new URL(route.request().url()).searchParams.has('sid') ? '1' : '0{"sid":"fixture","upgrades":[],"pingInterval":25000,"pingTimeout":20000}' }));
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname;
     let body: unknown = {};
     if (path === '/api/auth/refresh') body = { access_token: 'fixture-session', token_type: 'bearer', user: { id: 'alice', username: 'alice', email: 'alice@hive.test', avatar_url: null, created_at: '2026-01-01T00:00:00Z', appear_offline: false } };
+    else if (path === '/api/uploads/limits') body = { image: 10, video: 50, audio: 10, file: 10 };
+    else if (path === '/api/me/communication-state') body = { sounds: { enabled: true, volume: 0.35, messages: true, huddles: true, activity: true, feedback: true }, suppress: false };
+    else if (path === '/api/me/availability' || path.endsWith('/availability')) body = [];
+    else if (path === '/api/me/sounds') body = { enabled: true, volume: 0.35, messages: true, huddles: true, activity: true, feedback: true };
     else if (path === '/api/me/spaces') body = spaces;
     else if (path === '/api/me/preferences') {
       const ids = route.request().postDataJSON().spaceOrder as string[];

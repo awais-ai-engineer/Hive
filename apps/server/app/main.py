@@ -13,6 +13,7 @@ from app.api import health
 from app.apps.router import public_router as apps_public_router
 from app.apps.router import router as apps_router
 from app.auth.router import router as auth_router
+from app.availability.router import router as availability_router
 from app.calls import service as calls_service
 from app.calls.router import router as calls_router
 from app.channels.router import router as channels_router
@@ -78,6 +79,7 @@ api.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+api.include_router(availability_router, prefix="/api")
 api.include_router(health.router, prefix="/api")
 api.include_router(auth_router, prefix="/api")
 # Before users: /users/search must win over /users/{username}.
@@ -120,4 +122,4 @@ app = socketio.ASGIApp(sio, other_asgi_app=api)
 
 @api.exception_handler(StorageError)
 async def storage_error_handler(request, error):
-    return JSONResponse(status_code=502, content={"detail": "Storage unavailable"})
+    return JSONResponse(status_code=502, content={"detail": str(error) or "Storage unavailable"})

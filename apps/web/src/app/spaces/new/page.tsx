@@ -10,7 +10,7 @@ import { CategoryPicker } from '../../../components/interest-picker';
 import { TagsInput } from '../../../components/communities/tags-input';
 import { DomainInput } from '../../../components/spaces/domain-input';
 import { useAuth } from '../../../lib/auth';
-import { apiData, requestError, type Space } from '../../../lib/spaces';
+import { SPACES_CHANGED, apiData, requestError, type Space } from '../../../lib/spaces';
 
 function makeSlug(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50);
@@ -51,7 +51,8 @@ export default function NewSpacePage() {
     if (!parsed.success) { setError(parsed.error.issues[0].message); setBusy(false); return; }
     try {
       const space = await apiData<Space>('/api/spaces', { method: 'POST', body: JSON.stringify(parsed.data) });
-      router.push(`/s/${space.slug}`);
+      window.dispatchEvent(new Event(SPACES_CHANGED));
+      router.push(`/home?s=${encodeURIComponent(space.slug)}`);
     } catch (cause) { setError(requestError(cause)); }
     finally { setBusy(false); }
   }
