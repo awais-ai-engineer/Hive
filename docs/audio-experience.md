@@ -201,6 +201,7 @@ Each row names a separate bundled file. Source is the original effects score, or
 - apps/web/src/app/layout.tsx
 - apps/web/src/app/home/page.tsx
 - apps/web/src/app/settings/page.tsx
+- apps/web/src/components/call/prejoin-dialog.tsx
 - apps/web/src/components/call/global-call-dock.tsx
 - apps/web/src/components/call/call-bar.tsx
 - apps/web/src/components/call/call-stage.tsx

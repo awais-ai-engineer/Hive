@@ -56,6 +56,10 @@ test('two independent accounts resolve ringing and receive one authoritative tra
     await pb.getByRole('link', { name: 'Feed', exact: true }).first().click();
     await expect(pb).toHaveURL(/\/feed/);
     await pa.getByRole('button', { name: 'Start a huddle', exact: true }).click();
+    await pa.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(pa.getByRole('button', { name: 'Start a huddle', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    await expect(pb.getByRole('alertdialog', { name: 'Incoming huddle' })).toHaveCount(0);
+    await pa.getByRole('button', { name: 'Start a huddle', exact: true }).click();
     await pa.getByRole('button', { name: 'Join huddle', exact: true }).click();
     await expect(pb.getByRole('alertdialog', { name: 'Incoming huddle' })).toBeVisible();
     await expect.poll(() => pb.evaluate(() => (window as unknown as { audioLog: string[] }).audioLog.includes('start:invitation.wav'))).toBe(true);
