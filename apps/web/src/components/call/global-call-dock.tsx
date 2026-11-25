@@ -15,6 +15,6 @@ export function GlobalCallDock() {
   if (!user) return null;
   return <>
     <CallDock onAccept={channelId => router.push(`/home?c=${encodeURIComponent(channelId)}`)} titleFor={(_id, caller) => `Huddle with ${caller}`} />
-    {!pathname.startsWith('/home') && <div className="fixed bottom-4 left-4 z-40 w-[min(320px,calc(100vw-32px))]"><CallBar /></div>}
+    {!pathname.startsWith('/home') && <div className="fixed bottom-20 left-4 z-40 sm:bottom-4 w-[min(320px,calc(100vw-32px))]"><CallBar /></div>}
   </>;
 }

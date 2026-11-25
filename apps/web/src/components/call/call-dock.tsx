@@ -15,8 +15,8 @@ function PeerAudio({ stream }: { stream: MediaStream | null }) {
 }
 
 /**
- * Mounted once for the whole /home page: plays everyone's sound (so a huddle keeps going while you
- * switch channels), shows the floating tiles and the ringing toast.
+ * Mounted once in the authenticated app shell: keeps remote audio playing across navigation,
+ * and hosts the shared Huddle stage, invitation toast and pre-join dialog.
  */
 export function CallDock({ titleFor, onAccept }: { titleFor: (channelId: string, caller: string) => string; onAccept: (channelId: string) => void }) {
   const call = useCall();

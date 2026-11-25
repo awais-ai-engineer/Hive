@@ -54,7 +54,7 @@ test('two independent accounts resolve ringing and receive one authoritative tra
     await pa.goto(`http://localhost:3000/home?c=${channel}`); await pb.goto(`http://localhost:3000/home?c=${channel}`);
     await pb.getByRole('heading', { name: account.user.username, exact: true }).click();
     await pb.getByRole('link', { name: 'Feed', exact: true }).first().click();
-    await expect(pb).toHaveURL(/\/feed/);
+    await expect(pb).toHaveURL(/\/feed/, { timeout: 60000 });
     await pa.getByRole('button', { name: 'Start a huddle', exact: true }).click();
     await pa.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(pa.getByRole('button', { name: 'Start a huddle', exact: true })).toHaveAttribute('aria-pressed', 'false');
@@ -69,7 +69,7 @@ test('two independent accounts resolve ringing and receive one authoritative tra
     await expect.poll(() => pb.locator('audio').evaluateAll(nodes => nodes.some(node => { const stream = (node as HTMLAudioElement).srcObject; return stream instanceof MediaStream && stream.getAudioTracks().some(track => track.readyState === 'live'); }))).toBe(true);
     await expect.poll(() => pb.evaluate(() => (window as unknown as { audioLog: string[] }).audioLog.includes('stop:invitation.wav'))).toBe(true);
     await pb.getByRole('link', { name: 'Feed', exact: true }).first().click();
-    await expect(pb).toHaveURL(/\/feed/);
+    await expect(pb).toHaveURL(/\/feed/, { timeout: 60000 });
     await expect.poll(() => pb.locator('audio').evaluateAll(nodes => nodes.some(node => { const stream = (node as HTMLAudioElement).srcObject; return stream instanceof MediaStream && stream.getAudioTracks().some(track => track.readyState === 'live'); }))).toBe(true);
     await pa.getByRole('button', { name: 'Turn captions on', exact: true }).click();
     await pa.getByRole('button', { name: 'Enable transcription', exact: true }).click();

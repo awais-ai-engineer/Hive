@@ -71,7 +71,8 @@ Final test results, full event mapping and modified-file inventory follow below.
 - All 16 browser regressions passed, including settings persistence, actual WAV decoding, both themes/accessibility, mobile layout and the real local API/WebRTC test with two independent accounts and synthetic devices.
 - 55 focused backend tests passed across calls, communication policy, tasks and notifications. A subsequent 31-test run covering the expanded audio cases, tasks and notifications also passed; these scopes overlap and must not be summed.
 - Ruff, shared UI lint and Alembic drift validation passed. No new upgrade operations were detected; the existing ltree reflection warning is informational.
-- Final production build, sequential type checking and complete backend-suite results are available in the pull request checks. Physical listening and Safari/mobile testing remain unverified.
+- Complete backend CI suite: 543 passed; migration upgrade and drift checks passed. Production builds and sequential type checking passed. The final app-shell change passed all 15 general browser regressions plus the dedicated two-account Huddle test, including invitations arriving on Feed, audio continuity after navigation and cancelled pre-joins. Physical listening and Safari/mobile testing remain unverified.
+- Pull request: https://github.com/awais-ai-engineer/Hive/pull/42 (draft; no production deployment).
 
 ## Complete asset and event map
 
@@ -203,6 +204,7 @@ Each row names a separate bundled file. Source is the original effects score, or
 - apps/web/src/app/settings/page.tsx
 - apps/web/src/components/call/prejoin-dialog.tsx
 - apps/web/src/components/call/global-call-dock.tsx
+- apps/web/src/components/call/call-dock.tsx
 - apps/web/src/components/call/call-bar.tsx
 - apps/web/src/components/call/call-stage.tsx
 - apps/web/src/components/call/huddle-button.tsx
