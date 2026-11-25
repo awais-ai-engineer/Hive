@@ -41,7 +41,7 @@ export function HuddleNotes({ messageId, channelId, userId }: { messageId: strin
   const toggle = (index: number) => setPicked(current => { const next = new Set(current); if (!next.delete(index)) next.add(index); return next; });
   return <div className="mx-auto my-2 max-w-xl text-left justify-start">
     <div className="text-center"><UiButton type="button" onClick={() => void run()} disabled={state === 'busy'} className="rounded-lg px-2 py-1 text-xs font-medium text-brand hover:bg-brand-soft">
-      {state === 'busy' ? 'Reading the chat…' : state === 'done' ? 'Summarise again' : 'Summarise the chat during this huddle'}</UiButton></div>
+      {state === 'busy' ? 'Reading meeting notes…' : state === 'done' ? 'Summarise again' : 'Summarise this huddle'}</UiButton></div>
     {error && <p role="alert" className="mt-1 text-center text-xs text-rose-500">{error}</p>}
     {state !== 'idle' && <section aria-live="polite" className="card mt-2 p-4 text-sm">
       {state === 'busy' ? <Skeleton /> : summary && <>

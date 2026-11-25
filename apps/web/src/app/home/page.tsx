@@ -289,19 +289,19 @@ function Home() {
 
   useEffect(() => {
     if (!user) return;
-    const onChannelActivity = (data: { channelId: string; authorId: string }) => {
+    const onChannelActivity = (data: { channelId: string; authorId: string; messageId?: string }) => {
       if (data.authorId === user.id) return;
       // Chime for conversations you aren't looking at, unless they are set to quiet.
-      if ((data.channelId !== selected || document.hidden) && !prefs.current[data.channelId]) playMessageSound();
+      if ((data.channelId !== selected || document.hidden) && !prefs.current[data.channelId]) playMessageSound(data.messageId ? `message:${data.messageId}` : undefined);
       if (data.channelId !== selected && prefs.current[data.channelId]) refreshChannels();
       else if (data.channelId !== selected) {
         setChannels(list => list.map(item => item.id === data.channelId ? { ...item, unread: item.unread + 1 } : item));
       }
       refreshUnreads();
     };
-    const onDm = (data: { channelId?: string; authorId?: string; parentId?: string }) => {
+    const onDm = (data: { channelId?: string; authorId?: string; parentId?: string; messageId?: string }) => {
       if (!data.parentId && data.authorId && data.authorId !== user.id && data.channelId
-        && (data.channelId !== selected || document.hidden) && !prefs.current[data.channelId]) playMessageSound();
+        && (data.channelId !== selected || document.hidden) && !prefs.current[data.channelId]) playMessageSound(data.messageId ? `message:${data.messageId}` : undefined);
       refreshConversations(); refreshUnreads();
     };
     const onRead = (data: { channelId: string }) => {

@@ -22,7 +22,7 @@ async def create_invite(
     )
     invite = Invite(
         space_id=space.id,
-        code=secrets.token_urlsafe(8),
+        code=secrets.token_urlsafe(24),
         created_by=user.id,
         max_uses=data.max_uses,
         expires_at=expires_at,
@@ -115,6 +115,9 @@ async def accept_invite(session: AsyncSession, code: str, user: User) -> SpaceOu
     inviter_id = invite.created_by
     session.add(SpaceMember(space_id=accepted_space_id, user_id=user.id, role=MemberRole.member))
     await session.commit()
+    from app.realtime.socket import sio
+
+    await sio.emit("spaces:updated", {}, room=f"user:{user.id}")
     await notify_invite_accepted(session, inviter_id, user, space)
     from app.workflows import engine
 

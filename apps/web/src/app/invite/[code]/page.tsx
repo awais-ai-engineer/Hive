@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../../lib/auth';
-import { apiData, requestError } from '../../../lib/spaces';
+import { SPACES_CHANGED, apiData, requestError } from '../../../lib/spaces';
 
 type Preview = { space: { name: string; slug: string; type: string; description: string | null; member_count: number }; valid: boolean };
 
@@ -31,7 +31,8 @@ export default function InvitePage() {
     setBusy(true); setError('');
     try {
       const space = await apiData<{ slug: string }>(`/api/invites/${encodeURIComponent(code)}/accept`, { method: 'POST' });
-      router.push(`/s/${space.slug}`);
+      window.dispatchEvent(new Event(SPACES_CHANGED));
+      router.push(`/home?s=${encodeURIComponent(space.slug)}`);
     } catch (cause) { setError(requestError(cause)); }
     finally { setBusy(false); }
   }

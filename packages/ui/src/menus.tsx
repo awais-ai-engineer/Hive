@@ -1,5 +1,6 @@
 'use client';
 
+import { Chevron } from './chevron';
 import { forwardRef, useRef, type ComponentRef, type ReactNode } from 'react';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import * as Context from '@radix-ui/react-context-menu';
@@ -12,7 +13,7 @@ export const DropdownMenu = forwardRef<ComponentRef<typeof Dropdown.Content>, { 
   const renderItem = (item: MenuAction, index: number) => item.separator
     ? <Dropdown.Separator key={index} className="ui-separator" />
     : item.children
-      ? <Dropdown.Sub key={index}><Dropdown.SubTrigger disabled={item.disabled} data-danger={item.danger} className="ui-menu-item">{item.label}<span aria-hidden>›</span></Dropdown.SubTrigger><Dropdown.Portal><Dropdown.SubContent sideOffset={6} className="ui-menu">{item.children.map(renderItem)}</Dropdown.SubContent></Dropdown.Portal></Dropdown.Sub>
+      ? <Dropdown.Sub key={index}><Dropdown.SubTrigger disabled={item.disabled} data-danger={item.danger} className="ui-menu-item">{item.label}<Chevron right /></Dropdown.SubTrigger><Dropdown.Portal><Dropdown.SubContent sideOffset={6} className="ui-menu">{item.children.map(renderItem)}</Dropdown.SubContent></Dropdown.Portal></Dropdown.Sub>
       : <Dropdown.Item key={index} disabled={item.disabled} onSelect={() => item.onSelect?.()} data-danger={item.danger} className="ui-menu-item">{item.label}</Dropdown.Item>;
   const triggerElement = <Dropdown.Trigger asChild>{trigger}</Dropdown.Trigger>;
   return <Dropdown.Root>{triggerTooltip ? <Tooltip content={triggerTooltip}>{triggerElement}</Tooltip> : triggerElement}<Dropdown.Portal><Dropdown.Content ref={ref} aria-label={label} sideOffset={5} className={`ui-menu ${className}`}>{header && <Dropdown.Label className="ui-menu-header">{header}</Dropdown.Label>}{items.map(renderItem)}</Dropdown.Content></Dropdown.Portal></Dropdown.Root>;

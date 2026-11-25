@@ -2,6 +2,7 @@
 
 import { FileDropzone as UiFileDropzone, Button as UiButton, Input as UiInput, Textarea as UiTextarea, Radio as UiRadio, Select as UiSelect, LoadingState, EmptyState } from '@hive/ui';
 
+import { CommunicationSettings } from '../../components/communication-settings';
 import { LanguagePicker } from '../../components/language-picker';
 import { playMessageSound, setSoundsEnabled, soundsEnabled } from '../../lib/sounds';
 import Link from 'next/link';
@@ -19,8 +20,8 @@ import { apiData, requestError } from '../../lib/spaces';
 import { useAiStatus } from '../../lib/ai';
 import { DevicesCard, PushCard } from '../../components/settings-extras';
 
-type Section = 'profile' | 'notifications' | 'privacy' | 'blocked' | 'interests';
-const sections: [Section, string][] = [['profile', 'Profile'], ['notifications', 'Notifications'], ['privacy', 'Privacy'], ['blocked', 'Blocked people'], ['interests', 'Interests']];
+type Section = 'communication' | 'profile' | 'notifications' | 'privacy' | 'blocked' | 'interests';
+const sections: [Section, string][] = [['communication', 'Sounds & availability'], ['profile', 'Profile'], ['notifications', 'Notifications'], ['privacy', 'Privacy'], ['blocked', 'Blocked people'], ['interests', 'Interests']];
 
 function Saved({ show }: { show: boolean }) {
   return <span role="status" className="text-sm font-medium text-emerald-500">{show ? 'Saved' : ''}</span>;
@@ -290,10 +291,11 @@ export default function SettingsPage() {
     <div className="grid gap-6 md:grid-cols-[200px_1fr]">
       <nav aria-label="Settings sections" className="flex gap-1 overflow-x-auto md:flex-col">
         {sections.map(([id, label]) => <UiButton key={id} type="button" aria-current={section === id ? 'page' : undefined} onClick={() => setSection(id)}
-          className={`whitespace-nowrap rounded-xl px-3 py-2 text-left justify-start text-sm font-medium transition ${section === id ? 'bg-brand-soft text-brand' : 'text-white/65 hover:bg-[var(--surface-2)] hover:text-white'}`}>{label}</UiButton>)}
-        <Link href="/communities/manage" className="rounded-xl px-3 py-2 text-sm text-brand">Manage communities</Link>
+          className={`shrink-0 whitespace-nowrap rounded-xl px-3 py-2 text-left justify-start text-sm font-medium transition ${section === id ? 'bg-brand-soft text-brand' : 'text-white/65 hover:bg-[var(--surface-2)] hover:text-white'}`}>{label}</UiButton>)}
+        <Link href="/communities/manage" className="shrink-0 whitespace-nowrap rounded-xl px-3 py-2 text-sm text-brand">Manage communities</Link>
       </nav>
       <div className="min-w-0">
+        {section === 'communication' && <CommunicationSettings />}
         {section === 'profile' && <><ProfileCard user={user} updateUser={updateUser} /><section className="card mt-5 p-5 sm:p-6"><LanguagePicker /><p className="mt-2 text-sm text-white/60">Changes the language of Hive's menus and buttons on this device.</p></section><TranslateCard user={user} updateUser={updateUser} /></>}
         {section === 'notifications' && <><SoundCard /><NotificationsCard /><PushCard /></>}
         {section === 'privacy' && <><PrivacyCard user={user} updateUser={updateUser} /><DevicesCard /></>}

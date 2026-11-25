@@ -53,6 +53,16 @@ export default function SpacePage() {
     return () => { active = false; };
   }, [slug, loading, user]);
 
+  useEffect(() => {
+    if (!space?.my_role || !user) return;
+    const params = new URLSearchParams(search.toString());
+    params.set('s', space.slug);
+    const selectedChannel = search.get('c');
+    if (selectedChannel) params.set('c', selectedChannel);
+    if (search.get('tab') === 'posts' || (!search.get('tab') && space.type === 'community')) params.set('tab', 'posts');
+    router.replace(`/home?${params}`);
+  }, [space, user, router, search]);
+
   const selected = search.get('c');
   const channel = channels.find(item => item.id === selected) ?? channels[0];
   const tab = search.get('tab') ?? (space?.type === 'community' ? 'posts' : 'chat');

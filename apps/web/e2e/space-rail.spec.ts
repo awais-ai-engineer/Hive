@@ -73,7 +73,11 @@ test('keyboard sorting persists within a group; rail and strip pass axe', async 
   await page.goto('/home');
   const strip = page.getByRole('navigation', { name: 'Spaces' });
   await strip.getByRole('button', { name: 'Studio Team' }).focus();
-  await page.keyboard.press('Space'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Space');
+  await page.keyboard.press('Space');
+  await expect(strip.getByRole('button', { name: 'Studio Team' })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('ArrowDown');
+  await expect(strip.getByRole('status').first()).toContainText('design');
+  await page.keyboard.press('Space');
   await expect.poll(() => api.saved.length).toBe(1);
   expect(api.saved[0]).toEqual(['design', 'studio', 'garden']);
   await page.reload();

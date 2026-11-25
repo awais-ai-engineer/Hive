@@ -27,6 +27,8 @@ export const SocketEvents = {
   CallLeave: 'call:leave',
   CallSignal: 'call:signal',
   CallState: 'call:state',
+  CallCaption: 'call:caption',
+  AvailabilityChanged: 'availability:changed',
   CallRing: 'call:ring',
   CallIncoming: 'call:incoming',
   CallPeerJoined: 'call:peer-joined',

@@ -4,6 +4,7 @@ import { FileDropzone as UiFileDropzone, Button as UiButton } from '@hive/ui';
 
 import { useEffect, useRef, useState } from 'react';
 import type { Attachment } from '@hive/shared';
+import { apiData } from '../lib/spaces';
 import { uploadFile } from '../lib/api';
 
 type Row = { id: string; file: File; preview: string; controller: AbortController; progress: number; attachment?: Attachment; error?: string };
@@ -27,6 +28,8 @@ export function UploadPicker({ path, mediaOnly = false, maxFiles = 5, onChange, 
   compact?: boolean; controls?: { current: UploadControls | null };
 }) {
   const [rows, setRows] = useState<Row[]>([]);
+  const [limits, setLimits] = useState({ image: 10, video: 100, audio: 10, file: 10 });
+  useEffect(() => { let mounted = true; void apiData<typeof limits>('/api/uploads/limits').then(value => { if (mounted) setLimits(value); }).catch(() => {}); return () => { mounted = false; }; }, []);
   const current = useRef<Row[]>([]);
   const [error, setError] = useState('');
   const picker = useRef<HTMLInputElement>(null);
@@ -49,19 +52,25 @@ export function UploadPicker({ path, mediaOnly = false, maxFiles = 5, onChange, 
       if (current.current.length >= maxFiles) { setError(`Choose at most ${maxFiles} files`); break; }
       const kind = await fileKind(file);
       if (!active.current) return;
-      const limit = kind === 'video' ? 100 : 10;
+      const limit = limits[kind];
       if (!file.size || file.size > limit * 1048576) { setError(`${file.name}: ${kind}s must be non-empty and at most ${limit} MB`); continue; }
       if (mediaOnly && (kind === 'file' || (kind === 'video' && current.current.length > 0) || current.current.some(row => row.file.type.startsWith('video/')))) {
         setError('Choose 1–10 images or one video'); continue;
       }
-      const typedFile = new File([file], file.name, { type: kind === 'video' ? 'video/mp4' : kind === 'image' ? 'image/png' : 'application/octet-stream' });
-      const row: Row = { id: crypto.randomUUID(), file: typedFile, preview: URL.createObjectURL(file), controller: new AbortController(), progress: 0 };
+      const row: Row = { id: crypto.randomUUID(), file, preview: URL.createObjectURL(file), controller: new AbortController(), progress: 0 };
       update([...current.current, row]);
       void uploadFile<Attachment>(path, file, progress => update(current.current.map(item => item.id === row.id ? { ...item, progress } : item)), row.controller.signal)
         .then(attachment => update(current.current.map(item => item.id === row.id ? { ...item, attachment, progress: 100 } : item)))
         .catch(cause => { if (cause.name !== 'AbortError') update(current.current.map(item => item.id === row.id ? { ...item, error: cause.message } : item)); });
     }
     if (picker.current) picker.current.value = '';
+  }
+  function retry(row: Row) {
+    const controller = new AbortController();
+    update(current.current.map(item => item.id === row.id ? { ...item, controller, error: undefined, progress: 0 } : item));
+    void uploadFile<Attachment>(path, row.file, progress => update(current.current.map(item => item.id === row.id ? { ...item, progress } : item)), controller.signal)
+      .then(attachment => update(current.current.map(item => item.id === row.id ? { ...item, attachment, progress: 100 } : item)))
+      .catch(cause => { if (cause.name !== 'AbortError') update(current.current.map(item => item.id === row.id ? { ...item, error: cause.message } : item)); });
   }
   if (controls) controls.current = { open: () => picker.current?.click(), add: files => void add(files) };
   if (compact) {
@@ -73,7 +82,7 @@ export function UploadPicker({ path, mediaOnly = false, maxFiles = 5, onChange, 
         <span className="min-w-0 flex-1">
           <span className="block truncate font-medium">{row.file.name}</span>
           {!row.attachment && !row.error && <progress aria-label={`Uploading ${row.file.name}`} value={row.progress} max={100} className="h-1 w-full accent-[var(--brand)]" />}
-          {row.error && <span role="alert" className="block truncate text-rose-500">{row.error}</span>}
+          {row.error && <><span role="alert" className="block text-rose-500">{row.error}</span><UiButton type="button" className="text-brand underline" onClick={() => retry(row)}>Retry upload</UiButton></>}
         </span>
         <UiButton tooltip={`Remove ${row.file.name}`} type="button" className="shrink-0 text-white/50 hover:text-rose-500" aria-label={`Remove ${row.file.name}`} onClick={() => {
           row.controller.abort(); URL.revokeObjectURL(row.preview); update(current.current.filter(item => item.id !== row.id));
@@ -85,13 +94,13 @@ export function UploadPicker({ path, mediaOnly = false, maxFiles = 5, onChange, 
   return <div className="my-3 min-w-0 rounded border border-dashed border-white/20 p-3" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); void add(Array.from(event.dataTransfer.files)); }}>
     <UiFileDropzone.Input ref={picker} multiple accept={mediaOnly ? 'image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm' : undefined} aria-label={mediaOnly ? 'Choose media' : 'Choose files'} onChange={event => void add(Array.from(event.target.files ?? []))} className="sr-only" />
     <UiButton type="button" className="text-sm text-amber-400" onClick={() => picker.current?.click()}>{mediaOnly ? 'Choose media' : 'Attach files'}</UiButton>
-    <p className="mt-1 text-xs text-white/40">{mediaOnly ? '10 images or 1 video · Images 10 MB · Videos 100 MB' : 'Drop files here · Images/files 10 MB · Videos 100 MB'}</p>
+    <p className="mt-1 text-xs text-white/40">{mediaOnly ? `10 images or 1 video · Images ${limits.image} MB · Videos ${limits.video} MB` : `Drop files here · Images ${limits.image} MB · Files ${limits.file} MB · Videos ${limits.video} MB`}</p>
     <ul className="mt-2 flex flex-wrap gap-2">{rows.map(row => <li key={row.id} className="w-36 max-w-full rounded border border-white/10 p-2 text-xs">
       {mediaOnly && row.file.type.startsWith('image/') && <img src={row.preview} alt={row.file.name} className="mb-1 h-20 w-full object-contain" />}
       {mediaOnly && row.file.type.startsWith('video/') && <video src={row.preview} preload="metadata" className="mb-1 h-20 w-full" />}
       <p className="truncate">{row.file.name}</p>
       {!row.attachment && !row.error && <progress aria-label={`Uploading ${row.file.name}`} value={row.progress} max={100} className="w-full accent-amber-400" />}
-      {row.error && <p role="alert" className="text-rose-400">{row.error}</p>}
+      {row.error && <><p role="alert" className="text-rose-400">{row.error}</p><UiButton type="button" onClick={() => retry(row)}>Retry upload</UiButton></>}
       <UiButton tooltip={`Remove ${row.file.name}`} type="button" className="mt-1 text-rose-400" aria-label={`Remove ${row.file.name}`} onClick={() => {
         row.controller.abort(); URL.revokeObjectURL(row.preview); update(current.current.filter(item => item.id !== row.id));
       }}>Remove</UiButton>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Attachment, AttachmentViewed, Message, MessageDeleted, MessageExpired, MessagePage, ReactionUpdate, ThreadPage } from '@hive/shared';
+import { playSound } from './sounds';
 import { useAuth } from './auth';
 import { apiData, requestError } from './spaces';
 import { chatRequest, socket } from './socket';
@@ -215,9 +216,11 @@ export function useMessageList(channelId: string, parentId: string | null = null
         ...wire,
       });
       if (generation.current === version) merge([result.message]);
+      playSound('message_sent', 'feedback', `sent:${clientMsgId}`);
       return true;
     } catch (cause) {
       if (generation.current !== version) return false;
+      playSound('message_failed', 'feedback');
       patch(pending.id, item => ({ ...item, status: 'failed', error: requestError(cause) }));
       return false;
     }

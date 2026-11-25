@@ -8,7 +8,8 @@ import { PostFeed } from '../../components/posts/post-feed';
 import { colourFor } from '../../components/ui/avatar';
 import { Icon } from '../../components/ui/icons';
 import { useAuth } from '../../lib/auth';
-import { apiData, type Space } from '../../lib/spaces';
+import { socket } from '../../lib/socket';
+import { SPACES_CHANGED, apiData, type Space } from '../../lib/spaces';
 import { LoadingState } from '@hive/ui';
 
 function SpaceRow({ space, meta }: { space: Space; meta: string }) {
@@ -34,11 +35,18 @@ export default function FeedPage() {
   }, []);
   useEffect(() => {
     if (loading) return;
-    if (user) apiData<Space[]>('/api/me/spaces').then(setMine).catch(() => {});
-    apiData<Space[] | { items: Space[] }>('/api/spaces')
-      .then(value => setTrending((Array.isArray(value) ? value : value.items)
-        .filter(space => space.type === 'community').sort((a, b) => b.member_count - a.member_count).slice(0, 5)))
-      .catch(() => {});
+    let active = true;
+    const load = () => {
+      if (user) void apiData<Space[]>('/api/me/spaces').then(value => { if (active) setMine(value); }).catch(() => {});
+      else setMine([]);
+      void apiData<Space[] | { items: Space[] }>('/api/spaces').then(value => {
+        if (active) setTrending((Array.isArray(value) ? value : value.items)
+          .filter(space => space.type === 'community').sort((a, b) => b.member_count - a.member_count).slice(0, 5));
+      }).catch(() => {});
+    };
+    load(); window.addEventListener(SPACES_CHANGED, load); window.addEventListener('focus', load);
+    socket.on('spaces:updated', load);
+    return () => { active = false; window.removeEventListener(SPACES_CHANGED, load); window.removeEventListener('focus', load); socket.off('spaces:updated', load); };
   }, [loading, user]);
 
   const postTarget = mine.find(space => space.my_role && space.my_role !== 'guest');

@@ -66,13 +66,13 @@ export function PrejoinDialog() {
 
   const control = (on: boolean, icon: 'mic' | 'video', label: string, toggle: () => void) =>
     <UiButton type="button" onClick={toggle} aria-pressed={on} tooltip={label} aria-label={label}
-      style={{ background: on ? 'rgb(255 255 255 / 0.18)' : '#f43f5e', color: '#fff' }}
+      style={{ background: on ? 'rgb(255 255 255 / 0.18)' : 'var(--danger, rgb(244 63 94))', color: 'var(--rail-fg)' }}
       className="flex h-12 w-12 items-center justify-center rounded-full transition hover:brightness-110">
       <Icon name={icon} size={20} />{!on && <span aria-hidden className="absolute h-7 w-0.5 rotate-45 rounded bg-white" />}
     </UiButton>;
 
   return <Dialog open={!!pending} onOpenChange={open => { if (!open) finish(null); }} title={pending?.title || 'Join huddle'} description="Check your mic and camera before you join." className="max-w-lg">
-    <div className="relative aspect-video overflow-hidden rounded-2xl bg-[#15171c]">
+    <div className="relative aspect-video overflow-hidden rounded-2xl bg-[var(--call-surface)]">
       <video ref={video} muted autoPlay playsInline className={`h-full w-full object-cover ${camera ? '' : 'hidden'}`} />
       {!camera && <div className="flex h-full flex-col items-center justify-center gap-2" style={{ color: 'rgb(255 255 255 / 0.6)' }}><Icon name="video" size={34} /><span className="text-sm">Camera is off</span></div>}
       <span aria-hidden className="absolute bottom-3 left-3 flex h-6 items-end gap-0.5">{[0.3, 0.6, 1].map(step => <span key={step} className="w-1.5 rounded-sm bg-emerald-400 transition-all" style={{ height: `${6 + (level >= step * 60 ? 14 : 0)}px`, opacity: muted ? 0.3 : 1 }} />)}</span>

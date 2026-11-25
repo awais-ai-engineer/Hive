@@ -99,7 +99,7 @@ async def _check_not_blocked(session: AsyncSession, channel_id: str, user_id: st
 check_not_blocked = _check_not_blocked
 
 
-async def writable(session: AsyncSession, channel_id: str, user_id: str):
+async def writable(session: AsyncSession, channel_id: str, user_id: str, contact_kind: str = "messages"):
     channel, member = await readable(session, channel_id, user_id)
     if channel.type == ChannelType.dm:
         author = await session.get(User, user_id)
@@ -108,6 +108,9 @@ async def writable(session: AsyncSession, channel_id: str, user_id: str):
         if await session.scalar(select(User.id).join(DirectMember, DirectMember.user_id == User.id).where(DirectMember.channel_id == channel.id, User.is_system.is_(True))):
             raise HTTPException(403, "Replies to Hive are disabled")
         await _check_not_blocked(session, channel.id, user_id)
+        from app.availability.service import enforce
+
+        await enforce(session, channel.id, user_id, contact_kind)
         return channel
     require_role(member.role if member else None, MemberRole.member)
     if channel.type != ChannelType.text:
@@ -409,7 +412,23 @@ async def send(
         if channel is None or channel.type not in (ChannelType.text, ChannelType.dm) or channel.encrypted:
             raise HTTPException(404, "Channel not found")
     else:
-        channel = await writable(session, data.channelId, user.id)
+        channel = await writable(session, data.channelId, user.id,
+                                 "voice" if data.kind == "voice" else "media" if data.attachmentIds else "messages")
+    if channel.type == ChannelType.dm and not trusted:
+        from app.availability.service import enforce
+
+        if data.kind == "voice":
+            await enforce(session, channel.id, user.id, "voice")
+        elif data.attachmentIds:
+            await enforce(session, channel.id, user.id, "media")
+    if data.attachmentIds and channel.type == ChannelType.dm and not trusted:
+        from app.availability.service import enforce
+
+        kinds = set(await session.scalars(select(Attachment.kind).where(Attachment.id.in_(data.attachmentIds))))
+        if "audio" in kinds:
+            await enforce(session, channel.id, user.id, "voice")
+        if kinds - {"audio"}:
+            await enforce(session, channel.id, user.id, "media")
     await _check_secret(session, channel, user, data)
     existing_query = select(Message).where(
         Message.author_id == user.id, Message.client_msg_id == data.clientMsgId

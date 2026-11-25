@@ -573,3 +573,26 @@ async def test_translate_language_preference(client):
     assert (await client.patch("/api/me", headers=headers, json={"translate_language": "tlh"})).status_code == 422
     cleared = await client.patch("/api/me", headers=headers, json={"translate_language": None})
     assert cleared.json()["translate_language"] is None
+
+
+async def test_huddle_ai_uses_all_saved_speaker_transcripts(client, setup_chat, ai):
+    from app.db.models import Doc
+
+    alice, _, _, _, bh, _, _, channel = setup_chat
+    async with SessionLocal() as session:
+        doc = Doc(channel_id=channel, title="Huddle notes", emoji="🎧", version=1,
+            created_by=uid(alice), updated_by=uid(alice),
+            body=[{"id": "b0", "type": "callout", "text": "Transcript consent"},
+                  {"id": "t0", "type": "paragraph", "text": "alice: Release on Friday"},
+                  {"id": "t1", "type": "paragraph", "text": "bob: I will send the release notes by Thursday"}])
+        session.add(doc)
+        await session.commit()
+        doc_id = doc.id
+    huddle = await put(channel, alice, f"A huddle happened. [Notes](/home?c={channel}&doc={doc_id})",
+                       kind="huddle", huddle_started_at=datetime.now(UTC) - timedelta(minutes=10))
+    ai.responses = ["## Decisions\n- Release Friday [1]\n## Action items\n- Bob sends notes Thursday [2]"]
+    response = await post(client, '/huddle-notes', bh, messageId=huddle)
+    assert response.status_code == 200, response.text
+    assert response.json()['messageCount'] == 2
+    assert 'alice: Release on Friday' in ai.prompts
+    assert 'bob: I will send the release notes by Thursday' in ai.prompts

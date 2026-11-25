@@ -32,7 +32,7 @@ export function CallBar() {
       </span>
       <span className="flex -space-x-1.5">
         {people.slice(0, 4).map(person => <UiTooltip content={person.name} key={person.key}><span key={person.key}
-          className={`rounded-full ring-2 ${person.talking ? 'ring-emerald-400' : 'ring-[var(--call-surface)]'}`}><Avatar name={person.name} src={person.avatar} size={22} /></span></UiTooltip>)}
+          className={`inline-flex rounded-md ring-2 transition-shadow ${person.talking ? 'ring-emerald-400' : 'ring-[var(--call-surface)]'}`}><Avatar name={person.name} src={person.avatar} size={22} /></span></UiTooltip>)}
         {people.length > 4 && <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-[rgb(255_255_255/0.15)] text-[10px] ring-2 ring-[var(--call-surface)]">+{people.length - 4}</span>}
       </span>
     </UiButton>

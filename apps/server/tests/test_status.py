@@ -16,7 +16,7 @@ async def expire(username: str, *, status: bool = False, away: bool = False) -> 
     if status:
         values["status_expires_at"] = datetime.now(UTC) - timedelta(minutes=1)
     if away:
-        values["out_of_office_until"] = date.today() - timedelta(days=1)
+        values["out_of_office_until"] = datetime.now(UTC).date() - timedelta(days=1)
     async with SessionLocal() as session:
         await session.execute(update(User).where(User.username == username).values(**values))
         await session.commit()

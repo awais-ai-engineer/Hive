@@ -1,5 +1,7 @@
 'use client';
 
+import { publicUrl } from '../../../../lib/public-url';
+
 import { confirmAction as UiConfirm, Checkbox as UiCheckbox, Input as UiInput, Textarea as UiTextarea, Button as UiButton, Select as UiSelect, LoadingState } from '@hive/ui';
 
 import Link from 'next/link';
@@ -120,7 +122,7 @@ export default function SettingsPage() {
     if (!parsed.success) { setError(parsed.error.issues[0].message); return; }
     try {
       const invite = await apiData<Invite>(`/api/spaces/${encodeURIComponent(slug)}/invites`, { method: 'POST', body: JSON.stringify(parsed.data) });
-      setNewInvite(`http://localhost:3000/invite/${invite.code}`); formElement.reset(); await load();
+      setNewInvite(publicUrl(`/invite/${invite.code}`)); formElement.reset(); await load();
     } catch (cause) { setError(requestError(cause)); }
   }
 

@@ -13,3 +13,5 @@ export * from './schemas/games';
 export * from './schemas/notifications';
 export * from './schemas/apps';
 export * from './secret';
+
+export * from './captions';

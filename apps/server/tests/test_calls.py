@@ -306,13 +306,14 @@ async def test_hand_reactions_and_captions_stay_in_the_call(client, setup_chat, 
         reaction = await event(bq["call:react"])
         assert reaction["emoji"] == "🎉" and reaction["username"] == "alice"
         assert (await call(a, "call:react", {"channelId": lounge, "emoji": "💩"}))["error"]["code"] == "invalid"
-        assert (await call(a, "call:caption", {"channelId": lounge, "text": " Launch on Tuesday ", "final": True}))["ok"]
+        await call(a, "call:state", {"channelId": lounge, "captions": True})
+        assert (await call(a, "call:caption", {"segmentId": "test_segment_1", "channelId": lounge, "text": " Launch on Tuesday ", "final": True}))["ok"]
         caption = await event(bq["call:caption"])
         assert caption["text"] == "Launch on Tuesday" and caption["final"] is True
         await quiet(aq["call:caption"])  # the speaker does not get their own caption back
         # Someone outside the call can neither send nor receive any of it.
         assert (await call(c, "call:react", {"channelId": lounge, "emoji": "👍"}))["error"]["code"] == "forbidden"
-        assert (await call(c, "call:caption", {"channelId": lounge, "text": "hi"}))["error"]["code"] == "forbidden"
+        assert (await call(c, "call:caption", {"segmentId": "test_segment_2", "channelId": lounge, "text": "hi"}))["error"]["code"] == "forbidden"
         await quiet(cq["call:react"])
         await quiet(cq["call:caption"])
 
@@ -332,9 +333,11 @@ async def test_huddle_notes_become_a_doc_for_the_channel(client, setup_chat, liv
         await call(a, "channel:join", {"channelId": channel})
         for peer in (a, b):
             assert (await call(peer, "call:join", {"channelId": channel}))["ok"]
-        await call(a, "call:caption", {"channelId": channel, "text": "Launch moves to Tuesday", "final": False})
-        await call(a, "call:caption", {"channelId": channel, "text": "Launch moves to Tuesday", "final": True})
-        await call(b, "call:caption", {"channelId": channel, "text": "I will update the release notes", "final": True})
+        await call(a, "call:state", {"channelId": channel, "captions": True})
+        await call(b, "call:state", {"channelId": channel, "captions": True})
+        await call(a, "call:caption", {"segmentId": "test_segment_3", "channelId": channel, "text": "Launch moves to Tuesday", "final": False})
+        await call(a, "call:caption", {"segmentId": "test_segment_4", "channelId": channel, "text": "Launch moves to Tuesday", "final": True})
+        await call(b, "call:caption", {"segmentId": "test_segment_5", "channelId": channel, "text": "I will update the release notes", "final": True})
         await call(b, "call:leave", {"channelId": channel})
         await call(a, "call:leave", {"channelId": channel})
         posted = await event(aq["message:new"])

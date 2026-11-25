@@ -32,7 +32,7 @@ async def test_invite_preview_accept_and_use_limit(client):
     invite = await create_invite(client, owner, {"max_uses": 1})
     assert invite.status_code == 201
     code = invite.json()["code"]
-    assert len(code) <= 16
+    assert 32 <= len(code) <= 64
     preview = await client.get(f"/api/invites/{code}")
     assert preview.status_code == 200
     assert preview.json() == {

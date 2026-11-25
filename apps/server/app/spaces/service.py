@@ -205,6 +205,9 @@ async def list_members(session: AsyncSession, space: Space, cursor: str | None) 
         )
         for member, user in rows
     ]
+    from app.availability.service import decorate_status
+
+    await decorate_status(session, [item.user for item in result])
     return {"items": result, "next_cursor": rows[-1][1].id if more and rows else None}
 
 

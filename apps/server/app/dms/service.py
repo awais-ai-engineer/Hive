@@ -194,6 +194,9 @@ async def list_conversations(
             unread=unread.get(channel.id, 0),
             created_at=channel.created_at,
         ))
+    from app.availability.service import decorate_status
+
+    await decorate_status(session, [person for conversation in result for person in conversation.participants])
     result.sort(key=lambda item: item.last_message.id if item.last_message else item.id, reverse=True)
     return result
 

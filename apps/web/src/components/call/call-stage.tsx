@@ -1,6 +1,6 @@
 'use client';
 
-import { Tooltip as UiTooltip } from '@hive/ui';
+import { AlertDialog, Tooltip as UiTooltip } from '@hive/ui';
 
 import { Button as UiButton, Select as UiSelect } from '@hive/ui';
 
@@ -36,7 +36,7 @@ function TileView({ tile, big = false, reactions = [] }: { tile: Tile; big?: boo
     <video ref={element} autoPlay playsInline muted
       className={`h-full w-full ${big ? 'object-contain' : 'object-cover'} ${tile.video ? '' : 'hidden'}`}
       style={tile.mirror ? { transform: 'scaleX(-1)' } : undefined} />
-    {!tile.video && <span className={`rounded-full ${talking ? 'shadow-[0_0_0_4px_rgb(242_165_22/0.45)]' : ''}`}>
+    {!tile.video && <span style={{ borderRadius: (big ? 96 : 60) * 0.27 }} className={`inline-flex transition-shadow ${talking ? 'shadow-[0_0_0_4px_rgb(242_165_22/0.45)]' : ''}`}>
       <Avatar name={tile.name} src={tile.avatarUrl} size={big ? 96 : 60} /></span>}
     {(tile.state || tile.hand) && <span className={`absolute right-2 top-2 rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${tile.hand ? 'bg-[var(--brand)] text-[var(--rail)]' : 'bg-[rgb(0_0_0/0.55)]'}`}
       style={tile.hand ? undefined : WHITE}>{tile.hand ? '✋ Hand raised' : tile.state}</span>}
@@ -60,7 +60,7 @@ export function RoundControl({ icon, label, active, warn, onClick, size = 'lg', 
     <Icon name={icon} size={size === 'lg' ? 20 : 16} />
   </UiButton>;
   if (!caption) return button;
-  return <div className="flex w-14 flex-col items-center gap-1">{button}<span className="text-[11px] font-medium" style={MUTED_TEXT}>{caption}</span></div>;
+  return <div className="flex min-w-16 shrink-0 flex-col items-center gap-1">{button}<span className="whitespace-nowrap text-[11px] font-medium" style={MUTED_TEXT}>{caption}</span></div>;
 }
 
 /** The huddle: video tiles, screen share, reactions, captions and controls. Centred window or full screen. */
@@ -69,6 +69,8 @@ export function CallStage() {
   const { user } = useAuth();
   const { t } = useT();
   const [full, setFull] = useState(false);
+  const [consent, setConsent] = useState(false);
+  const toggleCaptions = () => { if (call.captionsOn) calls.toggleCaptions(user?.username ?? 'You'); else setConsent(true); };
   const [menu, setMenu] = useState<'settings' | 'react' | null>(null);
   const [panel, setPanel] = useState<'people' | 'captions'>('people');
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
@@ -131,37 +133,39 @@ export function CallStage() {
         {tiles.map(tile => <li key={tile.key} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
           <Avatar name={tile.name} src={tile.avatarUrl} size={28} />
           <span className="min-w-0 flex-1 truncate text-sm">{tile.label ?? tile.name}</span>
+          {call.peers.find(peer => peer.sid === tile.key)?.captions && <span className="text-xs text-[var(--call-highlight)]" aria-label="Transcribing microphone">CC</span>}
           {tile.hand && <UiTooltip content="Hand raised"><span>✋</span></UiTooltip>}
           {tile.video && <Icon name="video" size={14} className="opacity-60" />}
           <Icon name={tile.muted ? 'micOff' : 'mic'} size={14} className={tile.muted ? 'text-rose-300' : 'opacity-60'} />
         </li>)}
       </ul> : !call.captions.length ? <div className="mt-6 text-center text-sm" style={MUTED_TEXT}>
         <p>{captionsSupported() ? 'Notes are built from live captions. Turn captions on to add what you say. When the huddle ends, the notes are saved as a Doc in this conversation for everyone in it.' : 'Notes need live captions, which work in Chrome or Edge on a computer.'}</p>
-        {captionsSupported() && !call.captionsOn && <UiButton type="button" onClick={() => calls.toggleCaptions(user?.username ?? 'You')}
+        {captionsSupported() && !call.captionsOn && <UiButton type="button" onClick={toggleCaptions}
           className="mt-3 rounded-lg bg-[var(--brand)] px-3 py-1.5 text-sm font-semibold text-[var(--rail)]">Take notes</UiButton>}
       </div>
-        : <ol className="space-y-2 text-sm">{call.captions.map(caption => <li key={caption.id}>
-          <span className="font-semibold">{caption.username}: </span><span style={caption.final ? undefined : MUTED_TEXT}>{caption.text}</span></li>)}</ol>}
+        : <ol className="space-y-2 text-sm">{call.captions.map(caption => <li key={`${caption.userId}:${caption.id}`}>
+          <time className="mr-2 text-xs opacity-60" dateTime={caption.timestamp}>{new Date(caption.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time><span className="font-semibold">{caption.username}: </span><span style={caption.final ? undefined : MUTED_TEXT}>{caption.text}</span></li>)}</ol>}
     </div>
     <p className="border-t border-[rgb(255_255_255/0.08)] p-3 text-xs" style={MUTED_TEXT}>Everyone in this huddle sees captions as they are spoken. Finished lines are saved as meeting notes in this conversation when the huddle ends.</p>
   </aside>;
 
-  return <div className={`fixed inset-0 z-50 flex items-center justify-center ${full ? '' : 'bg-[rgb(8_6_14/0.62)] p-3 backdrop-blur-sm sm:p-6'}`}
+  return <><AlertDialog open={consent} onOpenChange={setConsent} title="Enable microphone transcription?" description="Your browser transcribes your microphone. Everyone in this Huddle sees your captions, and finalized captions are saved as meeting notes in this conversation. Browser speech recognition may use your browser provider's servers. Each participant must enable their own transcription." confirmLabel="Enable transcription" onConfirm={() => calls.toggleCaptions(user?.username ?? 'You')} />
+  <div className={`fixed inset-0 z-50 flex items-center justify-center ${full ? '' : 'bg-[rgb(8_6_14/0.62)] p-3 backdrop-blur-sm sm:p-6'}`}
     onMouseDown={event => { if (event.target === event.currentTarget) calls.setStageOpen(false); }}>
   <section aria-label={`Huddle in ${call.title}`} role="dialog" aria-modal
     className={`animate-in flex flex-col overflow-hidden bg-[var(--call-surface)] ${full
       ? 'h-full w-full'
-      : 'h-[min(88dvh,780px)] w-[min(1200px,100%)] rounded-3xl shadow-[0_0_0_1.5px_rgb(242_165_22/0.7),0_0_40px_6px_rgb(242_165_22/0.3),0_30px_80px_rgb(0_0_0/0.55)]'}`}
+      : 'h-[min(88dvh,780px)] w-[min(1200px,100%)] rounded-3xl huddle-halo'}`}
     style={WHITE}>
     <header className="flex items-center gap-3 border-b border-[rgb(255_255_255/0.08)] px-4 py-3">
       <UiButton type="button" onClick={() => calls.setStageOpen(false)} aria-label={t('huddle.minimise')} tooltip={t('huddle.minimise')}
         className="rounded-lg p-1.5 hover:bg-[rgb(255_255_255/0.1)]"><Icon name="chevronLeft" size={18} /></UiButton>
       <div className="min-w-0">
         <h2 className="truncate text-sm font-semibold">{call.status === 'joining' ? 'Connecting…' : call.title}</h2>
-        <p className="text-xs" style={MUTED_TEXT}>{t('huddle.people', { count })}</p>
+        <p className="text-xs" style={MUTED_TEXT}>{count === 1 ? '1 person' : t('huddle.people', { count })}</p>
       </div>
       {timer && <span className="flex items-center gap-1.5 rounded-full bg-[rgb(255_255_255/0.1)] px-2.5 py-1 text-xs font-semibold"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{timer}</span>}
-      {(call.captionsOn || call.captions.length > 0) && <span className="hidden items-center gap-1 rounded-full bg-[rgb(242_165_22/0.18)] px-2.5 py-1 text-xs font-semibold text-[var(--call-highlight)] sm:flex"><Icon name="file" size={12} />Taking notes</span>}
+      {(call.captionsOn || call.peers.some(peer => peer.captions)) && <span className="hidden items-center gap-1 rounded-full bg-[rgb(242_165_22/0.18)] px-2.5 py-1 text-xs font-semibold text-[var(--call-highlight)] sm:flex"><Icon name="file" size={12} />Taking notes</span>}
       <span className="ml-auto" />
       <RoundControl size="sm" icon={full ? 'shrink' : 'expand'} label={full ? t('huddle.exitFullScreen') : t('huddle.fullScreen')} onClick={() => setFull(value => !value)} />
     </header>
@@ -192,14 +196,14 @@ export function CallStage() {
       <div className="hidden sm:block"><RoundControl caption="Raise hand" icon="hand" label={call.hand ? 'Lower your hand' : 'Raise your hand'} active={call.hand} onClick={() => calls.toggleHand()} /></div>
       <RoundControl caption="React" icon="smile" label="Send a reaction" active={menu === 'react'} onClick={() => setMenu(value => value === 'react' ? null : 'react')} />
       {captionsSupported() && <div className="hidden sm:block"><RoundControl caption="Captions" icon="captions" label={call.captionsOn ? 'Turn captions off' : 'Turn captions on'} active={call.captionsOn}
-        onClick={() => calls.toggleCaptions(user?.username ?? 'You')} /></div>}
+        onClick={toggleCaptions} /></div>}
       <RoundControl caption="Audio" icon="settings" label="Audio settings" active={menu === 'settings'} onClick={() => setMenu(value => value === 'settings' ? null : 'settings')} />
       <div className="ml-2 flex w-16 flex-col items-center gap-1 sm:ml-4">
         <UiButton type="button" onClick={() => void calls.leave()} aria-label={t('huddle.leave')} tooltip={t('huddle.leave')}
           className="flex h-11 w-16 items-center justify-center rounded-full bg-rose-600 transition hover:bg-rose-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rail-fg)]" style={WHITE}>
           <Icon name="phone" size={20} className="rotate-[135deg]" />
         </UiButton>
-        <span className="text-[11px] font-medium" style={MUTED_TEXT}>{t('huddle.leave')}</span>
+        <span className="whitespace-nowrap text-[11px] font-medium" style={MUTED_TEXT}>{t('huddle.leave')}</span>
       </div>
       {menu === 'react' && <div className="absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 gap-1 rounded-2xl bg-[var(--call-panel)] p-2 shadow-xl">
         {REACTIONS.map(emoji => <UiButton tooltip={`React ${emoji}`} key={emoji} type="button" aria-label={`React ${emoji}`} onClick={() => { calls.react(emoji); setMenu(null); }}
@@ -216,5 +220,5 @@ export function CallStage() {
       </div>}
     </footer>
   </section>
-  </div>;
+  </div></>;
 }

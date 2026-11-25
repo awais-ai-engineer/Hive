@@ -8,7 +8,7 @@ import { socket } from '../../lib/socket';
 import { startRing, stopRing } from '../../lib/sounds';
 import { Icon } from '../ui/icons';
 
-type Ring = { channelId: string; from: { id: string; username: string } };
+type Ring = { channelId: string; invitationId?: string; from: { id: string; username: string } };
 
 /** "bob is calling you" toast for conversation huddles. Mount once in the logged-in app. */
 export function IncomingCall({ titleFor, onAccept }: { titleFor: (channelId: string, caller: string) => string; onAccept?: (channelId: string) => void }) {
@@ -20,7 +20,7 @@ export function IncomingCall({ titleFor, onAccept }: { titleFor: (channelId: str
   }, []);
   useEffect(() => {
     if (!ring) { stopRing(); return; }
-    startRing();
+    startRing(ring.invitationId);
     const timer = setTimeout(() => setRing(null), 30000); // stop ringing after 30 seconds
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setRing(null); };
     window.addEventListener('keydown', onKey);

@@ -162,6 +162,10 @@ async def notify(session, row: Notification) -> bool:
         user = await session.get(User, row.user_id)
         if user is None or in_quiet_hours(user.quiet_start, user.quiet_end, user.quiet_tz):
             return False
+        from app.availability.service import active
+
+        if any(item.suppress_notifications for item in await active(session, row.user_id)):
+            return False
         if row.user_id in await presence.online_ids([row.user_id]):
             return False
         targets = await targets_for(session, row.user_id)

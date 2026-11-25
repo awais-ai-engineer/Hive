@@ -3,6 +3,7 @@
 import { Button as UiButton } from '@hive/ui';
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useAvailability, availabilityMessage } from '../lib/availability';
 import { useAuth } from '../lib/auth';
 import { socket } from '../lib/socket';
 import { useChannelMessages, type ChatMessage } from '../lib/use-channel-messages';
@@ -51,7 +52,10 @@ export function ChannelChat({ channel, space, channels, placeholder, reason, can
   const previousLast = useRef<string | undefined>(undefined);
   const anchor = useRef<{ height: number; top: number } | null>(null);
   const lastRead = useRef<string | null>(null);
-  const canWrite = !reason;
+  const availability = useAvailability(channel.id, !space);
+  const unavailable = availability.find(person => person.blocked.includes('messages'));
+  const contactReason = reason || (unavailable ? availabilityMessage(unavailable) : '');
+  const canWrite = !contactReason;
   const secret = useSecretChat(user?.id, channel.id, encrypted);
   const [plain, setPlain] = useState<Record<string, string | null>>({});
   const decrypt = secret.decrypt;
@@ -164,6 +168,7 @@ export function ChannelChat({ channel, space, channels, placeholder, reason, can
     }}>New messages ↓</UiButton>}
     {typingText && <p role="status" aria-live="polite" className="py-1 text-xs text-white/50">{typingText}</p>}
     {encrypted && <SecretNotice name={secret.other?.username ?? 'them'} safety={secret.safety} ready={secret.ready} peerReady={secret.peerReady} error={secret.error} />}
+    {unavailable && <p role="status" className="mx-3 mb-2 rounded-xl border border-white/10 bg-brand-soft p-3 text-sm">{availabilityMessage(unavailable)}</p>}
     <Composer channelId={channel.id} channels={channels} secret={encrypted} allowViewOnce={allowViewOnce} placeholder={placeholder} reason={reason || (encrypted && !!secret.error ? secret.error : '')} sendTyping onEditLast={() => { const last=chat.messages.filter(item=>item.author.id===user?.id&&!item.deleted&&!item.status&&(!item.kind||item.kind==='text')).at(-1);if(last)window.dispatchEvent(new CustomEvent('hive:edit-message',{detail:{id:last.id}})); }}
       onSend={(body, files, options) => { nearBottom.current = true; return encrypted ? sendSecret(body) : chat.send(body, undefined, files, options); }} />
    </div>

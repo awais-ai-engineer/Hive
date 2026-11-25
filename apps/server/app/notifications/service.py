@@ -156,7 +156,10 @@ async def publish_count(session: AsyncSession, user_id: str) -> int:
 
 async def publish(session: AsyncSession, row: Notification) -> None:
     item = (await serialize(session, row.user_id, [row]))[0]
-    await _emit("notification:new", row.user_id, item.model_dump(mode="json"))
+    from app.availability.service import active
+
+    if not any(schedule.suppress_notifications for schedule in await active(session, row.user_id)):
+        await _emit("notification:new", row.user_id, item.model_dump(mode="json"))
     await publish_count(session, row.user_id)
 
 
