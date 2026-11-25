@@ -19,7 +19,7 @@ Persistent storage stays in Supabase for production. Local disk remains a develo
 
 3. Invitations
 Confirmed defect: the settings page explicitly generated http://localhost:3000/invite/....
-Changes: central publicUrl helper uses optional NEXT_PUBLIC_WEB_URL or the browser's current origin. Existing login next-path handling is retained. Creation/acceptance refresh membership navigation and enter /home?s=...; new tokens contain 192 bits of randomness and fit the widened database column. Existing atomic use counts, expiration, revocation, ban checks, and membership uniqueness remain in place.
+Changes: central publicUrl helper uses optional NEXT_PUBLIC_WEB_URL or the browser's current origin. Existing login next-path handling is retained. Creation/acceptance refresh membership navigation and enter /home?s=...; new tokens contain 192 bits of randomness and fit the widened database column. Existing atomic use counts, expiration, revocation, ban checks, and membership uniqueness remain in place. Invalid/revoked previews no longer disclose private space names, descriptions or slugs.
 Production frontend https://hive-web-duzu.onrender.com returned HTTP 200 during direct verification. Workspace email-domain self-join policy remains distinct from an explicit administrator-issued invite; existing behavior was preserved.
 
 4. Workspace header
@@ -72,7 +72,15 @@ Deployment setup
 7. Availability/sound settings require no new service. Keep PostgreSQL persistent and Redis configured as before. Availability enforcement does not depend on a scheduler job.
 
 Validation record
-Completed locally so far: 532 backend tests passed in the full run; one UTC/local-date-dependent test fixture failed and was corrected. A subsequent targeted run of status, communication, audio and AI tests passed all 71 tests. Shared tests pass (25), lint/typecheck pass, and the initial browser suite passes all 12 tests. The expanded 13-test browser run and final build are pending. Automated transcript transport tests are distinct from physical speech accuracy. The live Supabase probe is distinct from the deployed authenticated media endpoint.
+- Local backend: the broad run completed with 532 passes and one UTC/local-date-sensitive fixture failure. The fixture now uses UTC. The subsequent status/communication/audio/AI run passed 71 tests, call tests passed 18, and invitation tests passed 5, including revoked-preview privacy. CI initially passed 535 tests and found one old incoming-call payload assertion, now updated to validate invitationId. The complete final regression result is available under PR #41 checks.
+- Shared package: 25 tests passed, including long Unicode captions without truncation and caption identifier validation.
+- Browser checks: 9 settings/workspace flows passed against a production build; 4 component gallery checks passed in development, including both themes, axe accessibility, keyboard select/combobox, dialogs and calendar controls. The gallery is intentionally not exposed in production. Tests use controlled HTTP fixtures and keep component-test sockets offline; backend integration tests use real authenticated sockets and independent accounts.
+- Backend Ruff, frontend shared-UI lint and TypeScript checks passed. Optimized Next.js builds completed and generated all 27 static pages. Final CI performs a fresh build and full backend regression on the branch.
+- Both migrations applied to a separate scratch PostgreSQL database; Alembic reported no new upgrade operations/model drift. Existing ltree reflection warnings were informational.
+- Live external verification: production frontend returned HTTP 200. The saved private Supabase bucket passed streamed object save, fresh signing and download from an independent client. Temporary probe cleanup completed.
+- Not verified: physical two/three/five-device speech recognition, actual microphone/speaker quality or simultaneous acoustic speakers, live mobile autoplay behavior, the deployed Render environment, or the user's authenticated production upload failure. These remain release verification requirements. No application deployment or production migration was performed.
+
+PR and CI: https://github.com/awais-ai-engineer/Hive/pull/41
 
 Changed file inventory
 apps/server/alembic/versions/c4f8a901b527_communication_preferences.py
@@ -107,6 +115,7 @@ apps/server/tests/test_status.py
 apps/server/tests/test_voice.py
 apps/web/.env.example
 apps/web/e2e/communication.spec.ts
+apps/web/e2e/components.spec.ts
 apps/web/e2e/fixtures.ts
 apps/web/e2e/space-rail.spec.ts
 apps/web/src/app/feed/page.tsx

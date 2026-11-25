@@ -292,7 +292,7 @@ function Home() {
     const onChannelActivity = (data: { channelId: string; authorId: string; messageId?: string }) => {
       if (data.authorId === user.id) return;
       // Chime for conversations you aren't looking at, unless they are set to quiet.
-      if ((data.channelId !== selected || document.hidden) && !prefs.current[data.channelId]) playMessageSound(data.messageId ? `message:${data.messageId}` : undefined);
+      if ((data.channelId !== selected || document.hidden) && !space?.muted && !prefs.current[data.channelId]) playMessageSound(data.messageId ? `message:${data.messageId}` : undefined);
       if (data.channelId !== selected && prefs.current[data.channelId]) refreshChannels();
       else if (data.channelId !== selected) {
         setChannels(list => list.map(item => item.id === data.channelId ? { ...item, unread: item.unread + 1 } : item));
@@ -324,7 +324,7 @@ function Home() {
         .off('thread:activity', refreshThreads).off('thread:read', refreshThreads).off('presence', onPresence).off('connect', onReconnect)
         .off('sidebar:updated', onSidebar);
     };
-  }, [user, selected, refreshConversations, refreshUnreads, refreshThreads, refreshChannels]);
+  }, [user, selected, space?.muted, refreshConversations, refreshUnreads, refreshThreads, refreshChannels]);
 
   // Private channels appear or disappear when someone adds or removes the viewer.
   useEffect(() => {

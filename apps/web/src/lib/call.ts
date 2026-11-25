@@ -96,6 +96,8 @@ class CallManager {
   /** Signals that arrive before the join is acknowledged (we don't have ICE servers yet). */
   private queued: [string, Signal][] = [];
   private recognition: Recognition | null = null;
+  private recognitionRestart: ReturnType<typeof setTimeout> | null = null;
+  private recognitionFailures = 0;
   private lastInterim = 0;
   private pendingCaptions = new Map<string, { channelId: string; segmentId: string; text: string; final: boolean }>();
   private captionInFlight = false;
@@ -274,6 +276,7 @@ class CallManager {
     recognition.interimResults = true;
     recognition.onresult = event => {
       const channelId = this.state.channelId;
+      this.recognitionFailures = 0;
       if (!channelId || this.state.muted) return;
       for (let index = event.resultIndex; index < event.results.length; index++) {
         const result = event.results[index];
@@ -298,9 +301,20 @@ class CallManager {
         this.flushCaptions();
       }
     };
-    recognition.onerror = event => { if (event.error === 'not-allowed') { this.stopCaptions(); this.emit({ error: 'Captions need microphone access.' }); } };
-    // Recognition stops by itself after a pause; keep it going while captions are on.
-    recognition.onend = () => { if (this.recognition === recognition && this.state.channelId) { try { this.captionEpoch = crypto.randomUUID(); this.captionResults.clear(); recognition.start(); } catch { this.stopCaptions(); } } };
+    recognition.onerror = event => {
+      if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(event.error)) {
+        this.stopCaptions(); this.emit({ error: 'Transcription needs access to an available microphone.' });
+      } else this.recognitionFailures += 1;
+    };
+    recognition.onend = () => {
+      if (this.recognition !== recognition || !this.state.channelId) return;
+      this.recognitionRestart = setTimeout(() => {
+        this.recognitionRestart = null;
+        if (this.recognition !== recognition || !this.state.channelId) return;
+        try { this.captionEpoch = crypto.randomUUID(); this.captionResults.clear(); recognition.start(); }
+        catch { this.stopCaptions(); }
+      }, Math.min(10000, 250 * 2 ** Math.min(6, this.recognitionFailures)));
+    };
     this.recognition = recognition;
     this.captionEpoch = crypto.randomUUID(); this.captionResults.clear();
     void chatRequest('call:state', { channelId: this.state.channelId, captions: true }).then(() => {
@@ -312,6 +326,8 @@ class CallManager {
   private stopCaptions() {
     const recognition = this.recognition;
     this.recognition = null;
+    if (this.recognitionRestart) clearTimeout(this.recognitionRestart);
+    this.recognitionRestart = null;
     this.pendingCaptions.clear();
     if (this.retryTimer) clearTimeout(this.retryTimer);
     this.retryTimer = null;
@@ -342,6 +358,7 @@ class CallManager {
   }
 
   async toggleCamera() {
+    const wasOn = this.state.camera;
     if (this.state.camera) {
       this.cameraTrack?.stop();
       this.cameraTrack = null;
@@ -357,11 +374,12 @@ class CallManager {
         this.emit({ error: deviceMessage('camera', cause) });
       }
     }
-    playSound(this.state.camera ? 'camera_on' : 'camera_off', 'huddles');
+    if (wasOn !== this.state.camera) playSound(this.state.camera ? 'camera_on' : 'camera_off', 'huddles');
     this.sendState();
   }
 
   async toggleScreen() {
+    const wasSharing = this.state.screen;
     if (this.state.screen) {
       this.video?.stop();
       this.setVideo(this.cameraTrack);
@@ -382,6 +400,7 @@ class CallManager {
         return;
       }
     }
+    if (wasSharing !== this.state.screen) playSound(this.state.screen ? 'screen_on' : 'screen_off', 'huddles');
     this.sendState();
   }
 

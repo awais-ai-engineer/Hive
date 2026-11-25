@@ -41,9 +41,9 @@ export default function InvitePage() {
     <section className="rounded-xl border border-white/10 bg-white/[0.03] p-6">
       <h1 className="text-2xl font-bold">You’ve been invited</h1>
       {error && <p role="alert" className="mt-4 text-rose-400">{error}</p>}
-      {preview && <><h2 className="mt-5 text-xl">{preview.space.name}</h2>
+      {preview && <>{preview.valid && <><h2 className="mt-5 text-xl">{preview.space.name}</h2>
         <p className="mt-1 capitalize text-white/50">{preview.space.type} · {preview.space.member_count} members</p>
-        {preview.space.description && <p className="mt-3 text-white/70">{preview.space.description}</p>}
+        {preview.space.description && <p className="mt-3 text-white/70">{preview.space.description}</p>}</>}
         {!preview.valid && <p className="mt-4 text-rose-400">This invite has expired, was revoked, or has been used up.</p>}
         {preview.valid && (loading ? <LoadingState layout="inline" label="Loading account" /> : user ?
           <UiButton onClick={accept} disabled={busy} className="auth-button mt-5">{busy ? 'Joining…' : 'Accept invite'}</UiButton> :

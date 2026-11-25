@@ -36,7 +36,11 @@ export function CommunicationSettings() {
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(''); setSaved('');
     try {
-      await apiData(`/api/me/availability${editing ? `/${editing}` : ''}`, { method: editing ? 'PUT' : 'POST', body: JSON.stringify({ status, starts_at: new Date(start).toISOString(), ends_at: new Date(end).toISOString(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, message: message || null, restrictions: status === 'available' ? [] : restrictions, exceptions: exceptions.split(',').map(id => id.trim()).filter(Boolean), suppress_notifications: status !== 'available' && suppress }) });
+      const startsAt = new Date(start); const endsAt = new Date(end);
+      if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime())) throw new Error('Choose a valid start and end time.');
+      if (endsAt <= startsAt) throw new Error('The end time must be after the start time.');
+      if (endsAt.getTime() <= Date.now()) throw new Error('Choose an end time in the future.');
+      await apiData(`/api/me/availability${editing ? `/${editing}` : ''}`, { method: editing ? 'PUT' : 'POST', body: JSON.stringify({ status, starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, message: message || null, restrictions: status === 'available' ? [] : restrictions, exceptions: exceptions.split(',').map(id => id.trim()).filter(Boolean), suppress_notifications: status !== 'available' && suppress }) });
       await load(); setEditing(null); setSaved('Availability saved');
     } catch (cause) { setError(requestError(cause)); }
     finally { setBusy(false); }

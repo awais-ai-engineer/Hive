@@ -122,7 +122,8 @@ async def test_state_and_ring(client, setup_chat, live_server):
         assert state["muted"] is True and state["camera"] is True and state["username"] == "alice"
         assert (await call(a, "call:ring", {"channelId": dm}))["ok"]
         incoming = await event(bq["call:incoming"])
-        assert incoming == {"channelId": dm, "from": {"id": alice["user"]["id"], "username": "alice"}}
+        assert len(incoming["invitationId"]) == 26
+        assert incoming == {"channelId": dm, "invitationId": incoming["invitationId"], "from": {"id": alice["user"]["id"], "username": "alice"}}
         await quiet(cq["call:incoming"])
         assert (await call(a, "call:ring", {"channelId": lounge}))["error"]["code"] == "invalid"
 

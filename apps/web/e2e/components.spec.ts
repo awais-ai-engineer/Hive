@@ -28,7 +28,10 @@ test('select preserves FormData and the async combobox supports keyboard selecti
   await mockApi(page); await page.goto('/components');
   const select = page.getByRole('combobox', { name: 'Example select', exact: true });
   await select.focus(); await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('End'); await page.keyboard.press('Enter');
+  await expect(page.getByRole('option', { name: 'First option', exact: true })).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(page.getByRole('option', { name: 'Second option', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
   await expect(select).toHaveText(/Second option/);
   expect(await page.getByTestId('selection-form').evaluate(form => new FormData(form as HTMLFormElement).get('example'))).toBe('two');
   await page.getByRole('button', { name: 'Submit selection' }).click();

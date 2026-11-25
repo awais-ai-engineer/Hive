@@ -65,6 +65,9 @@ async def preview_invite(session: AsyncSession, code: str) -> InvitePreview:
     space = await session.get(Space, invite.space_id)
     if space is None:
         raise HTTPException(404, "Invite not found")
+    if not invite_is_valid(invite):
+        return InvitePreview(space=InviteSpacePreview(name="Invitation unavailable", slug="", type="community",
+            description=None, member_count=0), valid=False)
     result = await space_out(session, space)
     return InvitePreview(
         space=InviteSpacePreview(

@@ -142,3 +142,18 @@ async def test_invite_admin_permissions_validation_and_ban(client):
     assert (
         await client.post(f"/api/invites/{invite.json()['code']}/accept", headers=member)
     ).status_code == 403
+
+
+async def test_revoked_invite_does_not_reveal_private_space_metadata(client):
+    from tests.helpers import create_account
+
+    _, owner = await create_account(client, "privateowner", "privateowner@hive.test")
+    response = await client.post('/api/spaces', headers=owner,
+        json={'type': 'workspace', 'name': 'Private Launch Project', 'slug': 'hidden-launch', 'description': 'Private launch date'})
+    assert response.status_code == 201
+    invite = (await client.post('/api/spaces/hidden-launch/invites', headers=owner, json={})).json()
+    assert (await client.delete(f"/api/spaces/hidden-launch/invites/{invite['id']}", headers=owner)).status_code == 204
+    preview = await client.get(f"/api/invites/{invite['code']}")
+    assert preview.status_code == 200 and preview.json()['valid'] is False
+    assert 'Private Launch Project' not in preview.text and 'Private launch date' not in preview.text
+    assert 'hidden-launch' not in preview.text

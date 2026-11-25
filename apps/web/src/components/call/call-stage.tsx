@@ -189,13 +189,13 @@ export function CallStage() {
     </div>
 
     {call.error && <p role="alert" className="mx-4 mb-2 rounded-lg bg-rose-500/15 px-3 py-2 text-sm text-rose-200">{call.error}</p>}
-    <footer className="relative flex items-start justify-center gap-1 border-t border-[rgb(255_255_255/0.08)] px-4 py-3 sm:gap-2">
+    <footer className="relative flex flex-wrap items-start justify-center gap-1 border-t border-[rgb(255_255_255/0.08)] px-4 py-3 sm:gap-2">
       <RoundControl caption={call.muted ? 'Unmute' : 'Mute'} icon={call.muted ? 'micOff' : 'mic'} label={call.muted ? t('huddle.unmute') : t('huddle.mute')} warn={call.muted} onClick={() => calls.toggleMute()} />
       <RoundControl caption="Video" icon={call.camera ? 'video' : 'videoOff'} label={call.camera ? t('huddle.cameraOff') : t('huddle.cameraOn')} active={call.camera} onClick={() => void calls.toggleCamera()} />
       {canShare && <RoundControl caption="Share" icon="screen" label={call.screen ? t('huddle.stopShare') : t('huddle.share')} active={call.screen} onClick={() => void calls.toggleScreen()} />}
-      <div className="hidden sm:block"><RoundControl caption="Raise hand" icon="hand" label={call.hand ? 'Lower your hand' : 'Raise your hand'} active={call.hand} onClick={() => calls.toggleHand()} /></div>
+      <div className="shrink-0"><RoundControl caption="Raise hand" icon="hand" label={call.hand ? 'Lower your hand' : 'Raise your hand'} active={call.hand} onClick={() => calls.toggleHand()} /></div>
       <RoundControl caption="React" icon="smile" label="Send a reaction" active={menu === 'react'} onClick={() => setMenu(value => value === 'react' ? null : 'react')} />
-      {captionsSupported() && <div className="hidden sm:block"><RoundControl caption="Captions" icon="captions" label={call.captionsOn ? 'Turn captions off' : 'Turn captions on'} active={call.captionsOn}
+      {captionsSupported() && <div className="shrink-0"><RoundControl caption="Captions" icon="captions" label={call.captionsOn ? 'Turn captions off' : 'Turn captions on'} active={call.captionsOn}
         onClick={toggleCaptions} /></div>}
       <RoundControl caption="Audio" icon="settings" label="Audio settings" active={menu === 'settings'} onClick={() => setMenu(value => value === 'settings' ? null : 'settings')} />
       <div className="ml-2 flex w-16 flex-col items-center gap-1 sm:ml-4">

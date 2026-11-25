@@ -14,7 +14,12 @@ let ringTimer: ReturnType<typeof setInterval> | null = null;
 const seen = new Map<string, number>();
 const tabId = typeof crypto !== 'undefined' ? crypto.randomUUID() : '';
 const bus = typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('hive:sound-events') : null;
-if (bus) bus.onmessage = ({ data }) => { if (typeof data?.id === 'string') seen.set(data.id, Date.now()); };
+if (bus) bus.onmessage = ({ data }) => {
+  if (typeof data?.id !== 'string') return;
+  seen.set(data.id, Date.now());
+  const oldest = seen.keys().next().value;
+  if (seen.size > 1000 && oldest !== undefined) seen.delete(oldest);
+};
 
 export function soundPreferences() { return { ...preferences }; }
 export function configureSounds(value: Partial<SoundPreferences>) {
@@ -37,7 +42,9 @@ export function setSoundsEnabled(on: boolean) { configureSounds({ enabled: on })
 function audio() {
   if (!unlocked || typeof window === 'undefined') return null;
   try {
-    context ??= new AudioContext();
+    const Context = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Context) return null;
+    context ??= new Context();
     if (context.state === 'suspended') void context.resume().catch(() => {});
     return context;
   } catch { return null; }
@@ -63,7 +70,7 @@ function tone(ctx: AudioContext, frequency: number, start: number, length: numbe
 
 export function playSound(event: string, category: SoundCategory = 'feedback', id?: string, preview = false) {
   const now = Date.now();
-  if (!preferences.enabled || !preferences[category] || (!preview && suppressed) || now - lastPlayback < 350) return;
+  if (!preferences.enabled || preferences.volume <= 0 || !preferences[category] || (!preview && suppressed) || now - lastPlayback < 350) return;
   if (id && seen.has(id)) return;
   const ctx = audio();
   if (!ctx || ctx.state !== 'running') return;

@@ -48,7 +48,9 @@ test('space shortcuts do not steal key presses from text fields', async ({ page 
   await mockApi(page, undefined, true);
   await page.goto('/home?s=studio');
   const message = page.getByRole('textbox', { name: 'Message' });
+  await expect(message).toHaveAttribute('contenteditable', 'true');
   await message.focus();
+  await expect(message).toBeFocused();
   await page.keyboard.press('Meta+2');
   await expect(page).toHaveURL(/s=studio/);
   await message.fill('hello');
