@@ -27,7 +27,7 @@ test('two-space strip toggles, switches by tile and Cmd+2, and remains in sync w
   await strip.getByRole('button', { name: 'Garden Club', exact: true }).click();
   await expect(page).toHaveURL(/s=garden/);
   await expect(rail.getByRole('button', { name: 'Current space: Garden Club' })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Conversations' }).getByRole('button', { name: 'Garden Club' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Conversations' }).getByRole('heading', { name: 'Garden Club' })).toBeVisible();
   await page.keyboard.press('Meta+2');
   await expect(page).toHaveURL(/s=design/);
   await expect(rail.getByRole('button', { name: 'Current space: Design Team' })).toBeVisible();
@@ -60,14 +60,31 @@ test('space shortcuts do not steal key presses from text fields', async ({ page 
   await expect(page).toHaveURL(/s=design/);
 });
 
-test('the sidebar header uses the shared menu and its Switch space action opens the strip', async ({ page }) => {
+test('compact sidebar identity keeps actions in the existing main-navigation menu', async ({ page }) => {
   await mockApi(page);
   await page.goto('/home');
-  const sidebarHeading = page.getByRole('navigation', { name: 'Conversations' }).getByRole('button', { name: 'Studio Team' });
-  await sidebarHeading.click();
-  await expect(page.getByRole('menu')).toBeVisible();
-  await page.getByRole('menuitem', { name: 'Switch space' }).click();
-  await expect(page.getByRole('navigation', { name: 'Spaces' })).toBeVisible();
+  const header = page.locator('.space-sidebar-heading');
+  await expect(header.getByRole('heading', { name: 'Studio Team' })).toBeVisible();
+  await expect(header.getByRole('button')).toHaveCount(2);
+  await expect(header.locator('[aria-haspopup]')).toHaveCount(0);
+  await header.getByRole('button', { name: 'Hide space switcher' }).click();
+  await expect(page.locator('.rail-switcher-width')).toHaveAttribute('aria-hidden', 'true');
+  await header.getByRole('button', { name: 'Show space switcher' }).click();
+  await header.getByRole('button', { name: 'Search', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Current space: Studio Team' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Space settings', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Invite people' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.mouse.move(1200, 800);
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  for (const dark of [false, true]) {
+    await page.evaluate(value => document.documentElement.classList.toggle('dark', value), dark);
+    await expect(header.getByRole('heading', { name: 'Studio Team' })).toBeVisible();
+    await header.screenshot({ path: `../../output/playwright/workspace-header-${dark ? 'dark' : 'light'}.png` });
+  }
 });
 
 test('keyboard sorting persists within a group; rail and strip pass axe', async ({ page }) => {
@@ -104,6 +121,10 @@ test('390px mobile sheet switches spaces and the five-tab bar includes More', as
   await expect(sheet).toBeVisible();
   await expect(sheet.locator('.grid').first()).toHaveCSS('grid-template-columns', /^(\S+ ){3}\S+$/);
   expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual([]);
+  await sheet.getByRole('button', { name: 'Studio Team', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: 'Space settings', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeVisible();
   await sheet.getByRole('button', { name: 'Garden Club', exact: true }).click();
   await expect(page).toHaveURL(/s=garden/);
   await expect(sheet).not.toBeVisible();

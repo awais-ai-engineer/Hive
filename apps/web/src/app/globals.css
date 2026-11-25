@@ -205,7 +205,9 @@ body {
 .rail-mobile-top, .rail-mobile-tabs { display: none; }
 .home-sidebar { display: flex; flex-shrink: 0; height: 100%; }
 .sidebar-backdrop { display: none; }
-.space-sidebar-heading { font-family: var(--font-space-grotesk), var(--font-sans); font-size: 17px; font-weight: 600; }
+.space-sidebar-heading { font-family: var(--font-sans); }
+.space-sidebar-heading .space-icon { width: 28px; height: 28px; border-radius: 8px; font-size: 11px; }
+.space-sidebar-heading .space-icon img { border-radius: inherit; }
 .hive-tooltip { z-index: 100; max-width: 260px; border-radius: 8px; background: var(--rail); color: var(--rail-fg); padding: 6px 10px; font-size: 12px; box-shadow: var(--shadow-pop); }
 .hive-tooltip-arrow { fill: var(--rail); }
 .hive-sheet-overlay { position: fixed; inset: 0; z-index: 70; background: rgb(0 0 0 / 0.55); }

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertDialog, Button as UiButton, DropdownMenu, Sheet } from '@hive/ui';
+import { AlertDialog, Button as UiButton, DropdownMenu, Sheet, Tooltip } from '@hive/ui';
 import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { apiData, requestError, SPACES_CHANGED, type Space } from '../../lib/spaces';
@@ -8,14 +8,16 @@ import { Icon } from '../ui/icons';
 import { OPEN_SEARCH } from '../search/search-palette';
 import { SpaceIcon } from './space-tiles';
 
-/** Shared current-space action menu used by the rail tile and sidebar heading. */
-export function SpaceSwitcher({ current, onOpenSwitcher, compact = false, spaces = [], onSwitch, stripOpen, onToggleStrip }: {
+/** Static sidebar identity; the existing main-navigation tile owns workspace actions. */
+export function SpaceSwitcher({ current, onOpenSwitcher, compact = false, spaces = [], onSwitch, stripOpen, onToggleStrip, menuTrigger }: {
   /** The current membership, or null when the account has no spaces. */
   current: Space | null;
   /** Opens the space switcher strip. */
   onOpenSwitcher?: () => void;
   /** Renders the compact square trigger used in the main rail. */
   compact?: boolean;
+  /** Reuse the selected workspace tile in the existing mobile navigation sheet. */
+  menuTrigger?: ReactNode;
   /** Every space the account belongs to, for the "Switch to" list. */
   spaces?: Space[];
   onSwitch?: (slug: string) => void;
@@ -29,13 +31,17 @@ export function SpaceSwitcher({ current, onOpenSwitcher, compact = false, spaces
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const manage = current?.my_role === 'owner' || current?.my_role === 'admin';
-  const trigger: ReactNode = compact
-    ? <UiButton type="button" aria-label={current ? `Current space: ${current.name}` : 'No space yet'} aria-current={current ? 'page' : undefined} className={`rail-current-trigger ${current ? 'space-current' : ''}`} disabled={!current}>
-      {current ? <SpaceIcon space={current} /> : <Icon name="layers" size={20} />}
-    </UiButton>
-    : <UiButton type="button" aria-label={current?.name ?? 'No space yet'} disabled={!current} className="space-sidebar-heading flex min-h-11 w-full items-center justify-between gap-2 rounded-xl px-1 text-left hover:bg-white/5 disabled:opacity-100">
-      {current && <span className="shrink-0"><SpaceIcon space={current} /></span>}<span className="min-w-0 flex-1 truncate">{current?.name ?? 'No space yet'}</span>{current && <Icon name="chevronDown" size={18} />}
-    </UiButton>;
+  if (!compact) return <div className="space-sidebar-heading flex h-11 min-w-0 items-center gap-2">
+    <div className="flex min-w-0 flex-1 items-center gap-2">
+      {current && <SpaceIcon space={current} />}
+      <Tooltip content={current?.name ?? 'No space yet'}><h2 className="min-w-0 truncate text-base font-semibold leading-tight tracking-tight">{current?.name ?? 'No space yet'}</h2></Tooltip>
+    </div>
+    {spaces.length > 1 && onToggleStrip && <UiButton type="button" onClick={onToggleStrip} aria-expanded={!!stripOpen} aria-label={stripOpen ? 'Hide space switcher' : 'Show space switcher'} tooltip={stripOpen ? 'Hide space switcher' : 'Show space switcher'} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/60 hover:bg-white/10"><Icon name="sidebar" size={18} /></UiButton>}
+    <UiButton type="button" onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH))} aria-label="Search" tooltip="Search (Ctrl+K)" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/60 hover:bg-white/10"><Icon name="search" size={18} /></UiButton>
+  </div>;
+  const trigger = menuTrigger ?? <UiButton type="button" aria-label={current ? `Current space: ${current.name}` : 'No space yet'} aria-current={current ? 'page' : undefined} className={`rail-current-trigger ${current ? 'space-current' : ''}`} disabled={!current}>
+    {current ? <SpaceIcon space={current} /> : <Icon name="layers" size={20} />}
+  </UiButton>;
 
   async function leave() {
     if (!current) return;
@@ -59,7 +65,7 @@ export function SpaceSwitcher({ current, onOpenSwitcher, compact = false, spaces
   }
 
   return <>
-    <div className={compact ? 'contents' : 'space-sidebar-heading flex min-w-0 items-center gap-1'}>
+    <div className="contents">
     <DropdownMenu label="Space menu" trigger={trigger} triggerTooltip={current?.name} header={<><strong>{current?.name ?? 'No space yet'}</strong>{current && <span className="ui-menu-subtitle">{current.member_count} {current.member_count === 1 ? 'member' : 'members'}</span>}</>}
       items={[
         { label: 'Invite people', disabled: !current || !manage, onSelect: () => current && router.push(`/s/${current.slug}/settings#invites`) },
@@ -78,8 +84,7 @@ export function SpaceSwitcher({ current, onOpenSwitcher, compact = false, spaces
         { separator: true, label: '' },
         { label: 'Sign out of this space', disabled: !current, danger: true, onSelect: () => { setError(''); setLeaving(true); } },
       ]} />
-      {!compact && spaces.length > 1 && onToggleStrip && <UiButton type="button" onClick={onToggleStrip} aria-expanded={!!stripOpen} aria-label={stripOpen ? 'Hide space switcher' : 'Show space switcher'} tooltip={stripOpen ? 'Hide space switcher' : 'Show space switcher'} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/60 hover:bg-white/10"><Icon name="sidebar" size={18} /></UiButton>}
-      {!compact && <UiButton type="button" onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH))} aria-label="Search" tooltip="Search (Ctrl+K)" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/60 hover:bg-white/10"><Icon name="search" size={18} /></UiButton>}
+
     </div>
     <AlertDialog open={leaving} onOpenChange={setLeaving} title="Sign out of this space"
       description={current?.my_role === 'owner' ? 'Transfer ownership in space settings before signing out of this space.' : `Leave ${current?.name ?? 'this space'}? You will need to join again to access its conversations.`}
