@@ -13,6 +13,7 @@ type Pending = { channelId: string; title: string; resolve: (choice: { muted: bo
  */
 export function PrejoinDialog() {
   const [pending, setPending] = useState<Pending | null>(null);
+  const pendingRef = useRef<Pending | null>(null);
   const [muted, setMuted] = useState(false);
   const [camera, setCamera] = useState(false);
   const [note, setNote] = useState('');
@@ -22,8 +23,12 @@ export function PrejoinDialog() {
   const meter = useRef<{ context: AudioContext; timer: ReturnType<typeof setInterval> } | null>(null);
 
   useEffect(() => {
-    calls.beforeJoin = (channelId, title) => new Promise(resolve => { setMuted(false); setCamera(false); setNote(''); setPending({ channelId, title, resolve }); });
-    return () => { calls.beforeJoin = null; };
+    calls.beforeJoin = (channelId, title) => new Promise(resolve => {
+      pendingRef.current?.resolve(null);
+      pendingRef.current = { channelId, title, resolve };
+      setMuted(false); setCamera(false); setNote(''); setPending(pendingRef.current);
+    });
+    return () => { calls.beforeJoin = null; pendingRef.current?.resolve(null); pendingRef.current = null; stopPreview(); };
   }, []);
 
   function stopPreview() {
@@ -61,7 +66,7 @@ export function PrejoinDialog() {
   }, [pending, camera]);
 
   function finish(choice: { muted: boolean; camera: boolean } | null) {
-    const current = pending; setPending(null); stopPreview(); current?.resolve(choice);
+    const current = pendingRef.current; pendingRef.current = null; setPending(null); stopPreview(); current?.resolve(choice);
   }
 
   const control = (on: boolean, icon: 'mic' | 'video', label: string, toggle: () => void) =>

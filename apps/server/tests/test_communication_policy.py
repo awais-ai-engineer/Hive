@@ -54,8 +54,8 @@ async def test_schedules_exceptions_overlap_and_sound_preferences(client, setup_
     assert (await client.post('/api/me/availability', headers=ah, json=schedule(ends_at='2020-01-01T00:00:00Z'))).status_code == 422
     assert (await client.post('/api/me/availability', headers=ah, json=schedule(starts_at='2026-01-01T00:00:00'))).status_code == 422
     sounds = {'enabled': True, 'volume': 0.2, 'messages': False, 'huddles': True, 'activity': False, 'feedback': True}
-    assert (await client.put('/api/me/sounds', headers=ah, json=sounds)).json() == sounds
-    assert (await client.get('/api/me/sounds', headers=ah)).json() == sounds
+    assert {key: value for key, value in (await client.put('/api/me/sounds', headers=ah, json=sounds)).json().items() if key in sounds} == sounds
+    assert {key: value for key, value in (await client.get('/api/me/sounds', headers=ah)).json().items() if key in sounds} == sounds
     assert (await client.put('/api/me/sounds', headers=ah, json={**sounds, 'volume': 2})).status_code == 422
 
 

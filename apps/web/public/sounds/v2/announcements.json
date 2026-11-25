@@ -1,0 +1,51 @@
+[
+  {
+    "file": "notes_enabled.wav",
+    "text": "A. I. meeting notes are now enabled.",
+    "seconds": 2.612,
+    "bytes": 115244,
+    "sha256": "afc3b6718c4f4d1c498597052f4c36a5198d63283b41c7b1c0d726b2f0639e32"
+  },
+  {
+    "file": "notes_stopped.wav",
+    "text": "A. I. meeting notes have been stopped.",
+    "seconds": 2.426,
+    "bytes": 107052,
+    "sha256": "5d18026d8a23afa2b0df21f3264ebd067c060918bc9257fead7fd177e18cd22d"
+  },
+  {
+    "file": "recording_started.wav",
+    "text": "This meeting is now being recorded.",
+    "seconds": 2.194,
+    "bytes": 96812,
+    "sha256": "588a5ea713edeb9d80f0a0bfb7d380f0624cf1ffca0ce95a4ee76cc7bf85a833"
+  },
+  {
+    "file": "recording_stopped.wav",
+    "text": "Meeting recording has stopped.",
+    "seconds": 1.776,
+    "bytes": 78380,
+    "sha256": "abdddf2ea3e8939c44837a982c7b4de2e1b4679c10e0730d89e0c826b8f6ee1b"
+  },
+  {
+    "file": "transcription_started.wav",
+    "text": "Speech transcription is now enabled. Finalized captions will be saved as meeting notes.",
+    "seconds": 5.898,
+    "bytes": 260140,
+    "sha256": "1c46d4deb498f5a21d0fab85b191fe3233f6ce2b4731a9926805f03e3f8502de"
+  },
+  {
+    "file": "transcription_stopped.wav",
+    "text": "Speech transcription has stopped.",
+    "seconds": 2.218,
+    "bytes": 97836,
+    "sha256": "9a6cadd14cb107f53fc9851bcc90e742448108ffd8faa85c5831174e82df5103"
+  },
+  {
+    "file": "transcription_active.wav",
+    "text": "Speech transcription is active in this Huddle. Finalized captions are saved as meeting notes.",
+    "seconds": 6.095,
+    "bytes": 268844,
+    "sha256": "62c5542a7a6e26cd65e4a2ceeb6b887923e024252bbf7b3ab0738508b12ddd3d"
+  }
+]

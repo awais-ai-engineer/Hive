@@ -165,11 +165,12 @@ export function CallStage() {
         <p className="text-xs" style={MUTED_TEXT}>{count === 1 ? '1 person' : t('huddle.people', { count })}</p>
       </div>
       {timer && <span className="flex items-center gap-1.5 rounded-full bg-[rgb(255_255_255/0.1)] px-2.5 py-1 text-xs font-semibold"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{timer}</span>}
-      {(call.captionsOn || call.peers.some(peer => peer.captions)) && <span className="hidden items-center gap-1 rounded-full bg-[rgb(242_165_22/0.18)] px-2.5 py-1 text-xs font-semibold text-[var(--call-highlight)] sm:flex"><Icon name="file" size={12} />Taking notes</span>}
+      {(call.captionsOn || call.peers.some(peer => peer.captions)) && <span className="hidden items-center gap-1 rounded-full bg-[rgb(242_165_22/0.18)] px-2.5 py-1 text-xs font-semibold text-[var(--call-highlight)] sm:flex"><Icon name="file" size={12} />Transcription active</span>}
       <span className="ml-auto" />
       <RoundControl size="sm" icon={full ? 'shrink' : 'expand'} label={full ? t('huddle.exitFullScreen') : t('huddle.fullScreen')} onClick={() => setFull(value => !value)} />
     </header>
 
+    {call.disclosure && <p role="status" className="border-b border-white/10 px-4 py-2 text-xs">{call.disclosure}</p>}
     <div className="flex min-h-0 flex-1">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3">
         {stage ? <div className="relative min-h-0 flex-1">

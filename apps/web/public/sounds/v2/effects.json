@@ -1,0 +1,236 @@
+[
+  {
+    "file": "incoming.wav",
+    "seconds": 0.73,
+    "bytes": 35084,
+    "sha256": "ff6948ce02875467fb34ee65e25a315b0306260396433d8fac20815b6a7d6707"
+  },
+  {
+    "file": "channel_message.wav",
+    "seconds": 0.405,
+    "bytes": 19484,
+    "sha256": "8e364df62140e53c5c8137ea6e886eb29dc1f6a609d92d05cb7e2109ac001ca8"
+  },
+  {
+    "file": "message_sent.wav",
+    "seconds": 0.22,
+    "bytes": 10604,
+    "sha256": "7a243831eae77dae932296c6a400f3ea5b4f64b946daf74c23cf02348e5ac5a3"
+  },
+  {
+    "file": "mention.wav",
+    "seconds": 0.82,
+    "bytes": 39404,
+    "sha256": "4c81dae8a208bdb2170517351b393dbab13d280ee69a669919aea4f2075fa978"
+  },
+  {
+    "file": "reply.wav",
+    "seconds": 0.65,
+    "bytes": 31244,
+    "sha256": "f0ff83ddacc741e8e0027f0facbae651b4f91a8b6ce3f04f27b28352ab7b6724"
+  },
+  {
+    "file": "message_failed.wav",
+    "seconds": 0.59,
+    "bytes": 28364,
+    "sha256": "5fee69b574796e7a895156467486b8115f2da6341f248b91453bf96317adece6"
+  },
+  {
+    "file": "priority.wav",
+    "seconds": 1.0,
+    "bytes": 48044,
+    "sha256": "7f43e3601eb01124fe0caff7321d24d360e85b86237da466c4624dd97c096330"
+  },
+  {
+    "file": "invitation.wav",
+    "seconds": 1.44,
+    "bytes": 69164,
+    "sha256": "d4e0b9898f185e53354c20f1ba06023c1e61e5f4595c647b39c79b8d9a64861b"
+  },
+  {
+    "file": "outgoing.wav",
+    "seconds": 1.07,
+    "bytes": 51404,
+    "sha256": "280de58ebb0c41553c4582d9dc39f15adb0ecd890441b115288cd129259ed9e4"
+  },
+  {
+    "file": "huddle_start.wav",
+    "seconds": 0.9,
+    "bytes": 43244,
+    "sha256": "ff34981a42ebf2f86bda952b54d0d581bcd2f09de2965cdd3dfffefd33bfe809"
+  },
+  {
+    "file": "huddle_end.wav",
+    "seconds": 0.91,
+    "bytes": 43724,
+    "sha256": "2bdbaec0cee7c5648167db0bbdf8dc605dc5c4cc1371c33c376484f427e5a6b9"
+  },
+  {
+    "file": "participant_join.wav",
+    "seconds": 0.51,
+    "bytes": 24524,
+    "sha256": "4eb784e380c6d90432a0843e8a8e43f37ab0b972e767e95858be1395794301cd"
+  },
+  {
+    "file": "participant_leave.wav",
+    "seconds": 0.5,
+    "bytes": 24044,
+    "sha256": "337551248bc12b209571e43ffd2871203c3b34a9c131053c5a447cd674bc539b"
+  },
+  {
+    "file": "microphone_mute.wav",
+    "seconds": 0.215,
+    "bytes": 10364,
+    "sha256": "ca0078a4d7772f2efb23e045fb2e0c68fb5f26928f54ed3fe06ff7be7b86c28a"
+  },
+  {
+    "file": "microphone_on.wav",
+    "seconds": 0.26,
+    "bytes": 12524,
+    "sha256": "2cbc2331cb3db3ecd9e00d03bfa6d35934b09d91f51638073313934c126fdb40"
+  },
+  {
+    "file": "camera_on.wav",
+    "seconds": 0.385,
+    "bytes": 18524,
+    "sha256": "03f3aa14de9eb49319ad4c7267f6ff2b6ffc06551ff298dae7814f6885550433"
+  },
+  {
+    "file": "camera_off.wav",
+    "seconds": 0.335,
+    "bytes": 16122,
+    "sha256": "7852fa3700b31fc9e35948e45edb10d1413ac201f08a4e09e2dd3ded150bf46c"
+  },
+  {
+    "file": "hand_on.wav",
+    "seconds": 0.49,
+    "bytes": 23564,
+    "sha256": "fd8f8e6580e8881b07907dd81e3de6175c56c9feabce0d766cd2f86efd01cb5b"
+  },
+  {
+    "file": "hand_off.wav",
+    "seconds": 0.33,
+    "bytes": 15884,
+    "sha256": "ba30efaeeef1535eeec629ce82c842b17b1e4a7eea39d37a97cefc6ff9134e2c"
+  },
+  {
+    "file": "screen_on.wav",
+    "seconds": 0.71,
+    "bytes": 34124,
+    "sha256": "dd1b5fe77e0856aa5ce72eb7e85ce4901078c525deb5bcd0b1ea63ebdce7c39e"
+  },
+  {
+    "file": "screen_off.wav",
+    "seconds": 0.51,
+    "bytes": 24524,
+    "sha256": "eb5ae400857ac54f6de512e26f913602b77efa6e57e177f7d64c20f67f3feedd"
+  },
+  {
+    "file": "connection_lost.wav",
+    "seconds": 0.9,
+    "bytes": 43244,
+    "sha256": "e5dff26e88eb075d6fb39fec76c8ea8b8b0b298f8a0faf967b9e9a5cfe792bca"
+  },
+  {
+    "file": "reconnection.wav",
+    "seconds": 0.85,
+    "bytes": 40844,
+    "sha256": "4a6e8d6d7de5389ac88583412f48d097a7f0d74b107e8fa0122ee41aca2623c8"
+  },
+  {
+    "file": "declined.wav",
+    "seconds": 0.76,
+    "bytes": 36524,
+    "sha256": "374a01297ed12f38c0b67caae1e56cf910ab6bbfb195c2295d97a67fbfc604cf"
+  },
+  {
+    "file": "unanswered.wav",
+    "seconds": 0.91,
+    "bytes": 43724,
+    "sha256": "fb2a54123dbbabaf44a7e286a9e7ade3e98190a5422f6244321f6ccde4000266"
+  },
+  {
+    "file": "captions_start.wav",
+    "seconds": 0.38,
+    "bytes": 18284,
+    "sha256": "cde0450dd0b67df98fb8c362147f020ae609bc2c93c3a5d5bc5df6e91983488e"
+  },
+  {
+    "file": "captions_stop.wav",
+    "seconds": 0.32,
+    "bytes": 15404,
+    "sha256": "d5a5996f9be99aff34a269bcc3337f1e7e78cb7a3558bae41855880887afb82f"
+  },
+  {
+    "file": "workspace_invite.wav",
+    "seconds": 0.69,
+    "bytes": 33164,
+    "sha256": "07d03be83b8e9f804a53602f2ee9759d27da95986e2c3645c6d2c36819120fc6"
+  },
+  {
+    "file": "community_invite.wav",
+    "seconds": 0.77,
+    "bytes": 37002,
+    "sha256": "b88e7b06aa62bd29b9cf935cf1e45e58b42a57151c285aecde2fbda6deacd38f"
+  },
+  {
+    "file": "invite_accepted.wav",
+    "seconds": 0.67,
+    "bytes": 32204,
+    "sha256": "02dd8d708f9b2b1fc38036cca62c250daa0366aeed07ffcbbd5b6e91c5831cd9"
+  },
+  {
+    "file": "join_request.wav",
+    "seconds": 0.66,
+    "bytes": 31724,
+    "sha256": "36b36a4bb98af0e43f7b8d8806b414333a40b2ddf258622dc8ddb49b46c5a7c3"
+  },
+  {
+    "file": "member_join.wav",
+    "seconds": 0.5,
+    "bytes": 24044,
+    "sha256": "1ece9d5e574c8ef5aae675eda563fd8ecefb6d29dcb5b1adc9ec96965ba1156e"
+  },
+  {
+    "file": "task_assigned.wav",
+    "seconds": 0.55,
+    "bytes": 26444,
+    "sha256": "67f04cb9be047b2ebcfb0eee31a4c008542607ed13bb669e185668cc53b71deb"
+  },
+  {
+    "file": "meeting_reminder.wav",
+    "seconds": 1.01,
+    "bytes": 48524,
+    "sha256": "eb779db5fac5b16d0e4b36c217026a052362f68690a4a3f793eb151010eccba6"
+  },
+  {
+    "file": "deadline.wav",
+    "seconds": 0.87,
+    "bytes": 41804,
+    "sha256": "4f208b883b31461d639e6c136972bea8d508a0d32c3ccb0f1735f2bb5e29f731"
+  },
+  {
+    "file": "system.wav",
+    "seconds": 0.83,
+    "bytes": 39884,
+    "sha256": "ef4059a4eed9c66159f570b0992e3ac8620eb805888de808bcb9791615ddee6f"
+  },
+  {
+    "file": "success.wav",
+    "seconds": 0.44,
+    "bytes": 21164,
+    "sha256": "7d465b960dc87f47ad05b6a5c1406ae95d45da04a21e2bc0086b67406143c487"
+  },
+  {
+    "file": "warning.wav",
+    "seconds": 0.63,
+    "bytes": 30284,
+    "sha256": "6bb07db52bc9da8bb52682bd243bb2214b963e3a2754b9ecddba381998780243"
+  },
+  {
+    "file": "error.wav",
+    "seconds": 0.57,
+    "bytes": 27404,
+    "sha256": "503704fa8b38b0b9de5481ceb176860fb36d35b92fee97810d836bb566991afa"
+  }
+]

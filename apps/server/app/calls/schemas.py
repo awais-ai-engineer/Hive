@@ -7,6 +7,11 @@ class CallIn(BaseModel):
     channelId: str
 
 
+class InvitationIn(BaseModel):
+    invitationId: str = Field(min_length=26, max_length=26)
+    action: Literal["accepted", "declined", "cancelled"]
+
+
 class SignalIn(CallIn):
     to: str
     data: dict[str, Any]

@@ -15,3 +15,5 @@ export * from './schemas/apps';
 export * from './secret';
 
 export * from './captions';
+
+export * from './sounds';

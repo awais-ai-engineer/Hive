@@ -1,6 +1,6 @@
 'use client';
 
-import { configureSounds, suppressSounds, type SoundPreferences } from './sounds';
+import { configureSounds, resetAudio, suppressSounds, type SoundPreferences } from './sounds';
 import { apiData } from './spaces';
 import { socket } from './socket';
 import { createContext, useContext, useEffect, useState } from 'react';
@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!session?.user.id) { suppressSounds(true); return; }
+    if (!session?.user.id) { resetAudio(); return; }
     let active = true;
     const refreshAvailability = async () => {
       try {
@@ -45,8 +45,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
     void refreshAvailability();
     const timer = setInterval(() => void refreshAvailability(), 15000);
+    socket.on('sounds:updated', configureSounds);
     socket.on('availability:changed', refreshAvailability).on('connect', refreshAvailability);
-    return () => { active = false; clearInterval(timer); socket.off('availability:changed', refreshAvailability).off('connect', refreshAvailability); };
+    return () => { active = false; clearInterval(timer); resetAudio(); socket.off('sounds:updated', configureSounds); socket.off('availability:changed', refreshAvailability).off('connect', refreshAvailability); };
   }, [session?.user.id]);
 
   async function authenticate(endpoint: string, input: LoginInput | SignupInput) {

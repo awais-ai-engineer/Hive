@@ -93,6 +93,21 @@ class SoundsIn(BaseModel):
     huddles: bool = True
     activity: bool = True
     feedback: bool = True
+    mentions: bool | None = None
+    participants: bool | None = None
+    controls: bool | None = None
+    announcements: bool = True
+    events: dict[Annotated[str, Field(pattern=r"^[a-z_]{1,40}$")], bool] = Field(default_factory=dict, max_length=80)
+
+    @model_validator(mode="after")
+    def legacy_categories(self):
+        if self.mentions is None:
+            self.mentions = self.messages
+        if self.participants is None:
+            self.participants = self.huddles
+        if self.controls is None:
+            self.controls = self.huddles
+        return self
 
 
 @router.get("/me/sounds", response_model=SoundsIn)
@@ -104,6 +119,8 @@ async def sounds(user: CurrentUser):
 async def update_sounds(data: SoundsIn, user: CurrentUser, session: Session):
     user.sound_preferences = data.model_dump()
     await session.commit()
+    from app.realtime.socket import sio
+    await sio.emit("sounds:updated", data.model_dump(), room=f"user:{user.id}")
     return data
 
 

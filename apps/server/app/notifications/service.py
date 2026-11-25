@@ -159,7 +159,10 @@ async def publish(session: AsyncSession, row: Notification) -> None:
     from app.availability.service import active
 
     if not any(schedule.suppress_notifications for schedule in await active(session, row.user_id)):
-        await _emit("notification:new", row.user_id, item.model_dump(mode="json"))
+        from app.calls.audio import optional_audio_allowed
+        payload = item.model_dump(mode="json")
+        payload["sound"] = await optional_audio_allowed(session, row.user_id, row.channel_id, row.space_id, row.type == "mention")
+        await _emit("notification:new", row.user_id, payload)
     await publish_count(session, row.user_id)
 
 
