@@ -6,7 +6,6 @@ import { playSound, setAudioConversation, stopRing } from '../../lib/sounds';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { CallDock } from '../../components/call/call-dock';
 import { calls } from '../../lib/call';
 import { VoiceRoom } from '../../components/call/voice-room';
 import { ChannelChat } from '../../components/channel-chat';
@@ -538,9 +537,6 @@ function Home() {
       {error && <p role="alert" className="mb-2 text-sm text-rose-500">{error}</p>}
       {main}
     </section>
-    <CallDock onAccept={id => go({ c: id })} titleFor={(id, caller) => {
-      const known = conversations.find(item => item.id === id);
-      return known ? conversationTitle(known) : caller;
-    }} />
+
   </main>;
 }

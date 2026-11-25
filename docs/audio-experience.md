@@ -22,7 +22,7 @@ Reproduce effects with `python apps/web/scripts/render-sounds.py`. For speech, i
 
 ## Sound Manager
 
-The shared typed catalogue defines category, priority, local/shared scope and gain. The singleton manager decodes and caches bundled buffers, resumes after a gesture, catches missing-asset failures, cancels sources and owns ringtone intervals and exact expiry timers. Three common cues warm after interaction; other assets load on demand. Lower-priority overlap is suppressed, while mandatory disclosures queue and preempt ringtones. Notification output connects only to the local AudioContext destination and never to WebRTC tracks or screen sharing.
+The shared typed catalogue defines category, priority, local/shared scope and gain. The call dock is mounted once in the authenticated app shell, so incoming invitations, remote audio, consent disclosures and compact controls remain available outside Home. Navigating between Home, Feed, Explore and settings does not recreate the communication session. The singleton manager decodes and caches bundled buffers, resumes after a gesture, catches missing-asset failures, cancels sources and owns ringtone intervals and exact expiry timers. Three common cues warm after interaction; other assets load on demand. Lower-priority overlap is suppressed, while mandatory disclosures queue and preempt ringtones. Notification output connects only to the local AudioContext destination and never to WebRTC tracks or screen sharing.
 
 Stable event IDs deduplicate in memory and across tabs through Web Locks, bounded localStorage history and BroadcastChannel. Local controls remain local. Shared message IDs unify inbox and channel events. Incoming DMs and thread replies use authoritative inbox notifications; sent feedback follows successful delivery acknowledgement. The eight preference categories and individual switches use existing account JSONB storage, preserve legacy category choices and synchronize through `sounds:updated` plus the existing refresh. Previews do not change saved state. Logout clears playback and account state. The obsolete duplicate switch now links to the detailed controls.
 
@@ -198,8 +198,10 @@ Each row names a separate bundled file. Source is the original effects score, or
 - apps/web/public/sounds/v2/workspace_invite.wav
 - apps/web/scripts/render-announcements.py
 - apps/web/scripts/render-sounds.py
+- apps/web/src/app/layout.tsx
 - apps/web/src/app/home/page.tsx
 - apps/web/src/app/settings/page.tsx
+- apps/web/src/components/call/global-call-dock.tsx
 - apps/web/src/components/call/call-bar.tsx
 - apps/web/src/components/call/call-stage.tsx
 - apps/web/src/components/call/huddle-button.tsx
