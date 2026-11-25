@@ -2,7 +2,7 @@
 
 import { Button as UiButton } from '@hive/ui';
 
-import { playMessageSound } from '../../lib/sounds';
+import { playSound, setAudioConversation, stopRing } from '../../lib/sounds';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
@@ -275,6 +275,10 @@ function Home() {
     return () => clearInterval(timer);
   }, [messageParam, selected]);
 
+  useEffect(() => { setAudioConversation(selected); return () => setAudioConversation(null); }, [selected]);
+
+  useEffect(() => () => stopRing(), [space?.id]);
+
   // Live updates --------------------------------------------------------------------------
   useEffect(() => {
     if (!user || !space) return;
@@ -292,7 +296,7 @@ function Home() {
     const onChannelActivity = (data: { channelId: string; authorId: string; messageId?: string }) => {
       if (data.authorId === user.id) return;
       // Chime for conversations you aren't looking at, unless they are set to quiet.
-      if ((data.channelId !== selected || document.hidden) && !space?.muted && !prefs.current[data.channelId]) playMessageSound(data.messageId ? `message:${data.messageId}` : undefined);
+      if ((data.channelId !== selected || document.hidden) && !space?.muted && !prefs.current[data.channelId]) playSound('channel_message', 'messages', data.messageId ? `message:${data.messageId}` : undefined);
       if (data.channelId !== selected && prefs.current[data.channelId]) refreshChannels();
       else if (data.channelId !== selected) {
         setChannels(list => list.map(item => item.id === data.channelId ? { ...item, unread: item.unread + 1 } : item));
@@ -300,8 +304,6 @@ function Home() {
       refreshUnreads();
     };
     const onDm = (data: { channelId?: string; authorId?: string; parentId?: string; messageId?: string }) => {
-      if (!data.parentId && data.authorId && data.authorId !== user.id && data.channelId
-        && (data.channelId !== selected || document.hidden) && !prefs.current[data.channelId]) playMessageSound(data.messageId ? `message:${data.messageId}` : undefined);
       refreshConversations(); refreshUnreads();
     };
     const onRead = (data: { channelId: string }) => {

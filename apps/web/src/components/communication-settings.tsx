@@ -2,14 +2,13 @@
 import { Combobox, Button as UiButton, Input as UiInput, Select as UiSelect, Checkbox as UiCheckbox } from '@hive/ui';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { apiData, requestError } from '../lib/spaces';
-import { configureSounds, playSound, saveSounds, soundPreferences, type SoundPreferences } from '../lib/sounds';
+import { SoundSettings } from './sound-settings';
 
 type Schedule = { id: string; status: string; starts_at: string; ends_at: string; message: string | null; restrictions: string[]; exceptions: string[]; suppress_notifications: boolean; timezone: string };
 const statuses = ['available', 'busy', 'in_a_meeting', 'out_of_office', 'do_not_disturb', 'on_leave', 'custom'];
 const localInput = (date: Date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
 export function CommunicationSettings() {
-  const [preferences, setPreferences] = useState(soundPreferences);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [status, setStatus] = useState('in_a_meeting');
   const [start, setStart] = useState(() => localInput(new Date()));
@@ -26,13 +25,7 @@ export function CommunicationSettings() {
   const load = () => apiData<Schedule[]>('/api/me/availability').then(setSchedules);
   useEffect(() => {
     void load().catch(cause => setError(requestError(cause)));
-    void apiData<SoundPreferences>('/api/me/sounds').then(setPreferences).catch(() => {});
   }, []);
-  async function savePreferences() {
-    setBusy(true); setError(''); setSaved('');
-    try { await saveSounds(preferences); setSaved('Sound preferences saved'); } catch (cause) { setError(requestError(cause)); }
-    finally { setBusy(false); }
-  }
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(''); setSaved('');
     try {
@@ -52,12 +45,7 @@ export function CommunicationSettings() {
   }
   return <div className="space-y-5">
     {error && <p role="alert" className="text-rose-500">{error}</p>}{saved && <p role="status">{saved}</p>}
-    <section className="card space-y-4 p-5"><h2 className="text-lg font-bold">Sounds &amp; Notifications</h2>
-      <label className="flex items-center gap-3"><UiCheckbox checked={preferences.enabled} onChange={event => setPreferences({ ...preferences, enabled: event.target.checked })} />Enable sounds</label>
-      <label className="flex flex-wrap items-center gap-3">Volume<UiInput aria-label="Notification volume" type="range" min="0" max="1" step="0.05" value={preferences.volume} onChange={event => setPreferences({ ...preferences, volume: Number(event.target.value) })} /><span>{Math.round(preferences.volume * 100)}%</span></label>
-      {(['messages', 'huddles', 'activity', 'feedback'] as const).map(category => <div key={category} className="flex items-center justify-between gap-3"><label className="flex items-center gap-3 capitalize"><UiCheckbox checked={preferences[category]} onChange={event => setPreferences({ ...preferences, [category]: event.target.checked })} />{category}</label><UiButton type="button" className="btn-ghost" onClick={() => { const previous = soundPreferences(); configureSounds(preferences); playSound('preview', category, undefined, true); setTimeout(() => configureSounds(previous), 400); }}>Preview {category}</UiButton></div>)}
-      <UiButton type="button" disabled={busy} className="auth-button" onClick={() => void savePreferences()}>Save sound preferences</UiButton>
-    </section>
+    <SoundSettings />
     <form onSubmit={submit} className="card space-y-4 p-5"><h2 className="text-lg font-bold">Smart availability</h2><p className="text-sm text-white/60">Schedules use your timezone. Overlapping restrictions combine; cancelling a schedule restores any other active schedule.</p>
       <label className="block">Status<UiSelect className="auth-input mt-1" value={status} onChange={event => setStatus(event.target.value)}>{statuses.map(value => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}</UiSelect></label>
       <div className="grid gap-3 sm:grid-cols-2"><label>Start<UiInput className="auth-input" type="datetime-local" required value={start} onChange={event => setStart(event.target.value)} /></label><label>End<UiInput className="auth-input" type="datetime-local" required value={end} onChange={event => setEnd(event.target.value)} /></label></div>

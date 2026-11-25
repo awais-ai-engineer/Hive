@@ -20,8 +20,9 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.auth.security import decode_access_token
+from app.calls import invitations
 from app.calls import service as calls
-from app.calls.schemas import CallIn, CaptionIn, ReactIn, SignalIn, StateIn
+from app.calls.schemas import CallIn, CaptionIn, InvitationIn, ReactIn, SignalIn, StateIn
 from app.core.config import settings
 from app.db.models import (
     Channel,
@@ -112,6 +113,7 @@ async def disconnect(sid: str, *args: object) -> None:
             user = await session.get(User, user_id)
         if user is not None and not user.appear_offline:
             await broadcast_presence(user_id, False)
+    await invitations.expire_or_cancel(sid=sid)
     await leave_call(sid)
     signal_counts.pop(sid, None)
     typing_times.pop(sid, None)
@@ -477,13 +479,24 @@ async def save_huddle_notes(session, channel: Channel, author_id: str, names: li
     return doc
 
 
+async def announce_transcription(channel_id):
+    state = await calls.transcription_state(channel_id)
+    if state["changed"]:
+        await sio.emit("call:disclosure", {"channelId": channel_id, "id": f"transcription:{channel_id}:{state['meetingId']}:{state['version']}",
+                       "event": "transcription_started" if state["active"] else "transcription_stopped"}, room=f"call:{channel_id}")
+    return state
+
+
 async def leave_call(sid: str) -> None:
+    await invitations.expire_or_cancel(sid=sid)
     left = await calls.remove(sid)
     if left is None:
         return
     channel_id, entry, huddle = left
     await sio.leave_room(sid, f"call:{channel_id}")
     await sio.emit("call:peer-left", {"channelId": channel_id, "sid": sid}, room=f"call:{channel_id}")
+    if huddle is None:
+        await announce_transcription(channel_id)
     await announce_participants(channel_id)
     if huddle is not None and entry.get("userId"):
         await post_huddle_summary(channel_id, entry["userId"], huddle)
@@ -507,11 +520,13 @@ async def call_join(sid, data, session, user):
     peers = [{"sid": peer_sid, **entry}
              for peer_sid, entry in (await calls.participants(channel.id)).items() if peer_sid != sid]
     entry = await calls.add(channel.id, sid, user)
+    await invitations.accept_for(channel.id, user.id)
     await sio.enter_room(sid, f"call:{channel.id}")
     await sio.emit("call:peer-joined", {"channelId": channel.id, "sid": sid, **entry},
                    room=f"call:{channel.id}", skip_sid=sid)
     await announce_participants(channel.id)
-    return {"channelId": channel.id, "iceServers": calls.ice_servers(), "peers": peers}
+    state = await announce_transcription(channel.id)
+    return {"channelId": channel.id, "iceServers": calls.ice_servers(), "peers": peers, "transcription": state}
 
 
 @chat_event("call:leave", CallIn)
@@ -550,6 +565,7 @@ async def call_state(sid, data, session, user):
         raise HTTPException(403, "You are not in this call")
     await sio.emit("call:state", {"channelId": data.channelId, "sid": sid, **entry},
                    room=f"call:{data.channelId}")
+    await announce_transcription(data.channelId)
 
 
 def _call_limited(sid: str, kind: str, per_window: int) -> bool:
@@ -623,11 +639,31 @@ async def call_ring(sid, data, session, user):
     await enforce(session, channel.id, user.id, "huddles")
     if not await redis.set(f"{settings.socketio_channel}:ring:{channel.id}:{user.id}", 1, nx=True, ex=5):
         raise HTTPException(429, "Hold on a moment before ringing again")
-    for participant in await participant_ids(session, channel.id):
-        if participant != user.id and not await blocked_among(session, user.id, [participant]):
-            await sio.emit("call:incoming", {"channelId": channel.id, "invitationId": new_id(),
-                                             "from": {"id": user.id, "username": user.username}},
-                           room=f"user:{participant}")
+    recipients = [person for person in await participant_ids(session, channel.id)
+                  if person != user.id and not await blocked_among(session, user.id, [person])]
+    row = await invitations.create(channel.id, user.id, recipients, sid)
+    from app.calls.audio import optional_audio_allowed
+    for participant in recipients:
+        audible = await optional_audio_allowed(session, participant, channel.id)
+        await sio.emit("call:incoming", {"channelId": channel.id, "invitationId": row["invitationId"],
+                       "expiresAt": row["expiresAt"], "sound": audible, "from": {"id": user.id, "username": user.username}},
+                       room=f"user:{participant}")
+    return {"invitationId": row["invitationId"], "expiresAt": row["expiresAt"]}
+
+
+@chat_event("call:respond", InvitationIn)
+async def call_respond(sid, data, session, user):
+    # Acceptance is allowed only once the user really joined; a cancelled pre-join cannot accept.
+    if data.action == "accepted":
+        raw = await redis.get(invitations.key(data.invitationId))
+        if raw is None:
+            raise HTTPException(404, "Invitation expired")
+        row = json.loads(raw)
+        await calls.check_access(session, row["channelId"], user)
+        if await calls.current_call(sid) != row["channelId"]:
+            raise HTTPException(403, "Join the Huddle before accepting")
+    return await invitations.resolve(data.invitationId, user.id, data.action)
+
 
 
 async def evict_from_space(user_id: str, space_id: str) -> None:

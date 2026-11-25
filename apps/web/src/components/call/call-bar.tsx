@@ -36,6 +36,8 @@ export function CallBar() {
         {people.length > 4 && <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-[rgb(255_255_255/0.15)] text-[10px] ring-2 ring-[var(--call-surface)]">+{people.length - 4}</span>}
       </span>
     </UiButton>
+    {call.disclosure && <p role="status" className="mt-2 text-xs opacity-70">{call.disclosure}</p>}
+    {call.outgoing && <div className="mt-2 flex items-center justify-between text-xs"><span role="status">Calling?</span><UiButton type="button" className="btn-ghost !py-1" onClick={() => calls.cancelRinging()}>Cancel invitation</UiButton></div>}
     {call.error && <p role="alert" className="mt-2 text-xs text-rose-300">{call.error}</p>}
     <div className="mt-3 flex items-center gap-1.5">
       <RoundControl size="sm" icon={call.muted ? 'micOff' : 'mic'} label={call.muted ? t('huddle.unmute') : t('huddle.mute')} warn={call.muted} onClick={() => calls.toggleMute()} />

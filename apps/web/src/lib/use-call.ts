@@ -5,7 +5,7 @@ import { calls, type CallState } from './call';
 
 const server: CallState = {
   channelId: null, title: '', stageOpen: false, status: 'idle', error: '', muted: false, camera: false, screen: false,
-  localStream: null, speaking: false, peers: [], hand: false, captionsOn: false, captions: [], reactions: [],
+  localStream: null, speaking: false, peers: [], hand: false, captionsOn: false, captions: [], reactions: [], disclosure: '', outgoing: false,
 };
 
 /** Live call state for React components (one shared call per tab). */

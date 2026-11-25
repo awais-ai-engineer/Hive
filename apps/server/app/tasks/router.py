@@ -67,6 +67,8 @@ async def get_assignees(session: Session, user: CurrentUser, channel_id: str | N
 async def post_task(data: TaskCreate, session: Session, user: CurrentUser):
     task = await service.create_task(session, data, user)
     await announce(session, "created", task)
+    if task.assignee_id and task.assignee_id != user.id:
+        await sio.emit("audio:event", {"event": "task_assigned", "id": f"task-assigned:{task.id}:{task.updated_at.isoformat()}"}, room=f"user:{task.assignee_id}")
     return (await service.serialize(session, [task], user))[0]
 
 
@@ -74,6 +76,8 @@ async def post_task(data: TaskCreate, session: Session, user: CurrentUser):
 async def patch_task(task_id: str, data: TaskPatch, session: Session, user: CurrentUser):
     task, previous = await service.update_task(session, task_id, data, user)
     await announce(session, "updated", task, (previous,))
+    if task.assignee_id and task.assignee_id != previous and task.assignee_id != user.id:
+        await sio.emit("audio:event", {"event": "task_assigned", "id": f"task-assigned:{task.id}:{task.updated_at.isoformat()}"}, room=f"user:{task.assignee_id}")
     return (await service.serialize(session, [task], user))[0]
 
 

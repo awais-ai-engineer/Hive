@@ -32,6 +32,7 @@ export function HuddleButton({ channelId, title, ring = false }: { channelId: st
     await calls.join(channelId, title);
     const state = calls.getState();
     if (state.status === 'error') { setError(state.error); return; }
+    if (state.status !== 'connected') return;
     calls.setStageOpen(true);
     if (ring && alone) await calls.ring(channelId).catch(cause => setError(requestError(cause)));
   }

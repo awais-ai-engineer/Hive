@@ -150,6 +150,8 @@ async def _loop():
         try:
             await run_due()
             await expire_due()
+            from app.calls.invitations import expire_or_cancel
+            await expire_or_cancel()
         except Exception:
             log.exception("Scheduled delivery failed; retrying on next tick")
         await asyncio.sleep(15)

@@ -1,0 +1,27 @@
+Hive audio collection, version 2
+
+Sound effects (39 WAV files listed in effects.json)
+Original compositions and offline renders created for Hive. No third-party samples,
+proprietary notification recordings, or external playback URLs are used.
+Copyright 2026 Hive contributors. These sound effects are provided under CC0 1.0:
+https://creativecommons.org/publicdomain/zero/1.0/
+The scores and renderer are in apps/web/scripts/render-sounds.py.
+
+Voice announcements (7 WAV files listed in announcements.json)
+Original product wording synthesized offline with Piper 1.4.1 (GPL-3.0 tool),
+using en_US-ljspeech-medium from rhasspy/piper-voices. The model is trained from
+scratch on the public-domain LJ Speech dataset, rather than a Lessac-derived model.
+No voice model or Piper runtime is distributed with this application.
+
+Voice model source and model card:
+https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/ljspeech/medium
+https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/ljspeech/medium/MODEL_CARD
+Dataset: https://keithito.com/LJ-Speech-Dataset/
+Recordings: Linda Johnson / LibriVox; alignment and annotation: Keith Ito.
+Dataset and recordings: public domain in the United States, as documented by the source.
+Piper tool: https://github.com/OHF-Voice/piper1-gpl
+Original wording and rendered announcement assets: CC0 1.0 to the extent applicable.
+No endorsement by the original speaker, dataset author, or Piper project is implied.
+
+Technical provenance, checksums, durations, and reproduction instructions are in
+effects.json, announcements.json and docs/audio-experience.md.

@@ -4,8 +4,7 @@ import { Tooltip as UiTooltip } from '@hive/ui';
 
 import { Button as UiButton } from '@hive/ui';
 
-import { playMessageSound, playSound } from '../lib/sounds';
-import { currentUserId } from '../lib/api';
+import { conversationAudible, playSound, stopRing, type SoundEvent } from '../lib/sounds';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -45,25 +44,31 @@ export default function Nav() {
       }, 400);
     };
     refresh();
-    // On pages other than Home (which plays its own), chime for new direct messages.
-    const chime = (data: { authorId?: string; parentId?: string; messageId?: string }) => {
-      if (!location.pathname.startsWith('/home') && data.authorId && data.authorId !== currentUserId() && !data.parentId) playMessageSound(data.messageId ? `message:${data.messageId}` : undefined);
+    const notificationSound = (data: { id: string; type: string; sound?: boolean; channelId?: string; messageId?: string; actor?: { id: string } }) => {
+      if (data.sound === false || data.actor?.id === user.id || !conversationAudible(data.channelId)) return;
+      const mapping: Record<string, SoundEvent> = { dm: 'incoming', mention: 'mention', reply: 'reply', post_comment: 'reply', invite_accepted: 'invite_accepted' };
+      const event = mapping[data.type];
+      if (event) playSound(event, undefined, data.messageId ? `message:${data.messageId}` : `notification:${data.id}`);
     };
-    const notificationSound = (data: { id: string; type: string }) => playSound(data.type, data.type === 'mention' || data.type === 'reply' || data.type === 'dm' ? 'messages' : 'activity', `notification:${data.id}`);
+    const reminderSound = (data: { id: string }) => playSound('deadline', undefined, `reminder:${data.id}`);
+    const scheduledFailed = (data: { id: string }) => playSound('message_failed', undefined, `scheduled-failed:${data.id}`);
+    const assignedSound = (data: { event: string; id: string }) => { if (data.event === 'task_assigned') playSound('task_assigned', undefined, data.id); };
+    socket.on('audio:event', assignedSound);
+    socket.on('reminder:due', reminderSound).on('scheduled:failed', scheduledFailed);
     socket.on('notification:new', notificationSound);
-    socket.on('dm:activity', chime);
     socket.on('dm:activity', refresh).on('space:activity', refresh).on('spaces:updated', refresh).on('read:updated', refresh).on('connect', refresh);
     window.addEventListener(DMS_CHANGED, refresh);
     return () => {
       active = false; clearTimeout(timer);
       socket.off('notification:new', notificationSound);
-      socket.off('dm:activity', chime);
+      socket.off('audio:event', assignedSound);
+      socket.off('reminder:due', reminderSound).off('scheduled:failed', scheduledFailed);
       socket.off('dm:activity', refresh).off('space:activity', refresh).off('spaces:updated', refresh).off('read:updated', refresh).off('connect', refresh);
       window.removeEventListener(DMS_CHANGED, refresh);
     };
   }, [user, pathname]);
 
-  useEffect(() => setMenu(false), [pathname]);
+  useEffect(() => { setMenu(false); stopRing(); }, [pathname]);
   useEffect(() => {
     if (!menu) return;
     const close = (event: MouseEvent) => { if (!menuRef.current?.contains(event.target as Node)) setMenu(false); };

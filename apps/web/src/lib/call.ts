@@ -1,7 +1,7 @@
 'use client';
 
 import { captionParts } from '@hive/shared';
-import { playSound } from './sounds';
+import { announceSound, isAnnouncing, onAnnouncement, playSound, startRing, stopRing, stopHuddleAudio, type SoundEvent } from './sounds';
 import { currentUserId, subscribeSession } from './api';
 import { chatRequest, socket } from './socket';
 
@@ -51,6 +51,8 @@ export type CallState = {
   captions: Caption[];
   /** Emoji reactions floating over tiles for a few seconds. */
   reactions: Reaction[];
+  disclosure: string;
+  outgoing: boolean;
 };
 
 type Signal = { description?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit };
@@ -71,7 +73,7 @@ export function deviceMessage(device: 'microphone' | 'camera', cause: unknown): 
 
 const idle: CallState = {
   channelId: null, title: '', stageOpen: false, status: 'idle', error: '', muted: false, camera: false, screen: false,
-  localStream: null, speaking: false, peers: [], hand: false, captionsOn: false, captions: [], reactions: [],
+  localStream: null, speaking: false, peers: [], hand: false, captionsOn: false, captions: [], reactions: [], disclosure: '', outgoing: false,
 };
 
 type Recognition = { lang: string; continuous: boolean; interimResults: boolean; start(): void; stop(): void;
@@ -98,6 +100,11 @@ class CallManager {
   private recognition: Recognition | null = null;
   private recognitionRestart: ReturnType<typeof setTimeout> | null = null;
   private recognitionFailures = 0;
+  private disclosureUntil = 0;
+  private outgoingInvitation: string | null = null;
+  private outgoingTimeout: ReturnType<typeof setTimeout> | null = null;
+  private reconnecting = false;
+  private disclosedMeetings = new Set<string>();
   private lastInterim = 0;
   private pendingCaptions = new Map<string, { channelId: string; segmentId: string; text: string; final: boolean }>();
   private captionInFlight = false;
@@ -107,24 +114,49 @@ class CallManager {
 
   constructor() {
     if (typeof window === 'undefined') return;
+    onAnnouncement(playing => {
+      this.disclosureUntil = playing ? Infinity : Date.now() + 600;
+      const recognition = this.recognition;
+      if (!recognition) return;
+      if (playing) { try { recognition.stop(); } catch { /* already stopped */ } }
+      else if (this.state.captionsOn && !this.recognitionRestart) this.restartRecognition(recognition, 650);
+    });
+    socket.on('call:disclosure', (data: { channelId: string; event: SoundEvent; id: string }) => {
+      if (data.channelId !== this.state.channelId || !['transcription_started', 'transcription_stopped'].includes(data.event)) return;
+      if (data.event === 'transcription_started') this.disclosedMeetings.add(data.id.split(':')[2]);
+      this.emit({ disclosure: data.event === 'transcription_started' ? 'Speech transcription is active. Finalized captions are saved as meeting notes.' : 'Speech transcription has stopped.' });
+      announceSound(data.event, data.id);
+    });
+    socket.on('call:resolved', (data: { invitationId: string; status: string }) => {
+      stopRing(data.invitationId, true);
+      if (data.invitationId !== this.outgoingInvitation) return;
+      if (this.outgoingTimeout) clearTimeout(this.outgoingTimeout);
+      this.outgoingInvitation = null; this.emit({ outgoing: false });
+      if (data.status === 'declined' || data.status === 'expired') playSound(data.status === 'declined' ? 'declined' : 'unanswered', 'huddles', `resolved:${data.invitationId}`);
+    });
     let ownerId = currentUserId();
     subscribeSession(session => {
-      if (this.state.channelId && session?.user.id !== ownerId) { this.hangUp(); this.emit({ ...idle }); }
+      if (session?.user.id !== ownerId) { this.disclosedMeetings.clear(); if (this.state.channelId) { this.hangUp(); this.emit({ ...idle }); } }
       ownerId = session?.user.id;
     });
     socket.on('call:peer-joined', (peer: Omit<Peer, 'stream' | 'speaking'> & { channelId: string }) => {
       if (peer.channelId !== this.state.channelId) return;
-      playSound('participant_join', 'huddles', `join:${peer.sid}`);
+      if (!this.peers.has(peer.sid) && ![...this.peers.values()].some(item => item.userId === peer.userId)) playSound('participant_join', 'participants', `join:${this.state.channelId}:${peer.userId}:${peer.sid}`);
       this.peers.set(peer.sid, { ...peer, stream: null, speaking: false });
       this.connect(peer.sid);
       this.emit();
     });
     socket.on('call:peer-left', (data: { channelId: string; sid: string }) => {
-      if (data.channelId === this.state.channelId) { playSound('participant_leave', 'huddles', `leave:${data.sid}`); this.drop(data.sid); }
+      if (data.channelId === this.state.channelId) {
+        const peer = this.peers.get(data.sid);
+        if (peer && ![...this.peers.values()].some(item => item.sid !== data.sid && item.userId === peer.userId)) playSound('participant_leave', 'participants', `leave:${data.sid}`);
+        this.drop(data.sid);
+      }
     });
     socket.on('call:state', (data: { channelId: string; sid: string; muted: boolean; camera: boolean; screen: boolean; hand?: boolean; captions?: boolean }) => {
       const peer = this.peers.get(data.sid);
       if (!peer || data.channelId !== this.state.channelId) return;
+      if (data.hand && !peer.hand) playSound('hand_on', 'participants', `hand:${data.sid}:${Date.now()}`);
       this.peers.set(data.sid, { ...peer, muted: data.muted, camera: data.camera, screen: data.screen, hand: !!data.hand, captions: !!data.captions });
       // Someone started sharing their screen: show it right away instead of waiting for a click.
       this.emit(data.screen && !peer.screen ? { stageOpen: true } : {});
@@ -147,7 +179,7 @@ class CallManager {
     socket.on('disconnect', () => { if (this.state.channelId) playSound('connection_lost', 'huddles'); });
     socket.on('connect', () => {
       const channelId = this.state.channelId;
-      if (channelId && this.state.status === 'connected') { playSound('reconnection', 'huddles'); this.resetLinks(); this.emit({ status: 'error' }); void this.joinNow(channelId, this.state.title); }
+      if (channelId && this.state.status === 'connected') { this.reconnecting = true; this.resetLinks(); this.emit({ status: 'error' }); void this.joinNow(channelId, this.state.title); }
     });
   }
 
@@ -182,7 +214,7 @@ class CallManager {
     void this.audioContext?.resume();
     if (!this.audio) {
       try {
-        const media = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const media = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
         this.audio = media.getAudioTracks()[0];
       } catch (cause) {
         // No microphone or permission denied: join muted so the user can still listen and watch.
@@ -190,14 +222,20 @@ class CallManager {
       }
     }
     try {
-      const result = await chatRequest<{ iceServers: RTCIceServer[]; peers: Omit<Peer, 'stream' | 'speaking'>[] }>(
+      const result = await chatRequest<{ iceServers: RTCIceServer[]; peers: Omit<Peer, 'stream' | 'speaking'>[]; transcription: { active: boolean; meetingId: string } }>(
         'call:join', { channelId });
       this.iceServers = result.iceServers;
       for (const peer of result.peers) this.peers.set(peer.sid, { ...peer, stream: null, speaking: false });
       this.updateLocalStream();
       for (const peer of result.peers) this.connect(peer.sid);
       this.emit({ status: 'connected' });
-      playSound('huddle_start', 'huddles');
+      stopRing();
+      playSound(this.reconnecting ? 'reconnection' : 'huddle_start', 'huddles'); this.reconnecting = false;
+      if (result.transcription?.active && !this.disclosedMeetings.has(result.transcription.meetingId)) {
+        this.disclosedMeetings.add(result.transcription.meetingId);
+        this.emit({ disclosure: 'Speech transcription is active. Finalized captions are saved as meeting notes.' });
+        announceSound('transcription_active', `transcription-active:${channelId}:${result.transcription.meetingId}:${currentUserId()}`);
+      }
       for (const [from, signal] of this.queued.splice(0)) void this.onSignal(from, signal);
       await chatRequest('call:state', { channelId, muted: this.state.muted || !this.audio, camera: this.state.camera, screen: this.state.screen, hand: this.state.hand, captions: this.state.captionsOn }).catch(cause => { this.stopCaptions(); this.emit({ error: cause instanceof Error ? cause.message : 'Huddle state could not be synchronized.' }); });
       this.flushCaptions();
@@ -277,7 +315,7 @@ class CallManager {
     recognition.onresult = event => {
       const channelId = this.state.channelId;
       this.recognitionFailures = 0;
-      if (!channelId || this.state.muted) return;
+      if (!channelId || this.state.muted || Date.now() < this.disclosureUntil || isAnnouncing()) return;
       for (let index = event.resultIndex; index < event.results.length; index++) {
         const result = event.results[index];
         const text = result[0]?.transcript.trim();
@@ -308,19 +346,25 @@ class CallManager {
     };
     recognition.onend = () => {
       if (this.recognition !== recognition || !this.state.channelId) return;
-      this.recognitionRestart = setTimeout(() => {
-        this.recognitionRestart = null;
-        if (this.recognition !== recognition || !this.state.channelId) return;
-        try { this.captionEpoch = crypto.randomUUID(); this.captionResults.clear(); recognition.start(); }
-        catch { this.stopCaptions(); }
-      }, Math.min(10000, 250 * 2 ** Math.min(6, this.recognitionFailures)));
+      if (isAnnouncing()) return;
+      this.restartRecognition(recognition, Math.min(10000, 650 * 2 ** Math.min(6, this.recognitionFailures)));
     };
     this.recognition = recognition;
     this.captionEpoch = crypto.randomUUID(); this.captionResults.clear();
     void chatRequest('call:state', { channelId: this.state.channelId, captions: true }).then(() => {
       if (this.recognition !== recognition) return;
-      try { recognition.start(); this.emit({ captionsOn: true }); playSound('captions_start', 'huddles'); } catch { this.stopCaptions(); }
+      try { this.emit({ captionsOn: true }); playSound('captions_start'); if (!isAnnouncing()) this.restartRecognition(recognition, Math.max(650, this.disclosureUntil - Date.now())); } catch { this.stopCaptions(); }
     }).catch(cause => { this.stopCaptions(); this.emit({ error: cause instanceof Error ? cause.message : 'Transcription could not be enabled.' }); });
+  }
+
+  private restartRecognition(recognition: Recognition, delay: number) {
+    if (this.recognitionRestart) clearTimeout(this.recognitionRestart);
+    this.recognitionRestart = setTimeout(() => {
+      this.recognitionRestart = null;
+      if (this.recognition !== recognition || !this.state.channelId || isAnnouncing()) return;
+      try { this.captionEpoch = crypto.randomUUID(); this.captionResults.clear(); recognition.start(); }
+      catch { this.stopCaptions(); }
+    }, delay);
   }
 
   private stopCaptions() {
@@ -333,11 +377,15 @@ class CallManager {
     this.retryTimer = null;
     if (this.state.channelId && socket.connected) void chatRequest('call:state', { channelId: this.state.channelId, captions: false }).catch(() => {});
     try { recognition?.stop(); } catch { /* already stopped */ }
-    if (this.state.captionsOn) playSound('captions_stop', 'huddles');
+    if (this.state.captionsOn) playSound('captions_stop');
     this.emit({ captionsOn: false });
   }
 
   private hangUp() {
+    if (this.outgoingTimeout) clearTimeout(this.outgoingTimeout);
+    stopHuddleAudio();
+    if (this.outgoingInvitation) void chatRequest('call:respond', { invitationId: this.outgoingInvitation, action: 'cancelled' }).catch(() => {});
+    this.outgoingInvitation = null;
     this.stopCaptions();
     this.resetLinks();
     this.stopTracks();
@@ -345,7 +393,19 @@ class CallManager {
     this.queued = [];
   }
 
-  async ring(channelId: string) { await chatRequest('call:ring', { channelId }); }
+  async ring(channelId: string) {
+    const result = await chatRequest<{ invitationId: string; expiresAt: number }>('call:ring', { channelId });
+    if (this.outgoingTimeout) clearTimeout(this.outgoingTimeout);
+    this.outgoingTimeout = setTimeout(() => { if (this.outgoingInvitation === result.invitationId) { this.outgoingInvitation = null; this.emit({ outgoing: false }); stopRing(result.invitationId); playSound('unanswered', undefined, `resolved:${result.invitationId}`); } }, Math.max(0, result.expiresAt - Date.now()));
+    this.outgoingInvitation = result.invitationId; this.emit({ outgoing: true }); startRing(result.invitationId, true, result.expiresAt);
+  }
+
+  cancelRinging() {
+    if (this.outgoingTimeout) clearTimeout(this.outgoingTimeout);
+    stopRing();
+    if (this.outgoingInvitation) void chatRequest('call:respond', { invitationId: this.outgoingInvitation, action: 'cancelled' }).catch(() => {});
+    this.outgoingInvitation = null; this.emit({ outgoing: false });
+  }
 
   toggleMute() {
     if (!this.audio) return;

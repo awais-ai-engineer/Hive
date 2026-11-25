@@ -39,7 +39,7 @@ async def clear_stale_calls() -> int:
     Calls only exist while sockets are connected to this server; after a restart those sockets
     are gone, so any participants still listed in Redis are ghosts. (Hive runs one API process.)"""
     removed = 0
-    for pattern in ("call:*", "call-meta:*", "call-who:*", "call-sid:*", "call-notes:*"):
+    for pattern in ("call:*", "call-meta:*", "call-who:*", "call-sid:*", "call-notes:*", "call-invitation*"):
         keys = [key async for key in redis.scan_iter(f"{settings.socketio_channel}:{pattern}")]
         if keys:
             removed += await redis.delete(*keys)
@@ -187,14 +187,36 @@ async def current_call(sid: str) -> str | None:
     return await redis.get(sid_key(sid))
 
 
+async def transcription_state(channel_id: str) -> dict:
+    """Compute aggregate consent state atomically; one disclosure per real transition."""
+    result = await redis.eval("""
+    local active = '0'
+    for _, raw in ipairs(redis.call('HVALS', KEYS[1])) do
+        if cjson.decode(raw).captions == true then active = '1' end
+    end
+    local old = redis.call('HGET', KEYS[2], 'transcription') or '0'
+    local version = redis.call('HGET', KEYS[2], 'disclosureVersion') or '0'
+    if old ~= active then
+        redis.call('HSET', KEYS[2], 'transcription', active)
+        version = redis.call('HINCRBY', KEYS[2], 'disclosureVersion', 1)
+    end
+    return {active, tostring(version), old ~= active and '1' or '0', redis.call('HGET', KEYS[2], 'start') or ''}
+    """, 2, room_key(channel_id), meta_key(channel_id))
+    return {"active": result[0] == "1", "version": int(result[1]), "changed": result[2] == "1",
+            "meetingId": result[3]}
+
+
 async def update_state(channel_id: str, sid: str, changes: dict) -> dict | None:
-    key = room_key(channel_id)
-    raw = await redis.hget(key, sid)
-    if raw is None:
-        return None
-    entry = json.loads(raw) | changes
-    await redis.hset(key, sid, json.dumps(entry))
-    return entry
+    raw = await redis.eval("""
+    local raw = redis.call('HGET', KEYS[1], ARGV[1])
+    if not raw then return false end
+    local entry = cjson.decode(raw)
+    for k, v in pairs(cjson.decode(ARGV[2])) do entry[k] = v end
+    local updated = cjson.encode(entry)
+    redis.call('HSET', KEYS[1], ARGV[1], updated)
+    return updated
+    """, 1, room_key(channel_id), sid, json.dumps(changes))
+    return json.loads(raw) if raw else None
 
 
 async def summary(channel_id: str) -> dict:
