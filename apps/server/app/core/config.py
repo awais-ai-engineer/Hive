@@ -1,4 +1,4 @@
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     # WebRTC ICE servers as JSON. Add a TURN server here when deploying behind strict NATs.
     ice_servers: str = '[{"urls": "stun:stun.l.google.com:19302"}]'
+    call_invitation_seconds: int = Field(default=45, ge=15, le=180)
+    call_reconnect_grace_seconds: int = Field(default=90, ge=15, le=300)
+    transcription_url: str = ""
+    transcription_token: str = ""
     upload_dir: str = "uploads"
     storage_driver: str = "local"
     max_image_mb: int = 10

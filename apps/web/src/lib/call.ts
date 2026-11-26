@@ -1,8 +1,9 @@
 'use client';
 
-import { captionParts } from '@hive/shared';
-import { announceSound, isAnnouncing, onAnnouncement, playSound, startRing, stopRing, stopHuddleAudio, type SoundEvent } from './sounds';
-import { currentUserId, subscribeSession } from './api';
+import { PcmCapture } from './pcm-transcription';
+import { SpeechCapture, recognitionClass, type TranscriptSegment } from './transcription';
+import { announceSound, isAnnouncing, onAnnouncement, playSound, stopRing, stopHuddleAudio, type SoundEvent } from './sounds';
+import { apiFetch, responseData, currentUserId, subscribeSession } from './api';
 import { chatRequest, socket } from './socket';
 
 /**
@@ -26,7 +27,7 @@ export type Peer = {
   captions?: boolean;
 };
 
-export type Caption = { id: string; sid: string; userId: string; timestamp: string; username: string; text: string; final: boolean };
+export type Caption = { id: string; sid: string; userId: string; timestamp: string; username: string; text: string; final: boolean; sessionId?: string | null; sequence?: number; revision?: number };
 export type Reaction = { id: string; sid: string; emoji: string };
 export const REACTIONS = ['👍', '👏', '😂', '🎉', '❤️', '🤔'] as const;
 
@@ -36,7 +37,10 @@ export type CallState = {
   title: string;
   /** Whether the floating participant tiles are open. */
   stageOpen: boolean;
-  status: 'idle' | 'joining' | 'connected' | 'error';
+  status: 'idle' | 'joining' | 'waiting' | 'connecting' | 'connected' | 'reconnecting' | 'error';
+  sessionId: string | null; startedAt: string | null;
+  captionsVisible: boolean; captureState: string; language: string;
+  coverage: { userId: string; name: string; consented: boolean; state: string; incompleteReason?: string | null }[];
   error: string;
   muted: boolean;
   camera: boolean;
@@ -58,7 +62,7 @@ export type CallState = {
 type Signal = { description?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit };
 type Link = {
   pc: RTCPeerConnection; polite: boolean; makingOffer: boolean; ignoreOffer: boolean; stream: MediaStream;
-  audioSender: RTCRtpSender | null; videoSender: RTCRtpSender | null;
+  audioSender: RTCRtpSender | null; videoSender: RTCRtpSender | null; pendingCandidates: RTCIceCandidateInit[];
 };
 
 /** Plain-words explanation for a failed getUserMedia / getDisplayMedia request. */
@@ -72,17 +76,11 @@ export function deviceMessage(device: 'microphone' | 'camera', cause: unknown): 
 }
 
 const idle: CallState = {
-  channelId: null, title: '', stageOpen: false, status: 'idle', error: '', muted: false, camera: false, screen: false,
+  channelId: null, sessionId: null, startedAt: null, captionsVisible: true, captureState: 'inactive', language: 'en-US', coverage: [], title: '', stageOpen: false, status: 'idle', error: '', muted: false, camera: false, screen: false,
   localStream: null, speaking: false, peers: [], hand: false, captionsOn: false, captions: [], reactions: [], disclosure: '', outgoing: false,
 };
 
-type Recognition = { lang: string; continuous: boolean; interimResults: boolean; start(): void; stop(): void;
-  onresult: ((event: { resultIndex: number; results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
-  onend: (() => void) | null; onerror: ((event: { error: string }) => void) | null };
-const recognitionClass = () => typeof window === 'undefined' ? null
-  : ((window as unknown as { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition }).SpeechRecognition
-    ?? (window as unknown as { webkitSpeechRecognition?: new () => Recognition }).webkitSpeechRecognition ?? null);
-export const captionsSupported = () => !!recognitionClass();
+export const captionsSupported = () => !!recognitionClass() || typeof AudioWorkletNode !== 'undefined';
 
 class CallManager {
   state: CallState = idle;
@@ -97,46 +95,41 @@ class CallManager {
   private audioContext: AudioContext | null = null;
   /** Signals that arrive before the join is acknowledged (we don't have ICE servers yet). */
   private queued: [string, Signal][] = [];
-  private recognition: Recognition | null = null;
-  private recognitionRestart: ReturnType<typeof setTimeout> | null = null;
-  private recognitionFailures = 0;
-  private disclosureUntil = 0;
-  private outgoingInvitation: string | null = null;
-  private outgoingTimeout: ReturnType<typeof setTimeout> | null = null;
+  private capture: SpeechCapture | PcmCapture | null = null;
+  private captureName = '';
+  private announcementResume: ReturnType<typeof setTimeout> | null = null;
+  private syncTimer: ReturnType<typeof setInterval> | null = null;
+  private warnedLeave = false;
+  private joining = false;
   private reconnecting = false;
   private disclosedMeetings = new Set<string>();
-  private lastInterim = 0;
-  private pendingCaptions = new Map<string, { channelId: string; segmentId: string; text: string; final: boolean }>();
-  private captionInFlight = false;
-  private retryTimer: ReturnType<typeof setTimeout> | null = null;
-  private captionEpoch = crypto.randomUUID();
-  private captionResults = new Map<number, string>();
+  private queuedCaptions: (Caption & { segmentId: string })[] = [];
+  private outgoingInvitation: string | null = null;
+  private outgoingTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     if (typeof window === 'undefined') return;
     onAnnouncement(playing => {
-      this.disclosureUntil = playing ? Infinity : Date.now() + 600;
-      const recognition = this.recognition;
-      if (!recognition) return;
-      if (playing) { try { recognition.stop(); } catch { /* already stopped */ } }
-      else if (this.state.captionsOn && !this.recognitionRestart) this.restartRecognition(recognition, 650);
+      if (this.announcementResume) clearTimeout(this.announcementResume);
+      if (playing) this.capture?.pause('Capture paused during a mandatory privacy disclosure; speech during playback is unavailable.');
+      else this.announcementResume = setTimeout(() => { if (!this.state.muted) this.capture?.resume(); }, 350);
     });
     socket.on('call:disclosure', (data: { channelId: string; event: SoundEvent; id: string }) => {
       if (data.channelId !== this.state.channelId || !['transcription_started', 'transcription_stopped'].includes(data.event)) return;
       if (data.event === 'transcription_started') this.disclosedMeetings.add(data.id.split(':')[2]);
-      this.emit({ disclosure: data.event === 'transcription_started' ? 'Speech transcription is active. Finalized captions are saved as meeting notes.' : 'Speech transcription has stopped.' });
+      this.emit({ disclosure: data.event === 'transcription_started' ? 'Speech transcription is active. Finalized speech is saved as a raw transcript for meeting participants.' : 'Speech transcription has stopped.' });
       announceSound(data.event, data.id);
     });
     socket.on('call:resolved', (data: { invitationId: string; status: string }) => {
-      stopRing(data.invitationId, true);
-      if (data.invitationId !== this.outgoingInvitation) return;
+      if (data.status !== 'ringing' || (data as { declined?: string[] }).declined?.includes(currentUserId() ?? '')) stopRing(data.invitationId, true);
+      if (data.invitationId !== this.outgoingInvitation || data.status === 'ringing') return;
       if (this.outgoingTimeout) clearTimeout(this.outgoingTimeout);
       this.outgoingInvitation = null; this.emit({ outgoing: false });
       if (data.status === 'declined' || data.status === 'expired') playSound(data.status === 'declined' ? 'declined' : 'unanswered', 'huddles', `resolved:${data.invitationId}`);
     });
     let ownerId = currentUserId();
     subscribeSession(session => {
-      if (session?.user.id !== ownerId) { this.disclosedMeetings.clear(); if (this.state.channelId) { this.hangUp(); this.emit({ ...idle }); } }
+      if (session?.user.id !== ownerId) { this.disclosedMeetings.clear(); if (this.state.channelId) { this.hangUp(true); this.emit({ ...idle }); } }
       ownerId = session?.user.id;
     });
     socket.on('call:peer-joined', (peer: Omit<Peer, 'stream' | 'speaking'> & { channelId: string }) => {
@@ -164,8 +157,13 @@ class CallManager {
     socket.on('call:react', (data: { channelId: string; sid: string; emoji: string }) => {
       if (data.channelId === this.state.channelId) this.showReaction(data.sid, data.emoji);
     });
-    socket.on('call:caption', (data: { channelId: string; sid: string; userId: string; segmentId: string; timestamp: string; username: string; text: string; final: boolean }) => {
-      if (data.channelId === this.state.channelId) this.addCaption(data.segmentId, data.sid, data.userId, data.timestamp, data.username, data.text, data.final);
+    socket.on('call:caption', (data: Caption & { channelId: string; segmentId: string }) => {
+      if (data.channelId !== this.state.channelId) return;
+      if (!this.state.sessionId) { this.queuedCaptions.push(data); return; }
+      this.mergeCaption(data);
+    });
+    socket.on('call:capture-state', (data: { sessionId: string; userId: string; state: string }) => {
+      if (data.sessionId === this.state.sessionId) this.emit({ coverage: this.state.coverage.map(person => person.userId === data.userId ? { ...person, state: data.state } : person) });
     });
     socket.on('call:signal', (data: { channelId: string; from: string; data: Signal }) => {
       if (data.channelId === this.state.channelId) void this.onSignal(data.from, data.data);
@@ -176,10 +174,10 @@ class CallManager {
       this.emit({ ...idle, error: 'You no longer have access to that huddle.' });
     });
     // After a reconnect the server has forgotten this socket: join again with fresh connections.
-    socket.on('disconnect', () => { if (this.state.channelId) playSound('connection_lost', 'huddles'); });
+    socket.on('disconnect', () => { if (this.state.channelId) { this.emit({ status: 'reconnecting' }); playSound('connection_lost', 'huddles'); this.captureStatus('offline', 'Signaling disconnected; finalized captions are buffered on this device.'); } });
     socket.on('connect', () => {
       const channelId = this.state.channelId;
-      if (channelId && this.state.status === 'connected') { this.reconnecting = true; this.resetLinks(); this.emit({ status: 'error' }); void this.joinNow(channelId, this.state.title); }
+      if (channelId && ['reconnecting', 'error'].includes(this.state.status)) { this.reconnecting = true; this.resetLinks(); this.emit({ status: 'reconnecting' }); void this.joinNow(channelId, this.state.title); }
     });
   }
 
@@ -196,22 +194,25 @@ class CallManager {
   /** Set by the pre-join screen: resolves with the chosen mic and camera state, or null to stay out. */
   beforeJoin: ((channelId: string, title: string) => Promise<{ muted: boolean; camera: boolean } | null>) | null = null;
 
-  async join(channelId: string, title = '') {
-    if (this.state.channelId === channelId && this.state.status !== 'idle' && this.state.status !== 'error') return;
+  async join(channelId: string, title = '', invitationId?: string) {
+    if (this.state.channelId === channelId && !['idle', 'error', 'reconnecting'].includes(this.state.status)) return;
     const choice = this.beforeJoin ? await this.beforeJoin(channelId, title) : { muted: false, camera: false };
     if (!choice) return;
-    await this.joinNow(channelId, title);
-    if (this.state.status !== 'connected') return;
+    if (invitationId) await chatRequest('call:respond', { invitationId, action: 'accepted' });
+    await this.joinNow(channelId, title, invitationId);
+    if (!['waiting', 'connecting', 'connected'].includes(this.state.status)) return;
     if (choice.muted && !this.state.muted) this.toggleMute();
     if (choice.camera && !this.state.camera) await this.toggleCamera();
   }
 
   /** Joins without the pre-join screen (reconnects and confirmed joins). */
-  async joinNow(channelId: string, title = '') {
-    if (this.state.channelId === channelId && this.state.status !== 'idle' && this.state.status !== 'error') return;
-    if (this.state.channelId && this.state.channelId !== channelId) await this.leave();
+  async joinNow(channelId: string, title = '', invitationId?: string) {
+    if (this.state.channelId === channelId && !['idle', 'error', 'reconnecting'].includes(this.state.status)) return;
+    if (this.joining) return;
+    if (this.state.channelId && this.state.channelId !== channelId && !await this.leave()) return;
+    this.joining = true;
     this.emit({ channelId, title, status: 'joining', error: '' });
-    void this.audioContext?.resume();
+    void this.audioContext?.resume().catch(() => {});
     if (!this.audio) {
       try {
         const media = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
@@ -222,35 +223,41 @@ class CallManager {
       }
     }
     try {
-      const result = await chatRequest<{ iceServers: RTCIceServer[]; peers: Omit<Peer, 'stream' | 'speaking'>[]; transcription: { active: boolean; meetingId: string } }>(
-        'call:join', { channelId });
+      const result = await chatRequest<{ iceServers: RTCIceServer[]; peers: Omit<Peer, 'stream' | 'speaking'>[]; transcription: { active: boolean; meetingId: string }; sessionId: string; startedAt: string; transcript: (Caption & { segmentId: string })[]; coverage: CallState['coverage'] }>(
+        'call:join', { channelId, invitationId });
+      if (this.state.sessionId && this.state.sessionId !== result.sessionId) { this.capture?.dispose(); this.capture = null; this.emit({ captionsOn: false, captions: [], coverage: [] }); }
+      this.emit({ sessionId: result.sessionId, startedAt: result.startedAt, coverage: result.coverage ?? [] });
+      for (const segment of [...(result.transcript ?? []), ...this.queuedCaptions.splice(0)]) this.mergeCaption(segment);
       this.iceServers = result.iceServers;
       for (const peer of result.peers) this.peers.set(peer.sid, { ...peer, stream: null, speaking: false });
       this.updateLocalStream();
       for (const peer of result.peers) this.connect(peer.sid);
-      this.emit({ status: 'connected' });
+      this.emit({ status: result.peers.length ? 'connecting' : 'waiting' });
       stopRing();
       playSound(this.reconnecting ? 'reconnection' : 'huddle_start', 'huddles'); this.reconnecting = false;
       if (result.transcription?.active && !this.disclosedMeetings.has(result.transcription.meetingId)) {
         this.disclosedMeetings.add(result.transcription.meetingId);
-        this.emit({ disclosure: 'Speech transcription is active. Finalized captions are saved as meeting notes.' });
+        this.emit({ disclosure: 'Speech transcription is active. Finalized speech is saved as a raw transcript for meeting participants.' });
         announceSound('transcription_active', `transcription-active:${channelId}:${result.transcription.meetingId}:${currentUserId()}`);
       }
       for (const [from, signal] of this.queued.splice(0)) void this.onSignal(from, signal);
-      await chatRequest('call:state', { channelId, muted: this.state.muted || !this.audio, camera: this.state.camera, screen: this.state.screen, hand: this.state.hand, captions: this.state.captionsOn }).catch(cause => { this.stopCaptions(); this.emit({ error: cause instanceof Error ? cause.message : 'Huddle state could not be synchronized.' }); });
-      this.flushCaptions();
+      await chatRequest('call:state', { channelId, muted: this.state.muted || !this.audio, camera: this.state.camera, screen: this.state.screen, hand: this.state.hand, captions: this.state.captionsOn }).catch(cause => { this.capture?.pause('Transcription state could not be synchronized'); this.emit({ error: cause instanceof Error ? cause.message : 'Huddle state could not be synchronized.' }); });
+      this.capture?.flush();
+      if (this.syncTimer) clearInterval(this.syncTimer);
+      this.syncTimer = setInterval(() => void this.syncTranscript(), 10000);
     } catch (cause) {
       this.hangUp();
       this.emit({ ...idle, status: 'error', error: cause instanceof Error ? cause.message : 'Could not join the huddle.' });
-    }
+    } finally { this.joining = false; }
   }
 
   async leave() {
     const channelId = this.state.channelId;
+    const drained = await this.stopTranscription();
+    if (!drained && !this.warnedLeave) { this.warnedLeave = true; this.emit({ error: 'Finalized captions have not synchronized. Reconnect to save them, or press Leave again to end with an incomplete transcript.' }); return false; }
     if (channelId && socket.connected) await chatRequest('call:leave', { channelId }).catch(() => {});
-    this.hangUp();
-    this.emit({ ...idle });
-    playSound('huddle_end', 'huddles');
+    this.hangUp(); this.emit({ ...idle }); this.warnedLeave = false;
+    playSound('huddle_end', 'huddles'); return true;
   }
 
   /** Closes every connection and releases the microphone, camera and screen. */
@@ -273,120 +280,74 @@ class CallManager {
     setTimeout(() => this.emit({ reactions: this.state.reactions.filter(item => item.id !== id) }), 3500);
   }
 
-  private flushCaptions() {
-    if (this.captionInFlight || !socket.connected || !this.state.captionsOn || this.state.muted) return;
-    const pending = [...this.pendingCaptions.values()].find(item => item.channelId === this.state.channelId);
-    if (!pending) return;
-    this.captionInFlight = true;
-    let delay = 100;
-    void chatRequest('call:caption', pending).then(() => {
-      this.pendingCaptions.delete(pending.segmentId);
-    }).catch(cause => {
-      delay = 3000;
-      this.emit({ error: cause instanceof Error ? cause.message : 'Caption sharing interrupted.' });
-    }).finally(() => {
-      this.captionInFlight = false;
-      if (this.pendingCaptions.size && !this.retryTimer && this.state.captionsOn) this.retryTimer = setTimeout(() => {
-        this.retryTimer = null; this.flushCaptions();
-      }, delay);
-    });
+  private mergeCaption(data: Caption & { segmentId: string }) {
+    this.addCaption(data.segmentId, data.sid ?? '', data.userId, data.timestamp, data.username, data.text, data.final, data.sequence, data.revision, data.sessionId);
+  }
+  private addCaption(id: string, sid: string, userId: string, timestamp: string, username: string, text: string, final: boolean, sequence = 0, revision = 0, sessionId = this.state.sessionId) {
+    if (sessionId && sessionId !== this.state.sessionId) return;
+    const captions = [...this.state.captions]; const index = captions.findIndex(item => item.id === id && item.userId === userId);
+    if (index >= 0 && ((captions[index].final && !final) || (captions[index].revision ?? 0) > revision)) return;
+    const line = { id, sid, userId, timestamp, username, text, final, sessionId, sequence, revision };
+    if (index >= 0) captions[index] = line; else captions.push(line);
+    captions.sort((a, b) => a.timestamp.localeCompare(b.timestamp) || (a.sequence ?? 0) - (b.sequence ?? 0));
+    this.emit({ captions: captions.slice(-500) });
+  }
+  private async syncTranscript() {
+    if (!this.state.channelId || !socket.connected) return;
+    try {
+      const result = await chatRequest<{ sessionId: string; segments: (Caption & { segmentId: string })[]; coverage: CallState['coverage'] }>('call:transcript-sync', { channelId: this.state.channelId });
+      if (result.sessionId !== this.state.sessionId) return;
+      result.segments.forEach(segment => this.mergeCaption(segment)); this.emit({ coverage: result.coverage }); this.capture?.flush();
+    } catch { /* reconnection restores replay; never clear captions on a failed refresh */ }
+  }
+  private captureStatus(state: string, reason?: string) {
+    this.emit({ captureState: state, ...(reason && ['error', 'interrupted'].includes(state) ? { error: reason } : {}) });
+    if (this.state.channelId && this.state.sessionId && socket.connected) void chatRequest('call:capture-state', { channelId: this.state.channelId, sessionId: this.state.sessionId, state, reason }).catch(() => {});
+  }
+  setCaptionsVisible() { this.emit({ captionsVisible: !this.state.captionsVisible }); }
+  setLanguage(language: string) { if (!['en-US', 'ur-PK', 'auto'].includes(language)) return; this.emit({ language }); this.capture?.restart(); }
+  async toggleTranscription(username: string) {
+    if (this.state.captionsOn) { await this.stopTranscription(); return; }
+    if (!this.state.channelId || !this.state.sessionId || this.state.muted) { this.emit({ error: 'Join and unmute before starting microphone transcription.' }); return; }
+    try {
+      const configuration = await responseData<{ engine: string }>(await apiFetch('/api/calls/transcription'));
+      if (configuration.engine === 'browser' && !recognitionClass()) { this.emit({ error: 'Browser recognition is unavailable. An operator must configure the self-hosted speech worker for this browser.' }); return; }
+      if (configuration.engine === 'browser' && this.state.language === 'auto') { this.emit({ error: 'Mixed-language automatic recognition requires the self-hosted speech worker. Select English or Urdu for browser recognition.' }); return; }
+      await chatRequest('call:state', { channelId: this.state.channelId, captions: true });
+      this.captureName = username;
+      const channelId = this.state.channelId; const sessionId = this.state.sessionId;
+      if (!this.capture && configuration.engine === 'self_hosted') this.capture = new PcmCapture({ channelId, sessionId,
+        track: () => this.audio, language: () => this.state.language,
+        connected: () => socket.connected && this.state.sessionId === sessionId,
+        local: segment => this.mergeCaption(segment), status: (state, reason) => this.captureStatus(state, reason) });
+      this.capture ??= new SpeechCapture({ userId: currentUserId() ?? '', channelId, sessionId,
+        track: () => this.audio, language: () => this.state.language, connected: () => socket.connected && this.state.sessionId === sessionId,
+        local: segment => this.addCaption(segment.segmentId, socket.id ?? '', currentUserId() ?? '', new Date().toISOString(), this.captureName, segment.text, false, segment.sequence, segment.revision, sessionId),
+        send: async (segment: TranscriptSegment) => {
+          const result = await chatRequest<{ segment?: Caption & { segmentId: string } }>('call:caption', segment);
+          if (segment.final && !result.segment) throw new Error('The server did not acknowledge this finalized segment.');
+          if (result.segment) this.mergeCaption(result.segment);
+        }, status: (state, reason) => this.captureStatus(state, reason) });
+      this.emit({ captionsOn: true });
+      this.capture.start(isAnnouncing());
+    } catch (cause) { this.emit({ error: cause instanceof Error ? cause.message : 'Transcription could not start.' }); }
+  }
+  toggleCaptions(username: string) { void this.toggleTranscription(username); }
+  private async stopTranscription() {
+    if (!this.capture) return true;
+    const drained = await this.capture.stop();
+    if (this.state.channelId && socket.connected) await chatRequest('call:state', { channelId: this.state.channelId, captions: false }).catch(() => {});
+    this.emit({ captionsOn: false }); return drained;
   }
 
-  private addCaption(id: string, sid: string, userId: string, timestamp: string, username: string, text: string, final: boolean) {
-    const captions = [...this.state.captions];
-    const index = captions.findIndex(item => item.id === id && item.userId === userId);
-    if (index >= 0 && captions[index].final) return;
-    const line = { id, sid, userId, timestamp, username, text, final };
-    if (index >= 0) captions[index] = line;
-    else captions.push(line);
-    this.emit({ captions: captions.slice(-100) });
-  }
-
-  /** Live captions: the browser transcribes your microphone and shares the words with the call. */
-  toggleCaptions(username: string) {
-    if (this.state.muted && !this.recognition) { this.emit({ error: 'Unmute your microphone before enabling transcription.' }); return; }
-    if (this.recognition) { this.stopCaptions(); return; }
-    const Speech = recognitionClass();
-    if (!Speech) { this.emit({ error: 'Live captions need Chrome or Edge on a computer.' }); return; }
-    const recognition = new Speech();
-    recognition.lang = typeof navigator !== 'undefined' ? navigator.language : 'en-US';
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.onresult = event => {
-      const channelId = this.state.channelId;
-      this.recognitionFailures = 0;
-      if (!channelId || this.state.muted || Date.now() < this.disclosureUntil || isAnnouncing()) return;
-      for (let index = event.resultIndex; index < event.results.length; index++) {
-        const result = event.results[index];
-        const text = result[0]?.transcript.trim();
-        if (!text || this.captionResults.get(index) === `final:${text}`) continue;
-        const parts = captionParts(text);
-        const share = result.isFinal || Date.now() - this.lastInterim >= 400;
-        if (share) { this.lastInterim = Date.now(); this.captionResults.set(index, `${result.isFinal ? 'final' : 'interim'}:${text}`); }
-        parts.forEach((part, partIndex) => {
-          const segmentId = `${this.captionEpoch}_${index}_${partIndex}`;
-          this.addCaption(segmentId, socket.id ?? 'me', currentUserId() ?? '', new Date().toISOString(), username, part, result.isFinal);
-          if (share && result.isFinal) {
-            if (this.pendingCaptions.size >= 1000) {
-              this.emit({ error: 'Caption sharing has been interrupted for too long. Reconnect to continue sharing speech.' });
-              return;
-            }
-            this.pendingCaptions.set(segmentId, { channelId, segmentId, text: part, final: true });
-          } else if (share && socket.connected) {
-            void chatRequest('call:caption', { channelId, segmentId, text: part, final: false }).catch(() => {});
-          }
-        });
-        this.flushCaptions();
-      }
-    };
-    recognition.onerror = event => {
-      if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(event.error)) {
-        this.stopCaptions(); this.emit({ error: 'Transcription needs access to an available microphone.' });
-      } else this.recognitionFailures += 1;
-    };
-    recognition.onend = () => {
-      if (this.recognition !== recognition || !this.state.channelId) return;
-      if (isAnnouncing()) return;
-      this.restartRecognition(recognition, Math.min(10000, 650 * 2 ** Math.min(6, this.recognitionFailures)));
-    };
-    this.recognition = recognition;
-    this.captionEpoch = crypto.randomUUID(); this.captionResults.clear();
-    void chatRequest('call:state', { channelId: this.state.channelId, captions: true }).then(() => {
-      if (this.recognition !== recognition) return;
-      try { this.emit({ captionsOn: true }); playSound('captions_start'); if (!isAnnouncing()) this.restartRecognition(recognition, Math.max(650, this.disclosureUntil - Date.now())); } catch { this.stopCaptions(); }
-    }).catch(cause => { this.stopCaptions(); this.emit({ error: cause instanceof Error ? cause.message : 'Transcription could not be enabled.' }); });
-  }
-
-  private restartRecognition(recognition: Recognition, delay: number) {
-    if (this.recognitionRestart) clearTimeout(this.recognitionRestart);
-    this.recognitionRestart = setTimeout(() => {
-      this.recognitionRestart = null;
-      if (this.recognition !== recognition || !this.state.channelId || isAnnouncing()) return;
-      try { this.captionEpoch = crypto.randomUUID(); this.captionResults.clear(); recognition.start(); }
-      catch { this.stopCaptions(); }
-    }, delay);
-  }
-
-  private stopCaptions() {
-    const recognition = this.recognition;
-    this.recognition = null;
-    if (this.recognitionRestart) clearTimeout(this.recognitionRestart);
-    this.recognitionRestart = null;
-    this.pendingCaptions.clear();
-    if (this.retryTimer) clearTimeout(this.retryTimer);
-    this.retryTimer = null;
-    if (this.state.channelId && socket.connected) void chatRequest('call:state', { channelId: this.state.channelId, captions: false }).catch(() => {});
-    try { recognition?.stop(); } catch { /* already stopped */ }
-    if (this.state.captionsOn) playSound('captions_stop');
-    this.emit({ captionsOn: false });
-  }
-
-  private hangUp() {
+  private hangUp(clear = false) {
+    if (this.syncTimer) clearInterval(this.syncTimer); this.syncTimer = null;
+    if (this.announcementResume) clearTimeout(this.announcementResume);
     if (this.outgoingTimeout) clearTimeout(this.outgoingTimeout);
     stopHuddleAudio();
     if (this.outgoingInvitation) void chatRequest('call:respond', { invitationId: this.outgoingInvitation, action: 'cancelled' }).catch(() => {});
     this.outgoingInvitation = null;
-    this.stopCaptions();
+    this.capture?.dispose(clear); this.capture = null;
     this.resetLinks();
     this.stopTracks();
     this.peers.clear();
@@ -394,10 +355,11 @@ class CallManager {
   }
 
   async ring(channelId: string) {
-    const result = await chatRequest<{ invitationId: string; expiresAt: number }>('call:ring', { channelId });
+    const result = await chatRequest<{ invitationId: string; expiresAt: number; caller: string; status: string }>('call:ring', { channelId });
+    if (result.caller !== currentUserId() || result.status !== 'ringing') return;
     if (this.outgoingTimeout) clearTimeout(this.outgoingTimeout);
     this.outgoingTimeout = setTimeout(() => { if (this.outgoingInvitation === result.invitationId) { this.outgoingInvitation = null; this.emit({ outgoing: false }); stopRing(result.invitationId); playSound('unanswered', undefined, `resolved:${result.invitationId}`); } }, Math.max(0, result.expiresAt - Date.now()));
-    this.outgoingInvitation = result.invitationId; this.emit({ outgoing: true }); startRing(result.invitationId, true, result.expiresAt);
+    this.outgoingInvitation = result.invitationId; this.emit({ outgoing: true });
   }
 
   cancelRinging() {
@@ -411,7 +373,7 @@ class CallManager {
     if (!this.audio) return;
     const muted = !this.state.muted;
     this.audio.enabled = !muted;
-    if (muted && this.recognition) this.stopCaptions();
+    if (muted) this.capture?.pause('Microphone muted'); else this.capture?.resume();
     playSound(muted ? 'microphone_mute' : 'microphone_on', 'huddles');
     this.emit({ muted });
     this.sendState();
@@ -473,6 +435,7 @@ class CallManager {
       this.emit({ error: deviceMessage('microphone', cause) });
       return;
     }
+    this.capture?.pause('Audio input changed');
     track.enabled = !this.state.muted;
     this.audio?.stop();
     this.audio = track;
@@ -481,6 +444,7 @@ class CallManager {
       else link.audioSender = link.pc.addTrack(track);
     }
     this.updateLocalStream();
+    if (!this.state.muted) this.capture?.restart();
   }
 
   private sendState() {
@@ -512,7 +476,7 @@ class CallManager {
     const link: Link = {
       pc, polite: socket.id! > sid, makingOffer: false, ignoreOffer: false, stream: new MediaStream(),
       audioSender: this.audio ? pc.addTrack(this.audio) : null,
-      videoSender: this.video ? pc.addTrack(this.video) : null,
+      videoSender: this.video ? pc.addTrack(this.video) : null, pendingCandidates: [],
     };
     this.links.set(sid, link);
     pc.onnegotiationneeded = async () => {
@@ -520,7 +484,8 @@ class CallManager {
         link.makingOffer = true;
         await pc.setLocalDescription();
         this.signal(sid, { description: pc.localDescription!.toJSON() });
-      } finally { link.makingOffer = false; }
+      } catch { this.emit({ error: 'Media negotiation was interrupted; reconnecting.' }); pc.restartIce(); }
+      finally { link.makingOffer = false; }
     };
     pc.onicecandidate = event => { if (event.candidate) this.signal(sid, { candidate: event.candidate.toJSON() }); };
     pc.ontrack = event => {
@@ -529,15 +494,21 @@ class CallManager {
       event.track.onunmute = () => this.setPeerStream(sid, link.stream);
       this.setPeerStream(sid, link.stream);
     };
-    pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed') pc.restartIce(); };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') {
+        this.emit({ status: 'connected', error: '' });
+        const peer = this.peers.get(sid);
+        if (peer && this.state.channelId) void chatRequest('call:media-ready', { channelId: this.state.channelId, peerUserId: peer.userId }).catch(() => {});
+      } else if (pc.connectionState === 'failed') { pc.restartIce(); this.emit({ status: 'reconnecting', error: 'A media connection failed; attempting ICE recovery.' }); }
+      else if (pc.connectionState === 'disconnected' && ![...this.links.values()].some(item => item.pc.connectionState === 'connected')) this.emit({ status: 'reconnecting' });
+    };
   }
 
   private setPeerStream(sid: string, stream: MediaStream) {
     const peer = this.peers.get(sid);
     if (!peer) return;
-    const fresh = new MediaStream(stream.getTracks());
-    this.peers.set(sid, { ...peer, stream: fresh });
-    this.meter(sid, fresh);
+    this.peers.set(sid, { ...peer, stream });
+    this.meter(sid, stream);
     this.emit();
   }
 
@@ -551,11 +522,13 @@ class CallManager {
         link.ignoreOffer = !link.polite && collision;
         if (link.ignoreOffer) return;
         await link.pc.setRemoteDescription(description);
+        for (const queued of link.pendingCandidates.splice(0)) await link.pc.addIceCandidate(queued);
         if (description.type === 'offer') {
           await link.pc.setLocalDescription();
           this.signal(from, { description: link.pc.localDescription!.toJSON() });
         }
       } else if (candidate) {
+        if (!link.pc.remoteDescription) { if (link.pendingCandidates.length < 256) link.pendingCandidates.push(candidate); return; }
         try { await link.pc.addIceCandidate(candidate); }
         catch (error) { if (!link.ignoreOffer) throw error; }
       }

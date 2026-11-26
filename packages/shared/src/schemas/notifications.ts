@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const notificationTypes = ['mention', 'reply', 'reaction', 'post_comment', 'invite_accepted', 'dm'] as const;
+export const notificationTypes = ['mention', 'reply', 'reaction', 'post_comment', 'invite_accepted', 'dm', 'missed_huddle'] as const;
 export const notificationTypeSchema = z.enum(notificationTypes);
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
 
@@ -28,6 +28,7 @@ export const notificationSchema = z.object({
   snippet: z.string(),
   count: z.number(),
   readAt: z.string().nullable(),
+  callInvitationId: z.string().nullable().optional(),
   createdAt: z.string(),
 });
 export type AppNotification = z.infer<typeof notificationSchema>;

@@ -17,14 +17,16 @@ person leaves, the channel gets a short system message saying who was there and 
 
 import json
 import time
+from datetime import UTC, datetime
 
 from fastapi import HTTPException
 from redis.exceptions import WatchError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.calls import sessions
 from app.core.config import settings
-from app.db.models import ChannelType, HuddleSegment, MemberRole, User
+from app.db.models import ChannelType, HuddleMember, HuddleSegment, HuddleSession, MemberRole, User
 from app.db.session import SessionLocal, redis
 from app.messages.service import check_not_blocked, readable
 from app.spaces.permissions import require_role
@@ -43,6 +45,8 @@ async def clear_stale_calls() -> int:
         keys = [key async for key in redis.scan_iter(f"{settings.socketio_channel}:{pattern}")]
         if keys:
             removed += await redis.delete(*keys)
+    async with SessionLocal() as session:
+        await sessions.mark_server_restart(session)
     return removed
 
 
@@ -70,7 +74,7 @@ def ice_servers() -> list[dict]:
         return []
 
 
-async def check_access(session: AsyncSession, channel_id: str, user: User):
+async def check_access(session: AsyncSession, channel_id: str, user: User, direct_contact=True):
     """Same rule as reading the channel (private channels, members-only chat, DM participants),
     plus: space members must be at least `member`, and people who blocked each other can't
     share a 1:1 conversation call."""
@@ -79,7 +83,8 @@ async def check_access(session: AsyncSession, channel_id: str, user: User):
         await check_not_blocked(session, channel.id, user.id)
         from app.availability.service import enforce
 
-        await enforce(session, channel.id, user.id, "huddles")
+        if direct_contact:
+            await enforce(session, channel.id, user.id, "huddles")
         return channel
     require_role(member.role if member else None, MemberRole.member)
     return channel
@@ -92,31 +97,32 @@ async def participants(channel_id: str) -> dict[str, dict]:
 
 async def add(channel_id: str, sid: str, user: User) -> dict:
     """Adds the socket to the room atomically enough for a 6-person cap (WATCH/MULTI)."""
-    key = room_key(channel_id)
-    entry = {"userId": user.id, "username": user.username, "avatarUrl": user.avatar_url,
-             "muted": False, "camera": False,
-             "screen": False, "joinedAt": int(time.time() * 1000)}
-    async with redis.pipeline(transaction=True) as pipe:
-        while True:
-            try:
-                await pipe.watch(key)
-                count = await pipe.hlen(key)
-                already = await pipe.hexists(key, sid)
-                if count >= MAX_PARTICIPANTS and not already:
-                    await pipe.unwatch()
-                    raise HTTPException(409, "This call is full")
-                pipe.multi()
-                pipe.hset(key, sid, json.dumps(entry))
-                pipe.set(sid_key(sid), channel_id)
-                pipe.hsetnx(meta_key(channel_id), "start", entry["joinedAt"])
-                pipe.zadd(who_key(channel_id), {user.username: entry["joinedAt"]}, nx=True)
-                await pipe.execute()
-                return entry
-            except WatchError:
-                continue  # someone else joined at the same moment; re-check the count
+    async with SessionLocal() as session:
+        meeting = await sessions.join(session, channel_id, user)
+        entry = {"userId": user.id, "username": user.display_name or user.username,
+                 "avatarUrl": user.avatar_url, "muted": False, "camera": False,
+                 "screen": False, "joinedAt": int(time.time() * 1000), **sessions.meeting_out(meeting)}
+        key = room_key(channel_id)
+        async with redis.pipeline(transaction=True) as pipe:
+            while True:
+                try:
+                    await pipe.watch(key)
+                    if await pipe.hlen(key) >= MAX_PARTICIPANTS and not await pipe.hexists(key, sid):
+                        await pipe.unwatch()
+                        raise HTTPException(409, "This call is full")
+                    pipe.multi()
+                    pipe.hset(key, sid, json.dumps(entry))
+                    pipe.set(sid_key(sid), channel_id)
+                    pipe.hset(meta_key(channel_id), mapping={"start": meeting.meeting_start, "sessionId": meeting.id})
+                    pipe.zadd(who_key(channel_id), {user.username: entry["joinedAt"]}, nx=True)
+                    await pipe.execute()
+                    await session.commit()
+                    return entry
+                except WatchError:
+                    continue
 
 
-async def remove(sid: str) -> tuple[str, dict, dict | None] | None:
+async def remove(sid: str, disconnected=False) -> tuple[str, dict, dict | None] | None:
     """Removes the socket from its call. Returns (channel id, its entry, the finished huddle
     when this was the last person out)."""
     channel_id = await redis.get(sid_key(sid))
@@ -128,7 +134,17 @@ async def remove(sid: str) -> tuple[str, dict, dict | None] | None:
         pipe.delete(sid_key(sid))
         await pipe.execute()
     entry = json.loads(raw) if raw else {}
-    return channel_id, entry, await finish_if_empty(channel_id)
+    if entry.get("sessionId"):
+        async with SessionLocal() as session:
+            member = await session.get(HuddleMember, (entry["sessionId"], entry.get("userId")))
+            if member and member.consented:
+                if disconnected:
+                    member.capture_state = "offline"
+                    member.incomplete_reason = "A participant disconnected while transcribing."
+                elif member.capture_state not in ("stopped", "inactive"):
+                    member.incomplete_reason = "A participant left before transcription was drained."
+                await session.commit()
+    return channel_id, entry, await finish_if_empty(channel_id, defer=disconnected)
 
 
 def notes_key(channel_id: str) -> str:
@@ -146,26 +162,46 @@ async def add_note(channel_id: str, username: str, text: str) -> None:
     await redis.expire(key, 12 * 3600)
 
 
-async def finish_if_empty(channel_id: str) -> dict | None:
-    """When nobody is left, takes the huddle record (once: concurrent leavers can't both get it)."""
-    if await redis.hlen(room_key(channel_id)) > 0:
-        return None
-    async with redis.pipeline(transaction=True) as pipe:
-        pipe.hget(meta_key(channel_id), "start")
-        pipe.zrange(who_key(channel_id), 0, -1)
-        pipe.lrange(notes_key(channel_id), 0, -1)
-        pipe.delete(meta_key(channel_id), who_key(channel_id), notes_key(channel_id))
-        start, names, notes, _ = await pipe.execute()
-    if start is None:
-        return None
+async def finish_if_empty(channel_id: str, defer=False) -> dict | None:
     async with SessionLocal() as session:
-        segments = list(await session.scalars(select(HuddleSegment).where(
-            HuddleSegment.channel_id == channel_id, HuddleSegment.meeting_start == int(start),
-        ).order_by(HuddleSegment.created_at, HuddleSegment.user_id, HuddleSegment.segment_id)))
-    durable = [{"who": item.speaker, "text": item.text, "at": item.created_at.isoformat(),
-                "userId": item.user_id, "segmentId": item.segment_id} for item in segments]
-    return {"seconds": max(0, int((time.time() * 1000 - int(start)) / 1000)), "names": list(names),
-            "notes": durable or [json.loads(line) for line in notes]}
+        await sessions.lock(session, channel_id)
+        meeting = await sessions.current(session, channel_id)
+        if meeting is None or await redis.hlen(room_key(channel_id)) > 0:
+            return None
+        if defer:
+            meeting.empty_since = datetime.now(UTC)
+            await session.commit()
+            return None
+        meeting.ended_at = datetime.now(UTC)
+        members = list(await session.scalars(select(HuddleMember).where(HuddleMember.session_id == meeting.id)))
+        rows = list(await session.scalars(select(HuddleSegment).where(
+            HuddleSegment.session_id == meeting.id).order_by(HuddleSegment.created_at, HuddleSegment.user_id,
+                                                            HuddleSegment.sequence, HuddleSegment.segment_id)))
+        result = {"sessionId": meeting.id, "createdBy": meeting.created_by,
+            "startedAt": meeting.started_at.isoformat(), "meetingStart": meeting.meeting_start,
+            "seconds": max(0, int((meeting.ended_at - meeting.started_at).total_seconds())),
+            "names": [member.speaker for member in members],
+            "coverage": await sessions.coverage(session, meeting.id),
+            "notes": [{"who": item.speaker, "text": item.text, "at": item.created_at.isoformat(),
+                       "userId": item.user_id, "segmentId": item.segment_id} for item in rows]}
+        await redis.delete(meta_key(channel_id), who_key(channel_id), notes_key(channel_id))
+        await session.commit()
+        from app.calls import invitations
+        await invitations.finish_channel(channel_id, meeting.ended_at)
+        return result
+
+
+async def finish_abandoned():
+    from datetime import timedelta
+
+    from app.realtime.socket import post_huddle_summary
+    async with SessionLocal() as session:
+        rows = list(await session.scalars(select(HuddleSession).where(HuddleSession.ended_at.is_(None),
+            HuddleSession.empty_since <= datetime.now(UTC) - timedelta(seconds=settings.call_reconnect_grace_seconds))))
+    for row in rows:
+        result = await finish_if_empty(row.channel_id)
+        if result:
+            await post_huddle_summary(row.channel_id, row.created_by, result)
 
 
 def format_duration(seconds: int) -> str:

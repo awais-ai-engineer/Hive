@@ -3,12 +3,12 @@
 import { useEffect, useState } from 'react';
 
 /** "4:05" since the huddle connected; empty before that. */
-export function useCallTimer(connected: boolean) {
-  const [started, setStarted] = useState<number | null>(null);
+export function useCallTimer(startedAt: string | null) {
+  const started = startedAt ? Date.parse(startedAt) : null;
   const [now, setNow] = useState(() => Date.now());
-  useEffect(() => { setStarted(connected ? Date.now() : null); }, [connected]);
   useEffect(() => {
     if (!started) return;
+    setNow(Date.now());
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(tick);
   }, [started]);

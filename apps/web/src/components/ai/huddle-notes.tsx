@@ -12,7 +12,7 @@ import { Skeleton, SummaryPanel } from './summary-panel';
 export function HuddleNotes({ messageId, channelId, userId }: { messageId: string; channelId: string; userId?: string }) {
   const enabled = useAiStatus();
   const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle');
-  const [summary, setSummary] = useState<AiSummary | null>(null);
+  const [summary, setSummary] = useState<(AiSummary & { limitation?: string; transcriptCoverage?: string }) | null>(null);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -21,7 +21,7 @@ export function HuddleNotes({ messageId, channelId, userId }: { messageId: strin
   async function run() {
     setState('busy'); setError(''); setNotice('');
     try {
-      const result = await aiPost<AiSummary>('/huddle-notes', { messageId });
+      const result = await aiPost<AiSummary & { limitation?: string; transcriptCoverage?: string }>('/huddle-notes', { messageId });
       setSummary(result); setPicked(new Set(result.actions.map((_, index) => index))); setState('done');
     } catch (cause) { setError(requestError(cause)); setState('idle'); }
   }
@@ -45,6 +45,7 @@ export function HuddleNotes({ messageId, channelId, userId }: { messageId: strin
     {error && <p role="alert" className="mt-1 text-center text-xs text-rose-500">{error}</p>}
     {state !== 'idle' && <section aria-live="polite" className="card mt-2 p-4 text-sm">
       {state === 'busy' ? <Skeleton /> : summary && <>
+        {summary.limitation && <p role="status" className="mb-3 text-xs text-white/60">{summary.limitation}{summary.transcriptCoverage === 'partial' ? ' Capture interruptions or missing participant consent were reported.' : ''}</p>}
         <SummaryPanel summary={summary} hideActions />
         {summary.actions.length > 0 && <fieldset className="mt-2 border-t border-white/10 pt-3">
           <legend className="mb-1 text-xs font-semibold text-white/60">Action items: pick the ones to keep</legend>

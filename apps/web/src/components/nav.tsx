@@ -4,7 +4,7 @@ import { Tooltip as UiTooltip } from '@hive/ui';
 
 import { Button as UiButton } from '@hive/ui';
 
-import { conversationAudible, playSound, stopRing, type SoundEvent } from '../lib/sounds';
+import { conversationAudible, playSound, type SoundEvent } from '../lib/sounds';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -68,7 +68,7 @@ export default function Nav() {
     };
   }, [user, pathname]);
 
-  useEffect(() => { setMenu(false); stopRing(); }, [pathname]);
+  useEffect(() => { setMenu(false); }, [pathname]);
   useEffect(() => {
     if (!menu) return;
     const close = (event: MouseEvent) => { if (!menuRef.current?.contains(event.target as Node)) setMenu(false); };

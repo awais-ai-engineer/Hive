@@ -7,6 +7,7 @@ import { socket } from './socket';
 import { apiData } from './spaces';
 
 export const TYPE_LABELS: Record<NotificationType, { title: string; hint: string }> = {
+  missed_huddle: { title: 'Missed Huddles', hint: 'Unanswered Huddle invitations and their invitation time.' },
   mention: { title: 'Mentions', hint: 'Someone mentions you in a message.' },
   reply: { title: 'Replies', hint: 'Replies in threads you started or joined.' },
   reaction: { title: 'Reactions', hint: 'Someone reacts to your message.' },
@@ -42,6 +43,7 @@ export function describe(item: AppNotification) {
   const who = actorName(item);
   const others = item.count > 1 ? ` and ${item.count - 1} ${item.count === 2 ? 'other' : 'others'}` : '';
   switch (item.type) {
+    case 'missed_huddle': return `Missed Huddle from ${who}`;
     case 'mention': return `${who} mentioned you in ${place(item)}`;
     case 'reply': return `${who} replied in a thread in ${place(item)}`;
     case 'reaction': return `${who}${others} reacted to your message in ${place(item)}`;

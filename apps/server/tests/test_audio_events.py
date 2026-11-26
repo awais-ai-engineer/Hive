@@ -1,7 +1,5 @@
-import json
 
 from app.calls import invitations
-from app.db.session import redis
 from tests.helpers import call, connected, event, quiet
 
 
@@ -38,7 +36,7 @@ async def test_invitation_decline_reaches_caller_and_all_recipient_devices(clien
         assert incoming['invitationId'] == (await event(second['call:incoming']))['invitationId']
         assert incoming['invitationId'] == row['invitationId']
         assert (await call(c, 'call:respond', {'invitationId': row['invitationId'], 'action': 'declined'}))['error']['code'] == 'forbidden'
-        assert (await call(b, 'call:respond', {'invitationId': row['invitationId'], 'action': 'accepted'}))['error']['code'] == 'forbidden'
+        assert incoming['status'] == 'ringing' and incoming['from']['displayName'] == 'alice'
         await call(b, 'call:respond', {'invitationId': row['invitationId'], 'action': 'declined'})
         assert (await event(aq['call:resolved']))['status'] == 'declined'
         assert (await event(second['call:resolved']))['status'] == 'declined'
@@ -58,9 +56,14 @@ async def test_invitation_accept_cancel_and_expiry(client, setup_chat, live_serv
         await call(a, 'call:respond', {'invitationId': row['invitationId'], 'action': 'cancelled'})
         assert (await event(aq['call:resolved']))['status'] == 'cancelled'
         row = await invitations.create(dm, alice['user']['id'], [bob['user']['id']], a.get_sid())
-        row['expiresAt'] = 0
-        await redis.set(invitations.key(row['invitationId']), json.dumps(row), ex=120)
-        await redis.zadd(invitations.EXPIRY, {row['invitationId']: 0})
+        from datetime import UTC, datetime, timedelta
+
+        from app.db.models import HuddleInvitation
+        from app.db.session import SessionLocal
+        async with SessionLocal() as session:
+            expired = await session.get(HuddleInvitation, row['invitationId'])
+            expired.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+            await session.commit()
         await invitations.expire_or_cancel()
         assert (await event(aq['call:resolved']))['status'] == 'expired'
 

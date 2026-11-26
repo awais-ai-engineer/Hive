@@ -1,42 +1,44 @@
 'use client';
-
-import { Button as UiButton } from '@hive/ui';
-
-import { useEffect, useState } from 'react';
+import { Button } from '@hive/ui';
+import { useState } from 'react';
 import { calls } from '../../lib/call';
-import { chatRequest, socket } from '../../lib/socket';
-import { startRing, stopRing } from '../../lib/sounds';
-import { Icon } from '../ui/icons';
+import { currentUserId } from '../../lib/api';
+import { respondInvitation, useInvitations } from '../../lib/call-invitations';
+import { requestError } from '../../lib/spaces';
+import { stopRing } from '../../lib/sounds';
+import { Avatar } from '../ui/avatar';
 
-type Ring = { channelId: string; invitationId: string; expiresAt: number; sound?: boolean; from: { id: string; username: string } };
-
-/** "bob is calling you" toast for conversation huddles. Mount once in the logged-in app. */
+/** Authoritative, recoverable invitation UI. Route changes never own or resolve a call. */
 export function IncomingCall({ titleFor, onAccept }: { titleFor: (channelId: string, caller: string) => string; onAccept?: (channelId: string) => void }) {
-  const [ring, setRing] = useState<Ring | null>(null);
-  useEffect(() => {
-    const onIncoming = (data: Ring) => { if (calls.getState().channelId !== data.channelId) setRing(data); };
-    const resolved = (data: { invitationId: string }) => setRing(current => current?.invitationId === data.invitationId ? null : current);
-    const disconnected = () => setRing(null);
-    socket.on('call:resolved', resolved).on('disconnect', disconnected);
-    socket.on('call:incoming', onIncoming);
-    return () => { socket.off('call:incoming', onIncoming).off('call:resolved', resolved).off('disconnect', disconnected); };
-  }, []);
-  useEffect(() => {
-    if (!ring) { stopRing(); return; }
-    if (ring.sound !== false) startRing(ring.invitationId, false, ring.expiresAt);
-    const timer = setTimeout(() => setRing(null), Math.max(0, ring.expiresAt - Date.now()));
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { void chatRequest('call:respond', { invitationId: ring.invitationId, action: 'declined' }).catch(() => {}); setRing(null); } };
-    window.addEventListener('keydown', onKey);
-    return () => { clearTimeout(timer); stopRing(); window.removeEventListener('keydown', onKey); };
-  }, [ring]);
-  if (!ring) return null;
-  return <div role="alertdialog" aria-label="Incoming huddle" className="card on-surface animate-in fixed bottom-4 right-4 z-50 w-[min(92vw,320px)] p-4">
-    <p className="flex items-center gap-2 font-semibold"><Icon name="headphones" size={18} className="text-brand" />{ring.from.username} is calling you</p>
-    <p className="mt-1 text-xs text-white/60">Join the huddle to talk. They will see you when you arrive.</p>
-    <div className="mt-3 flex justify-end gap-2 text-sm">
-      <UiButton type="button" onClick={() => { void chatRequest('call:respond', { invitationId: ring.invitationId, action: 'declined' }).catch(() => {}); setRing(null); }} className="btn-ghost">Decline</UiButton>
-      <UiButton type="button" autoFocus className="auth-button !py-1.5 !text-sm"
-        onClick={() => { const { channelId } = ring; setRing(null); onAccept?.(channelId); void calls.join(channelId, titleFor(channelId, ring.from.username)).then(async () => { if (calls.getState().channelId === channelId && calls.getState().status === 'connected') { await chatRequest('call:respond', { invitationId: ring.invitationId, action: 'accepted' }); calls.setStageOpen(true); } else await chatRequest('call:respond', { invitationId: ring.invitationId, action: 'declined' }); }).catch(() => {}); }}>Join</UiButton>
-    </div>
-  </div>;
+  const rows = useInvitations(); const user = currentUserId();
+  const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  const incoming = rows.find(row => row.status === 'ringing' && row.from.id !== user && row.recipients.includes(user ?? '') && !row.declined.includes(user ?? '') && row.expiresAt > Date.now());
+  const outgoing = rows.find(row => row.from.id === user && ['ringing', 'accepted', 'connecting'].includes(row.status) && row.expiresAt > Date.now());
+  const row = incoming ?? outgoing;
+  if (!row) return error ? <p role="alert" className="card fixed bottom-20 right-4 z-[60] max-w-xs p-3 text-sm text-rose-500">{error}<Button type="button" className="btn-ghost" onClick={() => setError('')}>Dismiss</Button></p> : null;
+  const person = incoming ? row.from : row.people[0];
+  async function decline() {
+    setBusy(true); setError('');
+    try { await respondInvitation(row!.invitationId, incoming ? 'declined' : 'cancelled'); }
+    catch (cause) { setError(requestError(cause)); } finally { setBusy(false); }
+  }
+  async function accept() {
+    if (!incoming) return;
+    setBusy(true); setError(''); stopRing(row!.invitationId);
+    try {
+      // Server acceptance reserves the device and stops every other recipient tab's ringtone.
+      await respondInvitation(row!.invitationId, 'accepted');
+      onAccept?.(row!.channelId);
+      await calls.join(row!.channelId, titleFor(row!.channelId, incoming.from.displayName ?? incoming.from.username), row!.invitationId);
+      if (calls.getState().channelId === row!.channelId && calls.getState().status !== 'idle' && calls.getState().status !== 'error') calls.setStageOpen(true);
+      else await respondInvitation(row!.invitationId, 'declined');
+    } catch (cause) { setError(requestError(cause)); } finally { setBusy(false); }
+  }
+  return <section role={incoming ? 'alertdialog' : 'status'} aria-label={incoming ? 'Incoming huddle' : 'Outgoing Huddle'} className="card on-surface fixed bottom-20 right-4 z-[60] w-[min(92vw,320px)] p-4 sm:bottom-4">
+    <div className="flex items-center gap-3"><Avatar name={person?.displayName ?? person?.username ?? 'Huddle'} src={person?.avatarUrl} size={36} /><div className="min-w-0"><p className="truncate text-sm font-semibold">{person?.displayName ?? person?.username ?? 'Conversation Huddle'}</p><p className="text-xs text-white/60">{incoming ? 'Incoming Huddle invitation' : row.status === 'ringing' ? 'Calling — waiting for an answer' : 'Connecting media…'}</p></div></div>
+    {row.channelName && <p className="mt-2 truncate text-xs text-white/60">{row.channelName}</p>}
+    {incoming && <p className="mt-2 text-xs text-white/60">Sound needs permission from your browser. You can still join or decline here.</p>}
+    {error && <p role="alert" className="mt-2 text-xs text-rose-500">{error}</p>}
+    <div className="mt-3 flex justify-end gap-2"><Button disabled={busy} type="button" className="btn-ghost" onClick={() => void decline()}>{incoming ? 'Decline' : 'Cancel call'}</Button>{incoming && <Button disabled={busy} type="button" className="auth-button !w-auto" onClick={() => void accept()}>Join</Button>}</div>
+  </section>;
 }

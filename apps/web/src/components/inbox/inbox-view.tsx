@@ -9,6 +9,7 @@ import { actorName, describe, notificationHref } from '../../lib/notifications';
 import { socket } from '../../lib/socket';
 import { apiData, requestError, type Space } from '../../lib/spaces';
 import { tasksApi } from '../../lib/tasks';
+import { HuddleButton } from '../call/huddle-button';
 import { Avatar } from '../ui/avatar';
 import { Icon, type IconName } from '../ui/icons';
 
@@ -23,10 +24,11 @@ const FILTERS: { id: Filter; label: string; icon: IconName }[] = [
   { id: 'dm', label: 'Direct messages', icon: 'message' },
   { id: 'reaction', label: 'Reactions', icon: 'smile' },
   { id: 'post_comment', label: 'Comments', icon: 'layers' },
+  { id: 'missed_huddle', label: 'Missed Huddles', icon: 'phone' },
   { id: 'invite_accepted', label: 'Invites', icon: 'users' },
 ];
 const ICONS: Record<NotificationType, IconName> = {
-  mention: 'at', reply: 'threads', dm: 'message', reaction: 'smile', post_comment: 'layers', invite_accepted: 'users',
+  missed_huddle: 'phone', mention: 'at', reply: 'threads', dm: 'message', reaction: 'smile', post_comment: 'layers', invite_accepted: 'users',
 };
 /** Things that are waiting on you, not just news. */
 const NEEDS_YOU: NotificationType[] = ['mention', 'dm', 'reply'];
@@ -192,6 +194,7 @@ export function InboxView() {
           <p className="whitespace-pre-wrap break-words text-sm">{current.snippet || describe(current)}</p>
         </div>
         <div className="mt-4 grid gap-2">
+          {current.type === 'missed_huddle' && current.channelId && <HuddleButton channelId={current.channelId} title={`Call back ${actorName(current)}`} ring />}
           <UiButton type="button" className="auth-button" onClick={() => router.push(notificationHref(current))}><Icon name="message" size={15} />{current.channelId ? 'Reply in conversation' : 'Open'}</UiButton>
           <div className="grid grid-cols-2 gap-2">
             <UiButton type="button" className="btn-ghost justify-center" onClick={() => void remindLater(current)}><Icon name="clock" size={15} />Remind me later</UiButton>

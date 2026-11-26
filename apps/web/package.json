@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
     "lint:ui": "node scripts/check-ui.mjs",
-    "test:audio": "node --test test/sounds.test.cjs"
+    "test:audio": "node --test test/*.test.cjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

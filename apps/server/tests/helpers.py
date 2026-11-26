@@ -28,7 +28,7 @@ async def connected(url, account=None):
         "reaction:updated", "read:updated", "presence", "channel:activity", "dm:activity",
         "thread:activity", "thread:read",
         "call:peer-joined", "call:peer-left", "call:signal", "call:state", "call:incoming",
-        "call:disclosure", "call:resolved", "sounds:updated", "audio:event", "call:participants", "call:removed", "call:react", "call:caption", "doc:updated", "task:updated",
+        "call:disclosure", "call:resolved", "call:invitation", "call:capture-state", "sounds:updated", "audio:event", "call:participants", "call:removed", "call:react", "call:caption", "doc:updated", "task:updated",
         "notification:new", "notification:count", "command:response",
     )}
     for name, queue in queues.items():

@@ -391,29 +391,38 @@ async def test_catch_up_matches_unreads_and_hides_private(client, setup_chat, ai
 # Huddle notes ------------------------------------------------------------------------------------
 
 
-async def test_huddle_notes_window_and_actions(client, setup_chat, ai):
-    alice, bob, _, _ah, bh, ch, _, channel = setup_chat
+async def test_huddle_notes_use_durable_speech_and_actions(client, setup_chat, ai):
+    from app.db.models import HuddleMember, HuddleSegment, HuddleSession
+
+    alice, bob, _carol, _ah, bh, ch, _, channel = setup_chat
     start = datetime.now(UTC) - timedelta(minutes=30)
-    before = await put(channel, alice, "Before the huddle")
-    inside = await put(channel, alice, "Alice will send the report")
-    other = await put(channel, bob, "Bob agrees on Friday")
-    after = await put(channel, alice, "After the huddle")
+    await client.post('/api/spaces/chat/join', headers=ch)
+    await put(channel, alice, "Unrelated text chat must not become spoken meeting content")
     async with SessionLocal() as session:
-        for message_id, when in ((before, start - timedelta(minutes=5)), (inside, start + timedelta(minutes=5)),
-                                 (other, start + timedelta(minutes=10)), (after, start + timedelta(minutes=40))):
-            await session.execute(update(Message).where(Message.id == message_id).values(created_at=when))
+        meeting = HuddleSession(channel_id=channel, created_by=uid(alice), meeting_start=12345,
+                                started_at=start, ended_at=datetime.now(UTC))
+        session.add(meeting)
+        await session.flush()
+        for account, phrase in [(alice, 'Alice will send the report'), (bob, 'Bob agrees on Friday')]:
+            session.add(HuddleMember(session_id=meeting.id, user_id=uid(account), speaker=account['user']['username'],
+                                    consented=True, capture_state='stopped'))
+            session.add(HuddleSegment(channel_id=channel, meeting_start=12345, session_id=meeting.id,
+                user_id=uid(account), segment_id='one', sequence=1, revision=1,
+                speaker=account['user']['username'], text=phrase))
         await session.commit()
-    huddle = await put(channel, alice, "A huddle happened.", kind="huddle", huddle_started_at=start)
-    async with SessionLocal() as session:
-        await session.execute(update(Message).where(Message.id == huddle).values(created_at=start + timedelta(minutes=30)))
-        await session.commit()
+        meeting_id = meeting.id
+    huddle = await put(channel, alice, 'A huddle happened.', kind='huddle', huddle_started_at=start, huddle_session_id=meeting_id)
     ai.responses = ["## Key points\n- Report is coming [1]\n## Action items\n- Alice sends the report [1]\n- Bob confirms Friday [2]"]
-    data = (await post(client, "/huddle-notes", bh, messageId=huddle)).json()
-    assert data["messageCount"] == 2 and data["channelId"] == channel
-    assert "Before the huddle" not in ai.prompts and "After the huddle" not in ai.prompts
-    assert [a["text"] for a in data["actions"]] == ["Alice sends the report", "Bob confirms Friday"]
-    assert data["actions"][0]["sources"][0]["messageId"] == inside
-    assert (await post(client, "/huddle-notes", ch, messageId=huddle)).status_code == 403
+    response = await post(client, '/huddle-notes', bh, messageId=huddle)
+    assert response.status_code == 200
+    data = response.json()
+    assert data['messageCount'] == 2 and data['channelId'] == channel
+    assert 'Unrelated text chat' not in ai.prompts
+    assert 'Alice will send the report' in ai.prompts and 'Bob agrees on Friday' in ai.prompts
+    assert [action['text'] for action in data['actions']] == ['Alice sends the report', 'Bob confirms Friday']
+    assert data['actions'][0]['sources'][0]['messageId'] == huddle
+    assert data['transcriptCoverage'] == 'consented_speech_only'
+    assert (await post(client, '/huddle-notes', ch, messageId=huddle)).status_code == 403
 
 
 async def test_huddle_notes_edge_cases(client, setup_chat, ai):

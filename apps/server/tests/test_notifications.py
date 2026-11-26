@@ -172,7 +172,7 @@ async def test_preferences_switch_types_off(client, setup_chat, live_server):
     alice, bob, _, _ah, bh, _, _, channel = setup_chat
     prefs = (await client.get("/api/notifications/preferences", headers=bh)).json()["preferences"]
     assert prefs == {kind: True for kind in
-                     ("mention", "reply", "reaction", "post_comment", "invite_accepted", "dm")}
+                     ("mention", "reply", "reaction", "post_comment", "invite_accepted", "dm", "missed_huddle")}
     updated = await client.put("/api/notifications/preferences", headers=bh,
                                json={"preferences": {"mention": False}})
     assert updated.status_code == 200 and updated.json()["preferences"]["mention"] is False
