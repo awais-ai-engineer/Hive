@@ -313,17 +313,18 @@ async def test_hand_reactions_and_captions_stay_in_the_call(client, setup_chat, 
         await call(b, "call:join", {"channelId": lounge})
         assert (await call(a, "call:state", {"channelId": lounge, "hand": True}))["ok"]
         assert (await event(bq["call:state"]))["hand"] is True
-        assert (await call(a, "call:react", {"channelId": lounge, "emoji": "ðŸŽ‰"}))["ok"]
+        reaction_ack = await call(a, "call:react", {"channelId": lounge, "emoji": "\U0001f389"})
+        assert reaction_ack["ok"], reaction_ack
         reaction = await event(bq["call:react"])
-        assert reaction["emoji"] == "ðŸŽ‰" and reaction["username"] == "alice"
-        assert (await call(a, "call:react", {"channelId": lounge, "emoji": "ðŸ’©"}))["error"]["code"] == "invalid"
+        assert reaction["emoji"] == "\U0001f389" and reaction["username"] == "alice"
+        assert (await call(a, "call:react", {"channelId": lounge, "emoji": "\U0001f4a9"}))["error"]["code"] == "invalid"
         await call(a, "call:state", {"channelId": lounge, "captions": True})
         assert (await call(a, "call:caption", {"segmentId": "test_segment_1", "channelId": lounge, "text": " Launch on Tuesday ", "final": True}))["ok"]
         caption = await event(bq["call:caption"])
         assert caption["text"] == "Launch on Tuesday" and caption["final"] is True
         assert (await event(aq["call:caption"]))["userId"] == alice["user"]["id"]  # canonical authenticated acknowledgement
         # Someone outside the call can neither send nor receive any of it.
-        assert (await call(c, "call:react", {"channelId": lounge, "emoji": "ðŸ‘"}))["error"]["code"] == "forbidden"
+        assert (await call(c, "call:react", {"channelId": lounge, "emoji": "\U0001f44d"}))["error"]["code"] == "forbidden"
         assert (await call(c, "call:caption", {"segmentId": "test_segment_2", "channelId": lounge, "text": "hi"}))["error"]["code"] == "forbidden"
         await quiet(cq["call:react"])
         await quiet(cq["call:caption"])
