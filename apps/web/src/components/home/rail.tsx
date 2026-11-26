@@ -182,7 +182,11 @@ export function Rail({ spaces, current, onSwitch, unread, todos = 0, switcherOpe
         </UiButton>}>
         <nav aria-label="Spaces" onKeyDown={arrows}>
           {([['WORK', work], ['SOCIAL', social]] as const).map(([title, list]) => list.length > 0 && <section key={title} className="mb-5"><h2 className="mb-3 text-xs font-semibold text-muted">{title}</h2><div className="grid grid-cols-4 gap-x-2 gap-y-4">
-            {list.map(space => <UiButton tooltip={space.name} key={space.id} type="button" aria-label={space.name} aria-current={space.slug === current ? 'page' : undefined} onClick={() => { setSheet(false); onSwitch(space.slug); }} className={`mobile-space ${space.slug === current ? 'space-current' : ''}`}><SpaceIcon space={space} /><span className="w-full truncate text-xs">{space.name}</span></UiButton>)}
+            {list.map(space => {
+              const selected = space.slug === current;
+              const tile = <UiButton tooltip={space.name} key={space.id} type="button" aria-label={space.name} aria-current={selected ? 'page' : undefined} onClick={selected ? undefined : () => { setSheet(false); onSwitch(space.slug); }} className={`mobile-space ${selected ? 'space-current' : ''}`}><SpaceIcon space={space} /><span className="w-full truncate text-xs">{space.name}</span></UiButton>;
+              return selected ? <SpaceSwitcher key={space.id} current={space} compact menuTrigger={tile} spaces={spaces} onOpenSwitcher={() => setSheet(true)} onSwitch={slug => { setSheet(false); onSwitch(slug); }} /> : tile;
+            })}
           </div></section>)}
           {createMenu(<UiButton type="button" aria-label="Add a space" className="btn-ghost min-h-11 w-full justify-center"><Icon name="plus" />Add a space</UiButton>, 'Add a space')}
           <div className="on-dark mt-4 flex items-center justify-center gap-3 rounded-xl bg-rail p-3">{controls}</div>
