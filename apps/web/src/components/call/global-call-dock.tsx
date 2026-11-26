@@ -11,7 +11,7 @@ export function GlobalCallDock() {
   const { user } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  useEffect(() => { calls.cancelRinging(); calls.setStageOpen(false); }, [pathname]);
+  useEffect(() => { calls.setStageOpen(false); }, [pathname]);
   if (!user) return null;
   return <>
     <CallDock onAccept={channelId => router.push(`/home?c=${encodeURIComponent(channelId)}`)} titleFor={(_id, caller) => `Huddle with ${caller}`} />

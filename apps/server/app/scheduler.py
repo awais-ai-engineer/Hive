@@ -152,6 +152,8 @@ async def _loop():
             await expire_due()
             from app.calls.invitations import expire_or_cancel
             await expire_or_cancel()
+            from app.calls.service import finish_abandoned
+            await finish_abandoned()
         except Exception:
             log.exception("Scheduled delivery failed; retrying on next tick")
         await asyncio.sleep(15)

@@ -381,6 +381,7 @@ class Message(Base):
     bot_name: Mapped[str | None] = mapped_column(String(80))
     # Huddle lines only: when the huddle began, so its chat can be looked up afterwards.
     huddle_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    huddle_session_id: Mapped[str | None] = mapped_column(ForeignKey("huddle_sessions.id", ondelete="SET NULL"))
     reply_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -671,6 +672,7 @@ class Doc(Base):
     __table_args__ = (Index("ix_docs_channel_id", "channel_id", "updated_at"),)
 
     id: Mapped[str] = pk()
+    huddle_session_id: Mapped[str | None] = mapped_column(ForeignKey("huddle_sessions.id", ondelete="CASCADE"))
     channel_id: Mapped[str] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"))
     title: Mapped[str] = mapped_column(String(200), default="", server_default="")
     emoji: Mapped[str | None] = mapped_column(String(16))
@@ -996,13 +998,14 @@ class SavedItem(Base):
 
 
 NOTIFICATION_TYPES = (
-    "mention", "reply", "reaction", "post_comment", "invite_accepted", "dm",
+    "mention", "reply", "reaction", "post_comment", "invite_accepted", "dm", "missed_huddle",
 )
 
 
 class Notification(Base):
     __tablename__ = "notifications"
     __table_args__ = (
+        UniqueConstraint("user_id", "source_call_id", name="uq_notification_source_call"),
         CheckConstraint(
             "type IN (" + ", ".join(f"'{name}'" for name in NOTIFICATION_TYPES) + ")",
             name="ck_notifications_type",
@@ -1033,6 +1036,7 @@ class Notification(Base):
     comment_id: Mapped[str | None] = mapped_column(
         ForeignKey("comments.id", ondelete="CASCADE", name="fk_notifications_comment")
     )
+    source_call_id: Mapped[str | None] = mapped_column(ForeignKey("huddle_invitations.id", ondelete="CASCADE"))
     snippet: Mapped[str] = mapped_column(String(200), default="", server_default="")
     # Reactions on one message collapse into a single row; this is how many people reacted.
     count: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
@@ -1217,3 +1221,50 @@ class HuddleSegment(Base):
     speaker: Mapped[str] = mapped_column(String(80))
     text: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    session_id: Mapped[str | None] = mapped_column(ForeignKey("huddle_sessions.id", ondelete="CASCADE"), index=True)
+    sequence: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    revision: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+
+class HuddleSession(Base):
+    __tablename__ = "huddle_sessions"
+    __table_args__ = (Index("uq_huddle_active_channel", "channel_id", unique=True, postgresql_where=text("ended_at IS NULL")),)
+    id: Mapped[str] = mapped_column(String(26), primary_key=True, default=new_id)
+    channel_id: Mapped[str] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"))
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    meeting_start: Mapped[int] = mapped_column(BigInteger)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    empty_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    summary_message_id: Mapped[str | None] = mapped_column(String(26))
+
+
+class HuddleMember(Base):
+    __tablename__ = "huddle_members"
+    session_id: Mapped[str] = mapped_column(ForeignKey("huddle_sessions.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    speaker: Mapped[str] = mapped_column(String(80))
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    consented: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    capture_state: Mapped[str] = mapped_column(String(20), default="inactive", server_default="inactive")
+    incomplete_reason: Mapped[str | None] = mapped_column(String(200))
+    last_sequence: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    capture_cursor: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+
+
+class HuddleInvitation(Base):
+    __tablename__ = "huddle_invitations"
+    id: Mapped[str] = mapped_column(String(26), primary_key=True, default=new_id)
+    channel_id: Mapped[str] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"), index=True)
+    caller_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    caller_sid: Mapped[str] = mapped_column(String(100))
+    recipients: Mapped[list] = mapped_column(JSONB)
+    declined: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    status: Mapped[str] = mapped_column(String(20), default="ringing", server_default="ringing")
+    accepted_by: Mapped[str | None] = mapped_column(String(26))
+    accepted_sid: Mapped[str | None] = mapped_column(String(100))
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

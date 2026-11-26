@@ -70,11 +70,12 @@ export function CallStage() {
   const { t } = useT();
   const [full, setFull] = useState(false);
   const [consent, setConsent] = useState(false);
-  const toggleCaptions = () => { if (call.captionsOn) calls.toggleCaptions(user?.username ?? 'You'); else setConsent(true); };
+  const toggleCaptions = () => calls.setCaptionsVisible();
+  const toggleTranscription = () => { if (call.captionsOn) void calls.toggleTranscription(user?.username ?? 'You'); else setConsent(true); };
   const [menu, setMenu] = useState<'settings' | 'react' | null>(null);
   const [panel, setPanel] = useState<'people' | 'captions'>('people');
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
-  const timer = useCallTimer(call.status === 'connected');
+  const timer = useCallTimer(call.startedAt);
   const open = call.stageOpen && call.status !== 'idle';
 
   useEffect(() => {
@@ -118,7 +119,7 @@ export function CallStage() {
   const strip = tiles.filter(tile => tile.key !== shownKey);
   const count = call.peers.length + 1;
   const columns = count === 1 ? 'grid-cols-1' : count <= 4 ? 'grid-cols-2' : 'grid-cols-3';
-  const latest = [...call.captions].reverse().find(caption => Date.now() - Number(caption.id.split('-').at(-1)) < 12000 || !caption.final);
+  const latest = call.captionsVisible ? [...call.captions].reverse().find(caption => Date.now() - Date.parse(caption.timestamp) < 12000 || !caption.final) : undefined;
   const raised = tiles.filter(tile => tile.hand);
 
   const sidePanel = <aside aria-label="Huddle details" className="hidden w-80 shrink-0 flex-col border-l border-[rgb(255_255_255/0.08)] lg:flex">
@@ -139,17 +140,17 @@ export function CallStage() {
           <Icon name={tile.muted ? 'micOff' : 'mic'} size={14} className={tile.muted ? 'text-rose-300' : 'opacity-60'} />
         </li>)}
       </ul> : !call.captions.length ? <div className="mt-6 text-center text-sm" style={MUTED_TEXT}>
-        <p>{captionsSupported() ? 'Notes are built from live captions. Turn captions on to add what you say. When the huddle ends, the notes are saved as a Doc in this conversation for everyone in it.' : 'Notes need live captions, which work in Chrome or Edge on a computer.'}</p>
-        {captionsSupported() && !call.captionsOn && <UiButton type="button" onClick={toggleCaptions}
-          className="mt-3 rounded-lg bg-[var(--brand)] px-3 py-1.5 text-sm font-semibold text-[var(--rail)]">Take notes</UiButton>}
+        <p>{captionsSupported() ? 'Each person must enable their own microphone transcription. Finalized speech is saved as a raw transcript for meeting participants. AI meeting notes are generated separately.' : 'Speech transcription needs a supported browser or a configured self-hosted speech worker.'}</p>
+        {captionsSupported() && !call.captionsOn && <UiButton type="button" onClick={toggleTranscription}
+          className="mt-3 rounded-lg bg-[var(--brand)] px-3 py-1.5 text-sm font-semibold text-[var(--rail)]">Transcribe my microphone</UiButton>}
       </div>
         : <ol className="space-y-2 text-sm">{call.captions.map(caption => <li key={`${caption.userId}:${caption.id}`}>
           <time className="mr-2 text-xs opacity-60" dateTime={caption.timestamp}>{new Date(caption.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time><span className="font-semibold">{caption.username}: </span><span style={caption.final ? undefined : MUTED_TEXT}>{caption.text}</span></li>)}</ol>}
     </div>
-    <p className="border-t border-[rgb(255_255_255/0.08)] p-3 text-xs" style={MUTED_TEXT}>Everyone in this huddle sees captions as they are spoken. Finished lines are saved as meeting notes in this conversation when the huddle ends.</p>
+    <p className="border-t border-[rgb(255_255_255/0.08)] p-3 text-xs" style={MUTED_TEXT}>Finalized consented speech is saved as a raw transcript for meeting participants. Recognition can miss speech; capture interruptions are disclosed. AI notes are generated separately.</p>
   </aside>;
 
-  return <><AlertDialog open={consent} onOpenChange={setConsent} title="Enable microphone transcription?" description="Your browser transcribes your microphone. Everyone in this Huddle sees your captions, and finalized captions are saved as meeting notes in this conversation. Browser speech recognition may use your browser provider's servers. Each participant must enable their own transcription." confirmLabel="Enable transcription" onConfirm={() => calls.toggleCaptions(user?.username ?? 'You')} />
+  return <><AlertDialog open={consent} onOpenChange={setConsent} title="Enable microphone transcription?" description="Only your consenting microphone is transcribed. If configured, Hive forwards short audio windows to its self-hosted speech worker without saving audio; otherwise browser recognition may use your browser provider. Finalized text is saved for meeting participants. Unsent text can be retained on this device until synchronization. Each person must consent separately." confirmLabel="Enable transcription" onConfirm={() => void calls.toggleTranscription(user?.username ?? 'You')} />
   <div className={`fixed inset-0 z-50 flex items-center justify-center ${full ? '' : 'bg-[rgb(8_6_14/0.62)] p-3 backdrop-blur-sm sm:p-6'}`}
     onMouseDown={event => { if (event.target === event.currentTarget) calls.setStageOpen(false); }}>
   <section aria-label={`Huddle in ${call.title}`} role="dialog" aria-modal
@@ -189,6 +190,7 @@ export function CallStage() {
       {full && sidePanel}
     </div>
 
+    <p role="status" className="px-4 py-1 text-xs" style={MUTED_TEXT}>Media: {call.status}. Microphone transcription: {call.captureState}. Caption visibility does not control transcription.</p>
     {call.error && <p role="alert" className="mx-4 mb-2 rounded-lg bg-rose-500/15 px-3 py-2 text-sm text-rose-200">{call.error}</p>}
     <footer className="relative flex flex-wrap items-start justify-center gap-1 border-t border-[rgb(255_255_255/0.08)] px-4 py-3 sm:gap-2">
       <RoundControl caption={call.muted ? 'Unmute' : 'Mute'} icon={call.muted ? 'micOff' : 'mic'} label={call.muted ? t('huddle.unmute') : t('huddle.mute')} warn={call.muted} onClick={() => calls.toggleMute()} />
@@ -196,8 +198,8 @@ export function CallStage() {
       {canShare && <RoundControl caption="Share" icon="screen" label={call.screen ? t('huddle.stopShare') : t('huddle.share')} active={call.screen} onClick={() => void calls.toggleScreen()} />}
       <div className="shrink-0"><RoundControl caption="Raise hand" icon="hand" label={call.hand ? 'Lower your hand' : 'Raise your hand'} active={call.hand} onClick={() => calls.toggleHand()} /></div>
       <RoundControl caption="React" icon="smile" label="Send a reaction" active={menu === 'react'} onClick={() => setMenu(value => value === 'react' ? null : 'react')} />
-      {captionsSupported() && <div className="shrink-0"><RoundControl caption="Captions" icon="captions" label={call.captionsOn ? 'Turn captions off' : 'Turn captions on'} active={call.captionsOn}
-        onClick={toggleCaptions} /></div>}
+      <div className="shrink-0"><RoundControl caption="Captions" icon="captions" label={call.captionsVisible ? 'Hide captions' : 'Show captions'} active={call.captionsVisible} onClick={toggleCaptions} /></div>
+      {captionsSupported() && <div className="shrink-0"><RoundControl caption="Transcribe" icon="file" label={call.captionsOn ? 'Stop microphone transcription' : 'Start microphone transcription'} active={call.captionsOn} onClick={toggleTranscription} /></div>}
       <RoundControl caption="Audio" icon="settings" label="Audio settings" active={menu === 'settings'} onClick={() => setMenu(value => value === 'settings' ? null : 'settings')} />
       <div className="ml-2 flex w-16 flex-col items-center gap-1 sm:ml-4">
         <UiButton type="button" onClick={() => void calls.leave()} aria-label={t('huddle.leave')} tooltip={t('huddle.leave')}
@@ -211,6 +213,7 @@ export function CallStage() {
           className="rounded-xl px-2 py-1 text-2xl transition hover:bg-[rgb(255_255_255/0.12)]">{emoji}</UiButton>)}
       </div>}
       {menu === 'settings' && <div className="absolute bottom-full left-1/2 mb-2 w-72 -translate-x-1/2 rounded-xl bg-[var(--call-panel)] p-3 shadow-xl">
+        <label className="mb-3 block text-xs font-medium" style={MUTED_TEXT}>Transcription language<UiSelect aria-label="Transcription language" value={call.language} onChange={event => calls.setLanguage(event.target.value)} className="auth-input mt-1"><option value="en-US">English</option><option value="ur-PK">Urdu</option><option value="auto">Automatic / mixed language (speech worker)</option></UiSelect></label>
         <label className="block text-xs font-medium" style={MUTED_TEXT}>Microphone
           <UiSelect aria-label="Microphone" className="mt-1 w-full rounded-lg border border-[rgb(255_255_255/0.15)] bg-[var(--call-surface)] px-2 py-2 text-sm" style={WHITE}
             defaultValue="" onChange={event => { if (event.target.value) void calls.useMicrophone(event.target.value); }}>

@@ -5,6 +5,7 @@ import json
 import re
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai import context, factory
@@ -140,24 +141,41 @@ async def huddle_notes(session: AsyncSession, user: User, data: HuddleNotesIn) -
         raise HTTPException(422, "This is not a huddle summary.")
     if message.huddle_started_at is None:
         raise HTTPException(422, "This huddle was recorded before chat summaries were available.")
-    snippets = await context.channel_window(
-        session, user, message.channel_id, message.huddle_started_at, message.created_at)
-    # The saved transcript is the source of spoken discussion, independent of chat messages.
-    linked_doc = re.search(r"[?&]doc=([0-9A-Za-z]{26})", message.body or "")
-    if linked_doc:
-        doc = await session.get(Doc, linked_doc.group(1))
-        if doc is not None and doc.channel_id == message.channel_id:
-            transcript = [block.get("text", "") for block in doc.body
-                          if str(block.get("id", "")).startswith("t") and block.get("type") == "paragraph"]
-            if sum(len(line) for line in transcript) > settings.ai_max_input_chars:
-                raise HTTPException(422, "This transcript exceeds the summary limit. Read the complete meeting notes document.")
-            snippets = [Snippet(n=index + 1, message_id=message.id, channel_id=message.channel_id,
-                        parent_id=None, author="Transcript", created_at=message.created_at, text=line)
-                        for index, line in enumerate(transcript)]
-    base = {"scope": "huddle", "messageCount": len(snippets), "channelId": message.channel_id}
+    snippets = []
+    capture = 'unknown'
+    if message.huddle_session_id:
+        from app.calls import sessions as meetings
+        from app.db.models import HuddleSegment, HuddleSession
+        meeting = await session.get(HuddleSession, message.huddle_session_id)
+        await meetings.authorized(session, meeting.id, message.channel_id, user.id)
+        if meeting.ended_at is None:
+            raise HTTPException(409, 'The Huddle is still active; finalized speech is not ready for meeting notes.')
+        rows = list(await session.scalars(select(HuddleSegment).where(HuddleSegment.session_id == meeting.id)
+            .order_by(HuddleSegment.created_at, HuddleSegment.user_id, HuddleSegment.sequence, HuddleSegment.segment_id)))
+        if sum(len(row.text) for row in rows) > settings.ai_max_input_chars:
+            raise HTTPException(422, 'This transcript exceeds the summary limit. Read the complete raw transcript.')
+        coverage = await meetings.coverage(session, meeting.id)
+        capture = 'partial' if any(item['incompleteReason'] or not item['consented'] for item in coverage) else 'consented_speech_only'
+        snippets = [Snippet(n=index + 1, message_id=message.id, channel_id=message.channel_id,
+            parent_id=None, author=row.speaker, created_at=row.created_at, text=row.text) for index, row in enumerate(rows)]
+    else:
+        # Legacy summaries may have a saved transcript Doc; never substitute text chat for speech.
+        linked_doc = re.search(r"[?&]doc=([0-9A-Za-z]{26})", message.body or "")
+        if linked_doc:
+            doc = await session.get(Doc, linked_doc.group(1))
+            if doc is not None and doc.channel_id == message.channel_id:
+                transcript = [block.get('text', '') for block in doc.body
+                              if str(block.get('id', '')).startswith('t') and block.get('type') == 'paragraph']
+                if sum(len(line) for line in transcript) > settings.ai_max_input_chars:
+                    raise HTTPException(422, 'This transcript exceeds the summary limit.')
+                snippets = [Snippet(n=index + 1, message_id=message.id, channel_id=message.channel_id,
+                    parent_id=None, author='Legacy transcript', created_at=message.created_at, text=line)
+                    for index, line in enumerate(transcript)]
+    base = {"scope": "huddle", "messageCount": len(snippets), "channelId": message.channel_id,
+            "transcriptCoverage": capture, "limitation": "Only finalized consented speech is included. Missing speech must not be inferred."}
     if not snippets:
         return {**base, **EMPTY, "empty": True}
-    result = await call_model(session, user, "huddle", HUDDLE_TASK, lines(snippets),
+    result = await call_model(session, user, "huddle", HUDDLE_TASK + " The transcript may be partial. Never invent missing speech, responsibilities or deadlines. State capture limitations explicitly.", lines(snippets),
                               space_id=await space_of(session, message.channel_id))
     return {**base, **render(result.text, snippets), "empty": False}
 

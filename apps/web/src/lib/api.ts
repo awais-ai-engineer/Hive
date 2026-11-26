@@ -62,11 +62,12 @@ export function refreshSession(): Promise<AuthSession | null> {
         const response = await fetch(`${AUTH_URL}/api/auth/refresh`, {
           method: 'POST', credentials: 'include',
         });
+        if (response.status === 401 || response.status === 403) { if (revision === started) setSession(null); return null; }
         const value = await responseData<AuthSession>(response);
         if (revision === started) setSession(value);
         return session;
       } catch {
-        if (revision === started) setSession(null);
+        // Network/5xx refresh failures are not logout events. Keep active media identity.
         return null;
       } finally {
         refreshPromise = null;

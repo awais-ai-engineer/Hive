@@ -47,7 +47,8 @@ export async function mockApi(page: Page, initial: Space[] = fixtures, withChann
       body = withChannel ? [{ id: `${slug}-channel`, space_id: spaces.find(space => space.slug === slug)?.id ?? slug,
         type: 'text', name: 'general', topic: null, position: 0, unread: 0, is_private: false }] : [];
     } else if (/^\/api\/channels\/[^/]+\/messages$/.test(path)) body = { items: [], has_more: false };
-    else if (path === '/api/calls' || path === '/api/dms' || path === '/api/drafts' || path === '/api/scheduled' || path === '/api/reminders' || path === '/api/me/stars' || path === '/api/me/conversation-prefs') body = [];
+    else if (path === '/api/calls/invitations' || path === '/api/calls' || path === '/api/dms' || path === '/api/drafts' || path === '/api/scheduled' || path === '/api/reminders' || path === '/api/me/stars' || path === '/api/me/conversation-prefs') body = [];
+    else if (path === '/api/calls/transcription') body = { engine: 'browser' };
     else return route.fulfill({ status: 404, json: { detail: 'Not found' } });
     return route.fulfill({ json: body });
   });

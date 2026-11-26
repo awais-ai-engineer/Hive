@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import time
 
 from app.calls.service import format_duration, huddle_text, meta_key, room_key, sid_key
@@ -123,7 +123,9 @@ async def test_state_and_ring(client, setup_chat, live_server):
         assert (await call(a, "call:ring", {"channelId": dm}))["ok"]
         incoming = await event(bq["call:incoming"])
         assert len(incoming["invitationId"]) == 26
-        assert incoming == {"channelId": dm, "invitationId": incoming["invitationId"], "expiresAt": incoming["expiresAt"], "sound": True, "from": {"id": alice["user"]["id"], "username": "alice"}}
+        assert incoming['channelId'] == dm and incoming['sound'] is True
+        assert incoming['from']['id'] == alice['user']['id']
+        assert incoming['from']['username'] == 'alice' and incoming['status'] == 'ringing'
         await quiet(cq["call:incoming"])
         assert (await call(a, "call:ring", {"channelId": lounge}))["error"]["code"] == "invalid"
 
@@ -229,7 +231,15 @@ async def test_huddle_summary_message(client, setup_chat, live_server):
         await call(a, "channel:join", {"channelId": channel})
         for peer in (a, b, c):
             assert (await call(peer, "call:join", {"channelId": channel}))["ok"]
-        await redis.hset(meta_key(channel), "start", int(time.time() * 1000) - 6 * 60 * 1000 - 500)
+        from datetime import UTC, datetime, timedelta
+
+        from sqlalchemy import select
+
+        from app.db.models import HuddleSession
+        async with SessionLocal() as session:
+            meeting = await session.scalar(select(HuddleSession).where(HuddleSession.channel_id == channel, HuddleSession.ended_at.is_(None)))
+            meeting.started_at = datetime.now(UTC) - timedelta(minutes=6, milliseconds=500)
+            await session.commit()
         await call(c, "call:leave", {"channelId": channel})
         await call(b, "call:leave", {"channelId": channel})
         await quiet(aq["message:new"])
@@ -303,17 +313,17 @@ async def test_hand_reactions_and_captions_stay_in_the_call(client, setup_chat, 
         await call(b, "call:join", {"channelId": lounge})
         assert (await call(a, "call:state", {"channelId": lounge, "hand": True}))["ok"]
         assert (await event(bq["call:state"]))["hand"] is True
-        assert (await call(a, "call:react", {"channelId": lounge, "emoji": "🎉"}))["ok"]
+        assert (await call(a, "call:react", {"channelId": lounge, "emoji": "ðŸŽ‰"}))["ok"]
         reaction = await event(bq["call:react"])
-        assert reaction["emoji"] == "🎉" and reaction["username"] == "alice"
-        assert (await call(a, "call:react", {"channelId": lounge, "emoji": "💩"}))["error"]["code"] == "invalid"
+        assert reaction["emoji"] == "ðŸŽ‰" and reaction["username"] == "alice"
+        assert (await call(a, "call:react", {"channelId": lounge, "emoji": "ðŸ’©"}))["error"]["code"] == "invalid"
         await call(a, "call:state", {"channelId": lounge, "captions": True})
         assert (await call(a, "call:caption", {"segmentId": "test_segment_1", "channelId": lounge, "text": " Launch on Tuesday ", "final": True}))["ok"]
         caption = await event(bq["call:caption"])
         assert caption["text"] == "Launch on Tuesday" and caption["final"] is True
-        await quiet(aq["call:caption"])  # the speaker does not get their own caption back
+        assert (await event(aq["call:caption"]))["userId"] == alice["user"]["id"]  # canonical authenticated acknowledgement
         # Someone outside the call can neither send nor receive any of it.
-        assert (await call(c, "call:react", {"channelId": lounge, "emoji": "👍"}))["error"]["code"] == "forbidden"
+        assert (await call(c, "call:react", {"channelId": lounge, "emoji": "ðŸ‘"}))["error"]["code"] == "forbidden"
         assert (await call(c, "call:caption", {"segmentId": "test_segment_2", "channelId": lounge, "text": "hi"}))["error"]["code"] == "forbidden"
         await quiet(cq["call:react"])
         await quiet(cq["call:caption"])

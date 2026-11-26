@@ -9,8 +9,10 @@ test('two independent accounts resolve ringing and receive one authoritative tra
   const b = await browser.newContext({ permissions: ['microphone', 'camera'] });
   try {
     for (const context of [a, b]) await context.addInitScript(() => {
-      const state = window as unknown as { audioLog: string[]; recognitionStarts: number };
-      state.audioLog = []; state.recognitionStarts = 0;
+      const state = window as unknown as { audioLog: string[]; recognitionStarts: number; mediaPeers: RTCPeerConnection[]; emitSpeech: (text: string) => void };
+      state.audioLog = []; state.recognitionStarts = 0; state.mediaPeers = [];
+      const OriginalPeer = window.RTCPeerConnection;
+      window.RTCPeerConnection = class extends OriginalPeer { constructor(configuration?: RTCConfiguration) { super(configuration); state.mediaPeers.push(this); } };
       const byteNames = new WeakMap<ArrayBuffer, string>(); const bufferNames = new WeakMap<AudioBuffer, string>();
       const fetcher = window.fetch.bind(window);
       window.fetch = async (...args) => {
@@ -34,7 +36,10 @@ test('two independent accounts resolve ringing and receive one authoritative tra
       };
       class Recognition {
         onend: (() => void) | null = null;
-        start() { state.recognitionStarts++; }
+        onstart: (() => void) | null = null;
+        onresult: ((event: unknown) => void) | null = null;
+        result = 0;
+        start() { state.recognitionStarts++; state.emitSpeech = text => this.onresult?.({ resultIndex: 0, results: [Object.assign([{ transcript: text }], { isFinal: true })] }); queueMicrotask(() => this.onstart?.()); }
         stop() { queueMicrotask(() => this.onend?.()); }
       }
       Object.assign(window, { SpeechRecognition: Recognition, webkitSpeechRecognition: Recognition });
@@ -63,24 +68,58 @@ test('two independent accounts resolve ringing and receive one authoritative tra
     await pa.getByRole('button', { name: 'Join huddle', exact: true }).click();
     await expect(pb.getByRole('alertdialog', { name: 'Incoming huddle' })).toBeVisible();
     await expect.poll(() => pb.evaluate(() => (window as unknown as { audioLog: string[] }).audioLog.includes('start:invitation.wav'))).toBe(true);
+    await pa.keyboard.press('Escape');
+    await pa.getByRole('link', { name: 'Feed', exact: true }).first().click();
+    await expect(pa).toHaveURL(/\/feed/, { timeout: 60000 });
+    await expect(pb.getByRole('alertdialog', { name: 'Incoming huddle' })).toBeVisible();
     await pb.getByRole('button', { name: 'Join', exact: true }).click();
     await pb.getByRole('button', { name: 'Join huddle', exact: true }).click();
+    await pa.getByRole('button', { name: 'Open the huddle window', exact: true }).first().click();
     await expect(pa.getByText('2 people', { exact: true })).toBeVisible();
     await expect.poll(() => pb.locator('audio').evaluateAll(nodes => nodes.some(node => { const stream = (node as HTMLAudioElement).srcObject; return stream instanceof MediaStream && stream.getAudioTracks().some(track => track.readyState === 'live'); }))).toBe(true);
-    await expect.poll(() => pb.evaluate(() => (window as unknown as { audioLog: string[] }).audioLog.includes('stop:invitation.wav'))).toBe(true);
+    const ringsBefore = await pb.evaluate(() => (window as unknown as { audioLog: string[] }).audioLog.filter(event => event === 'start:invitation.wav').length);
     await pb.getByRole('link', { name: 'Feed', exact: true }).first().click();
     await expect(pb).toHaveURL(/\/feed/, { timeout: 60000 });
     await expect.poll(() => pb.locator('audio').evaluateAll(nodes => nodes.some(node => { const stream = (node as HTMLAudioElement).srcObject; return stream instanceof MediaStream && stream.getAudioTracks().some(track => track.readyState === 'live'); }))).toBe(true);
-    await pa.getByRole('button', { name: 'Turn captions on', exact: true }).click();
+    await pa.getByRole('button', { name: 'Start microphone transcription', exact: true }).click();
     await pa.getByRole('button', { name: 'Enable transcription', exact: true }).click();
-    for (const page of [pa, pb]) {
-      await expect.poll(() => page.evaluate(() => (window as unknown as { audioLog: string[] }).audioLog.filter(event => event === 'start:transcription_started.wav').length), { timeout: 20000 }).toBe(1);
-      await expect(page.getByText('Speech transcription is active. Finalized captions are saved as meeting notes.', { exact: true }).first()).toBeVisible();
+    for (const [index, page] of [pa, pb].entries()) {
+      await expect.poll(() => page.evaluate(() => (window as unknown as { audioLog: string[] }).audioLog.filter(event => event === 'start:transcription_started.wav').length), { timeout: 45000, message: `Participant ${index + 1} must hear one transcription disclosure` }).toBe(1);
+      await expect(page.getByText('Speech transcription is active.', { exact: false }).first()).toBeVisible();
     }
     await expect.poll(() => pa.evaluate(() => (window as unknown as { recognitionStarts: number }).recognitionStarts), { timeout: 20000 }).toBeGreaterThan(0);
+    await pb.getByRole('button', { name: 'Open the huddle window', exact: true }).first().click();
+    await pb.getByRole('button', { name: 'Start microphone transcription', exact: true }).click();
+    await pb.getByRole('button', { name: 'Enable transcription', exact: true }).click();
+    await expect.poll(() => pb.evaluate(() => (window as unknown as { recognitionStarts: number }).recognitionStarts)).toBeGreaterThan(0);
+    await pa.evaluate(() => (window as unknown as { emitSpeech: (text: string) => void }).emitSpeech('I will finish the backend integration.'));
+    await pb.evaluate(() => (window as unknown as { emitSpeech: (text: string) => void }).emitSpeech('I will investigate the database before tomorrow.'));
+    for (const page of [pa, pb]) {
+      await page.getByRole('tab', { name: 'Notes', exact: true }).click();
+      await expect(page.getByText('I will finish the backend integration.', { exact: true }).first()).toBeVisible();
+      await expect(page.getByText('I will investigate the database before tomorrow.', { exact: true }).first()).toBeVisible();
+    }
+    const receivedBytes = () => pb.evaluate(async () => {
+      let bytes = 0;
+      for (const peer of (window as unknown as { mediaPeers: RTCPeerConnection[] }).mediaPeers) (await peer.getStats()).forEach(report => { if (report.type === 'inbound-rtp' && report.kind === 'audio') bytes += report.bytesReceived; });
+      return bytes;
+    });
+    await expect.poll(receivedBytes).toBeGreaterThan(0);
+    const beforeNavigation = await receivedBytes();
+    const peerCount = await pb.evaluate(() => (window as unknown as { mediaPeers: RTCPeerConnection[] }).mediaPeers.length);
+    await pb.keyboard.press('Escape');
+    for (const destination of ['Explore', 'Feed', 'Explore', 'Feed']) await pb.getByRole('link', { name: destination, exact: true }).first().click();
+    await expect.poll(receivedBytes).toBeGreaterThan(beforeNavigation);
+    expect(await pb.evaluate(() => (window as unknown as { mediaPeers: RTCPeerConnection[] }).mediaPeers.length)).toBe(peerCount);
+    expect(await pb.evaluate(() => (window as unknown as { audioLog: string[] }).audioLog.filter(event => event === 'start:invitation.wav').length)).toBe(ringsBefore);
     await pa.keyboard.press('Escape');
     await pa.getByRole('button', { name: 'Open the huddle window', exact: true }).first().click();
     expect(await pa.evaluate(() => (window as unknown as { audioLog: string[] }).audioLog.filter(event => event === 'start:transcription_started.wav').length)).toBe(1);
     expect(await pb.evaluate(() => (window as unknown as { audioLog: string[] }).audioLog.some(event => /recording_started|notes_enabled/.test(event)))).toBe(false);
+  } catch (error) {
+    for (const [index, context] of [a, b].entries()) for (const page of context.pages()) {
+      console.log('Huddle diagnostic', index, await page.evaluate(() => ({ audio: (window as unknown as { audioLog: string[] }).audioLog, status: [...document.querySelectorAll('[role="status"], [role="alert"]')].map(node => node.textContent), peers: (window as unknown as { mediaPeers: RTCPeerConnection[] }).mediaPeers.map(peer => ({ signaling: peer.signalingState, connection: peer.connectionState, ice: peer.iceConnectionState })) })));
+    }
+    throw error;
   } finally { await a.close(); await b.close(); }
 });

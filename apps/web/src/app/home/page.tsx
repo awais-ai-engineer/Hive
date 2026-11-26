@@ -2,7 +2,7 @@
 
 import { Button as UiButton } from '@hive/ui';
 
-import { playSound, setAudioConversation, stopRing } from '../../lib/sounds';
+import { playSound, setAudioConversation } from '../../lib/sounds';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
@@ -276,7 +276,6 @@ function Home() {
 
   useEffect(() => { setAudioConversation(selected); return () => setAudioConversation(null); }, [selected]);
 
-  useEffect(() => () => stopRing(), [space?.id]);
 
   // Live updates --------------------------------------------------------------------------
   useEffect(() => {

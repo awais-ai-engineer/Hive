@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from app.users.schemas import PersonOut
 
-NotificationType = Literal["mention", "reply", "reaction", "post_comment", "invite_accepted", "dm"]
+NotificationType = Literal["mention", "reply", "reaction", "post_comment", "invite_accepted", "dm", "missed_huddle"]
 
 
 class NotificationOut(BaseModel):
@@ -24,6 +24,7 @@ class NotificationOut(BaseModel):
     snippet: str
     count: int
     readAt: datetime | None
+    callInvitationId: str | None = None
     createdAt: datetime
 
 

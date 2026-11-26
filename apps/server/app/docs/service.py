@@ -1,10 +1,10 @@
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import ChannelType, Doc, DocVersion, MemberRole, User, new_id
+from app.db.models import ChannelType, Doc, DocVersion, HuddleMember, MemberRole, User, new_id
 from app.docs.schemas import (
     DocCreate,
     DocOut,
@@ -78,6 +78,8 @@ async def load(
                                else select(Doc).where(Doc.id == doc_id))
     if doc is None:
         raise HTTPException(404, "Doc not found")
+    if doc.huddle_session_id and await session.get(HuddleMember, (doc.huddle_session_id, user.id)) is None:
+        raise HTTPException(404, "Doc not found")
     if write:
         await check_write(session, doc.channel_id, user)
     else:
@@ -88,7 +90,7 @@ async def load(
 async def list_docs(session: AsyncSession, channel_id: str, user: User) -> list[DocSummary]:
     await read_channel(session, channel_id, user.id)
     docs = list(await session.scalars(
-        select(Doc).where(Doc.channel_id == channel_id).order_by(Doc.updated_at.desc(), Doc.id.desc())
+        select(Doc).where(Doc.channel_id == channel_id, or_(Doc.huddle_session_id.is_(None), Doc.huddle_session_id.in_(select(HuddleMember.session_id).where(HuddleMember.user_id == user.id)))).order_by(Doc.updated_at.desc(), Doc.id.desc())
     ))
     return await serialize(session, docs, full=False)
 

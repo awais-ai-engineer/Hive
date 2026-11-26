@@ -17,12 +17,21 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from socketio.exceptions import ConnectionRefusedError
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 
 from app.auth.security import decode_access_token
 from app.calls import invitations
 from app.calls import service as calls
-from app.calls.schemas import CallIn, CaptionIn, InvitationIn, ReactIn, SignalIn, StateIn
+from app.calls import sessions as meetings
+from app.calls.schemas import (
+    CallIn,
+    CaptionIn,
+    CaptureIn,
+    InvitationIn,
+    MediaReadyIn,
+    ReactIn,
+    SignalIn,
+    StateIn,
+)
 from app.core.config import settings
 from app.db.models import (
     Channel,
@@ -30,7 +39,8 @@ from app.db.models import (
     ChannelType,
     Doc,
     DocVersion,
-    HuddleSegment,
+    HuddleMember,
+    HuddleSession,
     Message,
     Post,
     Space,
@@ -113,8 +123,7 @@ async def disconnect(sid: str, *args: object) -> None:
             user = await session.get(User, user_id)
         if user is not None and not user.appear_offline:
             await broadcast_presence(user_id, False)
-    await invitations.expire_or_cancel(sid=sid)
-    await leave_call(sid)
+    await leave_call(sid, disconnected=True)
     signal_counts.pop(sid, None)
     typing_times.pop(sid, None)
     log.info("socket disconnected %s", sid)
@@ -437,14 +446,21 @@ async def post_huddle_summary(channel_id: str, author_id: str, huddle: dict) -> 
         channel = await session.get(Channel, channel_id)
         if channel is None or channel.type == ChannelType.voice:
             return
-        started = datetime.now(UTC) - timedelta(seconds=huddle["seconds"])
+        started = datetime.fromisoformat(huddle["startedAt"]) if huddle.get("startedAt") else datetime.now(UTC) - timedelta(seconds=huddle["seconds"])
         body = calls.huddle_text(names, huddle["seconds"])
         doc = await save_huddle_notes(session, channel, author_id, names, huddle, started)
         if doc is not None:
             body += f" [Open the meeting notes]({settings.web_origin}/home?c={channel_id}&doc={doc.id})"
         message = Message(channel_id=channel_id, author_id=author_id, kind="huddle",
-                          body=body, huddle_started_at=started)
+                          body=body, huddle_started_at=started, huddle_session_id=huddle.get("sessionId"))
         session.add(message)
+        await session.flush()
+        if huddle.get('sessionId'):
+            meeting = await session.get(HuddleSession, huddle['sessionId'], with_for_update=True)
+            if meeting.summary_message_id:
+                await session.rollback()
+                return
+            meeting.summary_message_id = message.id
         await session.commit()
         out = await service.message_out(session, message, author_id)
         if doc is not None:
@@ -464,14 +480,16 @@ async def save_huddle_notes(session, channel: Channel, author_id: str, names: li
     when = started.strftime("%d %b %Y, %H:%M UTC")
     blocks = [
         {"id": "b0", "type": "callout", "emoji": "🎧",
-         "text": "Notes taken from live captions during the huddle. Only what people said with captions on is included."},
+         "text": "Raw transcript from consenting participants, not AI-generated notes. Browser recognition may omit or misrecognize speech. " +
+                 ("Capture interruptions were reported; this transcript is incomplete. " if any(item.get('incompleteReason') for item in huddle.get('coverage', [])) else "") +
+                 ("Not all participants consented to transcription. " if any(not item.get('consented') for item in huddle.get('coverage', [])) else "")},
         {"id": "b1", "type": "paragraph", "text": f"When: {when} · Length: {calls.format_duration(huddle['seconds'])}"},
         {"id": "b2", "type": "paragraph", "text": f"People: {', '.join(names)}"},
         {"id": "b3", "type": "heading", "level": 2, "text": "Transcript"},
     ] + [{"id": f"t{index}", "type": "paragraph", "text": f"{line['who']}: {line['text']}"[:4000]}
          for index, line in enumerate(lines)]
     now = datetime.now(UTC)
-    doc = Doc(id=new_id(), channel_id=channel.id, title=f"Huddle notes · {started.strftime('%d %b %Y')}",
+    doc = Doc(id=new_id(), channel_id=channel.id, huddle_session_id=huddle.get("sessionId"), title=f"Huddle notes · {started.strftime('%d %b %Y')}",
               emoji="🎧", body=blocks, version=1, created_by=author_id, updated_by=author_id, updated_at=now)
     session.add(doc)
     session.add(DocVersion(id=new_id(), doc_id=doc.id, version=1, title=doc.title, emoji=doc.emoji,
@@ -487,12 +505,15 @@ async def announce_transcription(channel_id):
     return state
 
 
-async def leave_call(sid: str) -> None:
-    await invitations.expire_or_cancel(sid=sid)
-    left = await calls.remove(sid)
+async def leave_call(sid: str, disconnected=False) -> None:
+    if not disconnected:
+        await invitations.expire_or_cancel(sid=sid)
+    left = await calls.remove(sid, disconnected=disconnected)
     if left is None:
         return
     channel_id, entry, huddle = left
+    if not disconnected and entry.get("userId"):
+        await invitations.ended(channel_id, entry["userId"])
     await sio.leave_room(sid, f"call:{channel_id}")
     await sio.emit("call:peer-left", {"channelId": channel_id, "sid": sid}, room=f"call:{channel_id}")
     if huddle is None:
@@ -513,20 +534,28 @@ async def leave_calls_in(user_id: str, channel_ids: list[str]) -> None:
 
 @chat_event("call:join", CallIn)
 async def call_join(sid, data, session, user):
-    channel = await calls.check_access(session, data.channelId, user)
+    accepted = None
+    if data.invitationId:
+        accepted = await invitations.get(data.invitationId)
+        if accepted['channelId'] != data.channelId or accepted['acceptedBy'] != user.id or accepted['acceptedSid'] != sid or accepted['status'] not in ('accepted', 'connecting'):
+            raise HTTPException(403, 'This invitation is not reserved for this device')
+    channel = await calls.check_access(session, data.channelId, user, direct_contact=accepted is None)
     current = await calls.current_call(sid)
     if current and current != channel.id:
         await leave_call(sid)  # one call per socket: joining another leaves the first
     peers = [{"sid": peer_sid, **entry}
              for peer_sid, entry in (await calls.participants(channel.id)).items() if peer_sid != sid]
     entry = await calls.add(channel.id, sid, user)
-    await invitations.accept_for(channel.id, user.id)
+    await invitations.accept_for(channel.id, user.id, sid)
     await sio.enter_room(sid, f"call:{channel.id}")
     await sio.emit("call:peer-joined", {"channelId": channel.id, "sid": sid, **entry},
                    room=f"call:{channel.id}", skip_sid=sid)
     await announce_participants(channel.id)
     state = await announce_transcription(channel.id)
-    return {"channelId": channel.id, "iceServers": calls.ice_servers(), "peers": peers, "transcription": state}
+    return {"channelId": channel.id, "iceServers": calls.ice_servers(), "peers": peers, "transcription": state,
+            "sessionId": entry["sessionId"], "startedAt": entry["startedAt"],
+            "coverage": await meetings.coverage(session, entry["sessionId"]),
+            "transcript": await meetings.transcript(session, await session.get(HuddleSession, entry["sessionId"]))}
 
 
 @chat_event("call:leave", CallIn)
@@ -565,7 +594,43 @@ async def call_state(sid, data, session, user):
         raise HTTPException(403, "You are not in this call")
     await sio.emit("call:state", {"channelId": data.channelId, "sid": sid, **entry},
                    room=f"call:{data.channelId}")
+    if data.captions is not None:
+        member = await session.get(HuddleMember, (entry['sessionId'], user.id))
+        if member:
+            member.consented = member.consented or data.captions
+            if not data.captions and member.capture_state not in ('stopped', 'inactive'):
+                member.capture_state = 'stopped'
+            await session.commit()
     await announce_transcription(data.channelId)
+
+
+@chat_event('call:capture-state', CaptureIn)
+async def call_capture_state(sid, data, session, user):
+    room = await calls.participants(data.channelId)
+    if sid not in room or room[sid].get('sessionId') != data.sessionId:
+        raise HTTPException(403, 'Join this Huddle before reporting capture state')
+    if data.state in ('paused', 'draining', 'stopped'):
+        await redis.set(f'{settings.socketio_channel}:caption-drain:{data.sessionId}:{user.id}', sid, ex=15)
+    await meetings.status(session, data.sessionId, user.id, data.state, data.reason)
+    await sio.emit('call:capture-state', {'sessionId': data.sessionId, 'channelId': data.channelId,
+        'userId': user.id, 'state': data.state}, room=f'call:{data.channelId}')
+
+
+@chat_event('call:transcript-sync', CallIn)
+async def call_transcript_sync(sid, data, session, user):
+    room = await calls.participants(data.channelId)
+    if sid not in room:
+        raise HTTPException(403, 'You are not in this Huddle')
+    meeting, _ = await meetings.authorized(session, room[sid]['sessionId'], data.channelId, user.id)
+    return {**meetings.meeting_out(meeting), 'segments': await meetings.transcript(session, meeting),
+            'coverage': await meetings.coverage(session, meeting.id)}
+
+
+@chat_event('call:media-ready', MediaReadyIn)
+async def call_media_ready(sid, data, session, user):
+    if await calls.current_call(sid) != data.channelId:
+        raise HTTPException(403, 'Join the Huddle first')
+    await invitations.media_ready(data.channelId, user.id, data.peerUserId)
 
 
 def _call_limited(sid: str, kind: str, per_window: int) -> bool:
@@ -591,41 +656,9 @@ async def call_react(sid, data, session, user):
 
 @chat_event("call:caption", CaptionIn)
 async def call_caption(sid, data, session, user):
-    """Live captions: each browser transcribes its own speaker and shares the text with the call only."""
-    room = await calls.participants(data.channelId)
-    if sid not in room:
-        raise HTTPException(403, "You are not in this call")
-    if room[sid].get("muted"):
-        raise HTTPException(409, "Unmute before sharing captions")
-    if not room[sid].get("captions"):
-        raise HTTPException(403, "Enable transcription before sharing captions")
-    if _call_limited(sid, "caption", 240):
-        raise HTTPException(429, "Too many captions")
-    text = data.text.strip()
-    if not text:
-        raise HTTPException(422, "Caption is empty")
-    segment_id = data.segmentId
-    await calls.caption_consent(data.channelId, sid, user.id, True)
-    call_start = await redis.hget(calls.meta_key(data.channelId), "start")
-    if call_start is None:
-        raise HTTPException(409, "This Huddle has expired. Rejoin before sharing captions.")
-    final_key = f"{settings.socketio_channel}:caption-final:{data.channelId}:{call_start}:{user.id}:{segment_id}"
-    if data.final:
-        inserted = await session.scalar(insert(HuddleSegment).values(
-            channel_id=data.channelId, meeting_start=int(call_start), user_id=user.id,
-            segment_id=segment_id, speaker=user.display_name or user.username, text=text,
-        ).on_conflict_do_nothing().returning(HuddleSegment.segment_id))
-        await session.commit()
-        if inserted is None:
-            return
-        await redis.set(final_key, 1, ex=12 * 3600)
-        await calls.add_note(data.channelId, user.username, text)
-    elif await redis.exists(final_key):
-        return
-    await sio.emit("call:caption", {"channelId": data.channelId, "sid": sid, "userId": user.id,
-                                    "segmentId": segment_id, "timestamp": datetime.now(UTC).isoformat(),
-                                    "username": user.display_name or user.username, "text": text, "final": data.final},
-                   room=f"call:{data.channelId}", skip_sid=sid)
+    from app.calls.transcripts import publish_caption
+    return await publish_caption(sid, data, session, user)
+
 
 
 @chat_event("call:ring", CallIn)
@@ -642,27 +675,14 @@ async def call_ring(sid, data, session, user):
     recipients = [person for person in await participant_ids(session, channel.id)
                   if person != user.id and not await blocked_among(session, user.id, [person])]
     row = await invitations.create(channel.id, user.id, recipients, sid)
-    from app.calls.audio import optional_audio_allowed
-    for participant in recipients:
-        audible = await optional_audio_allowed(session, participant, channel.id)
-        await sio.emit("call:incoming", {"channelId": channel.id, "invitationId": row["invitationId"],
-                       "expiresAt": row["expiresAt"], "sound": audible, "from": {"id": user.id, "username": user.username}},
-                       room=f"user:{participant}")
-    return {"invitationId": row["invitationId"], "expiresAt": row["expiresAt"]}
+    await invitations.emit(row)
+    return row
 
 
 @chat_event("call:respond", InvitationIn)
 async def call_respond(sid, data, session, user):
-    # Acceptance is allowed only once the user really joined; a cancelled pre-join cannot accept.
-    if data.action == "accepted":
-        raw = await redis.get(invitations.key(data.invitationId))
-        if raw is None:
-            raise HTTPException(404, "Invitation expired")
-        row = json.loads(raw)
-        await calls.check_access(session, row["channelId"], user)
-        if await calls.current_call(sid) != row["channelId"]:
-            raise HTTPException(403, "Join the Huddle before accepting")
-    return await invitations.resolve(data.invitationId, user.id, data.action)
+    return await invitations.resolve(data.invitationId, user.id, data.action, sid=sid)
+
 
 
 

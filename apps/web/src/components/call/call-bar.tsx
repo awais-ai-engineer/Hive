@@ -18,7 +18,7 @@ export function CallBar() {
   const call = useCall();
   const { user } = useAuth();
   const { t } = useT();
-  const timer = useCallTimer(call.status === 'connected');
+  const timer = useCallTimer(call.startedAt);
   if (call.status === 'idle' || !call.channelId) return null;
   const canShare = typeof navigator !== 'undefined' && !!navigator.mediaDevices && 'getDisplayMedia' in navigator.mediaDevices;
   const people = [{ key: 'me', name: user?.username ?? 'You', avatar: user?.avatar_url, talking: call.speaking && !call.muted },
@@ -37,7 +37,7 @@ export function CallBar() {
       </span>
     </UiButton>
     {call.disclosure && <p role="status" className="mt-2 text-xs opacity-70">{call.disclosure}</p>}
-    {call.outgoing && <div className="mt-2 flex items-center justify-between text-xs"><span role="status">Calling?</span><UiButton type="button" className="btn-ghost !py-1" onClick={() => calls.cancelRinging()}>Cancel invitation</UiButton></div>}
+    <p className="mt-1 text-xs opacity-70">{call.status === 'waiting' ? 'Waiting for participants' : call.status === 'connected' ? 'Connected' : call.status === 'reconnecting' ? 'Reconnecting' : 'Connecting'}</p>
     {call.error && <p role="alert" className="mt-2 text-xs text-rose-300">{call.error}</p>}
     <div className="mt-3 flex items-center gap-1.5">
       <RoundControl size="sm" icon={call.muted ? 'micOff' : 'mic'} label={call.muted ? t('huddle.unmute') : t('huddle.mute')} warn={call.muted} onClick={() => calls.toggleMute()} />

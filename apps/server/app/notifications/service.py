@@ -119,7 +119,7 @@ async def serialize(
             channelId=row.channel_id, channelName=place.channelName if place else None,
             isDm=place is not None and place.isDm,
             messageId=row.message_id, postId=row.post_id, commentId=row.comment_id,
-            snippet=row.snippet, count=row.count, readAt=row.read_at, createdAt=row.created_at,
+            callInvitationId=row.source_call_id, snippet=row.snippet, count=row.count, readAt=row.read_at, createdAt=row.created_at,
         ))
     return result
 
