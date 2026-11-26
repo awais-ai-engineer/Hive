@@ -12,6 +12,7 @@ function harness() {
     start(track) { this.track = track; instances.push(this); this.onstart?.(); }
     stop() { queueMicrotask(() => { this.onStopping?.(); this.onend?.(); }); }
     result(entries, resultIndex = 0) { this.onresult?.({ resultIndex, results: entries.map(([text, final]) => Object.assign([{ transcript: text }], { isFinal: final })) }); }
+    error(error) { this.onerror?.({ error }); }
   }
   const sandbox = { exports: {}, require: () => shared, window: { SpeechRecognition: Recognition }, crypto: require('node:crypto').webcrypto,
     sessionStorage: { getItem: key => store.get(key), setItem: (key, value) => store.set(key, value), removeItem: key => store.delete(key) },
@@ -65,4 +66,11 @@ test('unacknowledged finals survive capture replacement and retry without changi
 test('mute pause does not duplicate a recognizer while its stop is pending', async () => {
   const h = harness(); h.capture.start(); h.capture.pause(); h.capture.resume(); assert.equal(h.instances.length, 1);
   await new Promise(resolve => setTimeout(resolve, 180)); assert.equal(h.instances.length, 2); h.capture.dispose(true);
+});
+
+test('reports a terminal recognition failure distinctly from a recoverable interruption', () => {
+  const h = harness(); h.capture.start(); h.instances[0].error('not-allowed');
+  assert.equal(h.statuses.at(-1)[0], 'failed');
+  assert.match(h.statuses.at(-1)[1], /not-allowed/);
+  h.capture.dispose(true);
 });

@@ -59,7 +59,7 @@ export class SpeechCapture {
   private begin() {
     if (!this.desired || this.paused || this.recognizer) return;
     const Speech = recognitionClass();
-    if (!Speech) { this.options.status('error', 'Browser speech recognition is unavailable. A self-hosted transcription worker is required for this browser.'); return; }
+    if (!Speech) { this.options.status('failed', 'Browser speech recognition is unavailable. A self-hosted transcription worker is required for this browser.'); return; }
     const recognizer = new Speech();
     const epoch = crypto.randomUUID();
     const results = new Map<number, { sequence: number; text: string; final: boolean; revision: number }>();
@@ -84,14 +84,14 @@ export class SpeechCapture {
           else if (this.options.connected()) void this.options.send(segment).catch(() => {});
         });
         this.persist(); this.flush();
-        if (this.queue.size > 5000) { this.desired = false; this.pause('Caption delivery is backlogged. Reconnect before continuing transcription.'); this.options.status('error', 'Caption outbox is full; capture stopped without clearing finalized text.'); }
+        if (this.queue.size > 5000) { this.desired = false; this.pause('Caption delivery is backlogged. Reconnect before continuing transcription.'); this.options.status('failed', 'Caption outbox is full; capture stopped without clearing finalized text.'); }
       }
     };
     recognizer.onerror = ({ error }) => {
       this.failures++;
       if (['not-allowed', 'service-not-allowed', 'audio-capture', 'language-not-supported'].includes(error) || this.failures >= 6) {
         this.desired = false;
-        this.options.status('error', `Speech recognition failed (${error}). Check the microphone and selected language before restarting transcription.`);
+        this.options.status('failed', `Speech recognition failed (${error}). Check the microphone and selected language before restarting transcription.`);
       } else this.options.status('interrupted', `Speech recognition was interrupted (${error}); capture will retry.`);
     };
     recognizer.onend = () => {
