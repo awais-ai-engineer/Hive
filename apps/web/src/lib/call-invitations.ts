@@ -52,7 +52,12 @@ async function recover() {
   } catch { /* keep the visible invitation and expiry during transient network failures */ }
 }
 if (typeof window !== 'undefined') {
-  socket.on('call:invitation', update).on('connect', recover);
+  // `call:incoming` is the immediate recipient-targeted delivery event. Keep
+  // the broader events as recovery paths for reconnects and secondary tabs.
+  socket.on('call:invitation', update)
+    .on('call:incoming', update)
+    .on('call:resolved', update)
+    .on('connect', recover);
   subscribeSession(session => {
     const nextOwner = currentUserId() ?? null;
     if (owner !== nextOwner) { state = empty; revision++; stopRing(); if (expiry) clearTimeout(expiry); listeners.forEach(listener => listener()); owner = nextOwner; }

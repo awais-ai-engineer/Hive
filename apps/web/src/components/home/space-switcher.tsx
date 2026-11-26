@@ -31,13 +31,15 @@ export function SpaceSwitcher({ current, onOpenSwitcher, compact = false, spaces
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const manage = current?.my_role === 'owner' || current?.my_role === 'admin';
-  if (!compact) return <div className="space-sidebar-heading flex h-11 min-w-0 items-center gap-2">
-    <div className="flex min-w-0 flex-1 items-center gap-2">
-      {current && <SpaceIcon space={current} />}
+  if (!compact) return <div className="space-sidebar-heading relative flex h-11 min-w-0 items-center">
+    <div className="absolute left-1/2 flex min-w-0 max-w-[calc(100%-6.5rem)] -translate-x-1/2 items-center gap-2">
+      {current && <span className="shrink-0"><SpaceIcon space={current} /></span>}
       <Tooltip content={current?.name ?? 'No space yet'}><h2 className="min-w-0 truncate text-base font-semibold leading-tight tracking-tight">{current?.name ?? 'No space yet'}</h2></Tooltip>
     </div>
-    {spaces.length > 1 && onToggleStrip && <UiButton type="button" onClick={onToggleStrip} aria-expanded={!!stripOpen} aria-label={stripOpen ? 'Hide space switcher' : 'Show space switcher'} tooltip={stripOpen ? 'Hide space switcher' : 'Show space switcher'} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/60 hover:bg-white/10"><Icon name="sidebar" size={18} /></UiButton>}
-    <UiButton type="button" onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH))} aria-label="Search" tooltip="Search (Ctrl+K)" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/60 hover:bg-white/10"><Icon name="search" size={18} /></UiButton>
+    <div className="ml-auto flex shrink-0 items-center gap-1">
+      {spaces.length > 1 && onToggleStrip && <UiButton type="button" onClick={onToggleStrip} aria-expanded={!!stripOpen} aria-label={stripOpen ? 'Hide space switcher' : 'Show space switcher'} tooltip={stripOpen ? 'Hide space switcher' : 'Show space switcher'} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/60 hover:bg-white/10"><Icon name="sidebar" size={18} /></UiButton>}
+      <UiButton type="button" onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH))} aria-label="Search" tooltip="Search (Ctrl+K)" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/60 hover:bg-white/10"><Icon name="search" size={18} /></UiButton>
+    </div>
   </div>;
   const trigger = menuTrigger ?? <UiButton type="button" aria-label={current ? `Current space: ${current.name}` : 'No space yet'} aria-current={current ? 'page' : undefined} className={`rail-current-trigger ${current ? 'space-current' : ''}`} disabled={!current}>
     {current ? <SpaceIcon space={current} /> : <Icon name="layers" size={20} />}

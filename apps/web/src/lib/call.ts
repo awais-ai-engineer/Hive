@@ -301,7 +301,14 @@ class CallManager {
     } catch { /* reconnection restores replay; never clear captions on a failed refresh */ }
   }
   private captureStatus(state: string, reason?: string) {
-    this.emit({ captureState: state, ...(reason && ['error', 'interrupted'].includes(state) ? { error: reason } : {}) });
+    const failed = state === 'failed';
+    this.emit({ captureState: failed ? 'error' : state, ...(reason && ['error', 'failed', 'interrupted'].includes(state) ? { error: reason } : {}) });
+    // A fatal recognizer error must not leave the participant advertised as
+    // transcribing. Transient interruptions retain consent for a safe retry.
+    if (failed && this.state.captionsOn) {
+      this.emit({ captionsOn: false });
+      if (this.state.channelId && socket.connected) void chatRequest('call:state', { channelId: this.state.channelId, captions: false }).catch(() => {});
+    }
     if (this.state.channelId && this.state.sessionId && socket.connected) void chatRequest('call:capture-state', { channelId: this.state.channelId, sessionId: this.state.sessionId, state, reason }).catch(() => {});
   }
   setCaptionsVisible() { this.emit({ captionsVisible: !this.state.captionsVisible }); }
