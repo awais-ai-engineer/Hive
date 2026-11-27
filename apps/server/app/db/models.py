@@ -108,12 +108,16 @@ class ReportTarget(str, enum.Enum):
 
 class User(Base):
     __tablename__ = "users"
-    __table_args__ = (UniqueConstraint("google_sub", name="uq_users_google_sub"),)
+    __table_args__ = (
+        UniqueConstraint("google_sub", name="uq_users_google_sub"),
+        UniqueConstraint("supabase_sub", name="uq_users_supabase_sub"),
+    )
 
     id: Mapped[str] = pk()
     username: Mapped[str] = mapped_column(String(32), unique=True)
     email: Mapped[str] = mapped_column(String(255), unique=True)
     google_sub: Mapped[str | None] = mapped_column(String(255))
+    supabase_sub: Mapped[str | None] = mapped_column(String(255))
     password_hash: Mapped[str] = mapped_column(Text)
     avatar_url: Mapped[str | None] = mapped_column(Text)
     # Storage key of the current avatar object (avatar_url is the public, versioned link to it).
@@ -1278,3 +1282,35 @@ class HuddleInvitation(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class McpGrant(Base):
+    """User-approved workspace isolation and scope grants for a Supabase OAuth client."""
+
+    __tablename__ = "mcp_grants"
+    __table_args__ = (
+        UniqueConstraint("user_id", "client_id", name="uq_mcp_grants_user_client"),
+    )
+
+    id: Mapped[str] = pk()
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    client_id: Mapped[str] = mapped_column(String(128), index=True)
+    client_name: Mapped[str] = mapped_column(String(100), default="MCP Client", server_default="MCP Client")
+    scopes: Mapped[list[str]] = mapped_column(ARRAY(String(64)), default=list, server_default="{}")
+    space_ids: Mapped[list[str]] = mapped_column(ARRAY(String(26)), default=list, server_default="{}")
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = created_at()
+
+
+class McpAuditLog(Base):
+    """Audit log for MCP tool invocations."""
+
+    __tablename__ = "mcp_audit_logs"
+
+    id: Mapped[str] = pk()
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    client_id: Mapped[str] = mapped_column(String(128), index=True)
+    tool_name: Mapped[str] = mapped_column(String(64))
+    space_id: Mapped[str | None] = mapped_column(String(26))
+    status: Mapped[str] = mapped_column(String(20))
+    created_at: Mapped[datetime] = created_at()

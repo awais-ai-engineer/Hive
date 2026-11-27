@@ -20,6 +20,7 @@ dependencies = [
     "python-multipart>=0.0.33",
     "cryptography>=50.0.2",
     "tzdata>=2026.6",
+    "mcp>=2.3.0",
 ]
 
 [dependency-groups]
