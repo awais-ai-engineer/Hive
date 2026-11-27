@@ -126,11 +126,13 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
     </div>;
   }
   if (message.kind === 'huddle') {
-    // System line, for example the summary of a huddle that just ended.
+    const ended = !!message.huddle?.endedAt;
+    const summary = (message.body ?? '').replace(/\s*\[Open the meeting notes\]\([^)]*\)/, '');
     return <div data-message-id={message.id} className="my-3 px-2">
-      <div role="status" className="flex items-center justify-center gap-2 text-center text-xs text-white/55">
-        <Icon name="headphones" size={14} className="shrink-0" /><span className="[&_a]:font-semibold [&_a]:text-[var(--brand-soft-fg)] [&_p]:inline"><RichText source={message.body ?? ''} /></span>
-        <UiTooltip content={new Date(message.created_at).toLocaleString()}><time dateTime={message.created_at} className="shrink-0 text-white/40">{time}</time></UiTooltip>
+      <div role="status" className="mx-auto flex max-w-md items-center gap-3 rounded-xl border border-white/10 bg-[var(--surface-2)] px-3 py-2 text-sm">
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${ended?'bg-brand-soft text-brand':'bg-emerald-500/15 text-emerald-400'}`}><Icon name="headphones" size={16} /></span>
+        <span className="min-w-0 flex-1"><strong className="block text-xs">{ended ? 'Huddle completed' : 'Huddle in progress'}</strong><span className="block truncate text-xs text-white/60">{summary || 'Huddle activity'}</span></span>
+        <UiTooltip content={new Date(message.created_at).toLocaleString()}><time dateTime={message.created_at} className="shrink-0 text-xs text-white/40">{time}</time></UiTooltip>
       </div>
       {!message.id.startsWith('pending:') && <HuddleNotes messageId={message.id} channelId={message.channel_id} userId={userId} />}
     </div>;

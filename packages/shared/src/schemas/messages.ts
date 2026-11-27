@@ -31,6 +31,7 @@ export const messageSchema = z.object({
   mentions: z.array(z.object({ userId: z.string(), username: z.string(), displayName: z.string().nullable() })).optional(),
   channelLinks: z.array(z.object({id: z.string(), name: z.string(), href: z.string()})).optional(),
   poll: pollSchema.nullable().optional(),
+  huddle: z.object({ sessionId: z.string(), startedAt: z.string(), endedAt: z.string().nullable() }).nullable().optional(),
   id: z.string(), channel_id: z.string(), parent_id: z.string().nullable(),
   author: z.object({
     id: z.string(), username: z.string(), avatar_url: z.string().nullable(),

@@ -237,6 +237,7 @@ class MessageOut(BaseModel):
     channelLinks: list[ChannelLinkOut] = Field(default_factory=list)
     mentions: list[MentionOut] = Field(default_factory=list)
     poll: PollOut | None = None
+    huddle: dict | None = None
     id: str
     channel_id: str
     parent_id: str | None

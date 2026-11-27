@@ -19,6 +19,7 @@ from app.db.models import (
     ConversationPref,
     DirectMember,
     Draft,
+    HuddleSession,
     MemberRole,
     Message,
     MessageMention,
@@ -266,6 +267,11 @@ async def serialize(
             )
 
     result = []
+    huddle_sessions = {
+        meeting.id: meeting for meeting in await session.scalars(
+            select(HuddleSession).where(HuddleSession.id.in_([message.huddle_session_id for message, _ in rows if message.huddle_session_id]))
+        )
+    }
     for message, author in rows:
         deleted = message.deleted_at is not None
         previews = [
@@ -277,6 +283,10 @@ async def serialize(
             MessageOut(
                 kind=message.kind,
                 **({} if deleted else await extras(session, message, viewer_id)),
+                huddle=(
+                    {"sessionId": meeting.id, "startedAt": meeting.started_at.isoformat(), "endedAt": meeting.ended_at.isoformat() if meeting.ended_at else None}
+                    if (meeting := huddle_sessions.get(message.huddle_session_id)) else None
+                ),
                 id=message.id,
                 channel_id=message.channel_id,
                 parent_id=message.parent_id,
