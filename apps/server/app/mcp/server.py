@@ -5,6 +5,9 @@ from mcp.server.mcpserver import MCPServer
 from sqlalchemy import select
 
 from app.core.config import settings
+from app.channels.service import list_channels as visible_channels
+from app.docs.service import read_channel
+from app.db.models import HuddleMember
 from app.db.models import Channel, Doc, HuddleSegment, HuddleSession, Space, SpaceMember, Task, User
 from app.db.session import SessionLocal
 from app.mcp.auth import McpContext, record_audit
@@ -31,6 +34,14 @@ def _require_scope(ctx: McpContext, scope: str) -> None:
 def _require_space(ctx: McpContext, space_id: str) -> None:
     if not ctx.space_ids or space_id not in ctx.space_ids:
         raise PermissionError("Access to this workspace is not granted")
+
+
+async def _channels(session, ctx, space_id):
+    member = await session.scalar(select(SpaceMember.user_id).where(
+        SpaceMember.space_id == space_id, SpaceMember.user_id == ctx.user.id))
+    if member is None:
+        raise PermissionError("Workspace membership required")
+    return await visible_channels(session, await session.get(Space, space_id), ctx.user.id)
 
 
 @mcp_server.tool()
@@ -62,16 +73,10 @@ async def list_channels(space_id: str) -> list[dict]:
         )
         if member is None:
             raise PermissionError("Not a member of this workspace")
-        rows = (
-            await session.execute(
-                select(Channel.id, Channel.name, Channel.type)
-                .where(Channel.space_id == space_id)
-                .order_by(Channel.name)
-            )
-        ).all()
+        rows = await _channels(session, ctx, space_id)
         await record_audit(session, ctx, "list_channels", "ok", space_id=space_id)
         await session.commit()
-        return [{"id": r.id, "name": r.name, "type": r.type.value} for r in rows]
+        return [{"id": r.id, "name": r.name} for r in rows]
 
 
 @mcp_server.tool()
@@ -84,8 +89,7 @@ async def read_messages(channel_id: str, limit: int = 20) -> list[dict]:
         channel = await session.get(Channel, channel_id)
         if channel is None:
             raise ValueError("Channel not found")
-        if channel.space_id:
-            _require_space(ctx, channel.space_id)
+        _require_space(ctx, channel.space_id)
         items = await messages_service.history(session, ctx.user.id, channel_id, before=None, limit=capped)
         await record_audit(session, ctx, "read_messages", "ok", space_id=channel.space_id)
         await session.commit()
@@ -122,8 +126,8 @@ async def list_tasks(space_id: str, limit: int = 25) -> list[dict]:
     async with SessionLocal() as session:
         rows = (
             await session.execute(
-                select(Task.id, Task.title, Task.status, Task.due_date)
-                .where(Task.space_id == space_id)
+                select(Task.id, Task.title, Task.status, Task.due_at.label("due_date"))
+                .where(Task.channel_id.in_([c.id for c in await _channels(session, ctx, space_id)]))
                 .order_by(Task.created_at.desc())
                 .limit(capped)
             )
@@ -147,7 +151,9 @@ async def list_docs(space_id: str, limit: int = 25) -> list[dict]:
         rows = (
             await session.execute(
                 select(Doc.id, Doc.title, Doc.updated_at)
-                .where(Doc.space_id == space_id)
+                .where(Doc.channel_id.in_([c.id for c in await _channels(session, ctx, space_id)]),
+                       Doc.huddle_session_id.is_(None) | Doc.huddle_session_id.in_(
+                           select(HuddleMember.session_id).where(HuddleMember.user_id == ctx.user.id)))
                 .order_by(Doc.updated_at.desc())
                 .limit(capped)
             )
@@ -195,7 +201,8 @@ async def list_meetings(space_id: str, limit: int = 20) -> list[dict]:
             await session.execute(
                 select(HuddleSession.id, HuddleSession.channel_id, HuddleSession.started_at, HuddleSession.ended_at)
                 .join(Channel, Channel.id == HuddleSession.channel_id)
-                .where(Channel.space_id == space_id)
+                .where(Channel.id.in_([c.id for c in await _channels(session, ctx, space_id)]),
+                       HuddleSession.id.in_(select(HuddleMember.session_id).where(HuddleMember.user_id == ctx.user.id)))
                 .order_by(HuddleSession.started_at.desc())
                 .limit(capped)
             )
@@ -224,12 +231,14 @@ async def read_transcript(session_id: str, limit: int = 50) -> list[dict]:
         if huddle is None:
             raise ValueError("Meeting session not found")
         channel = await session.get(Channel, huddle.channel_id)
-        if channel and channel.space_id:
-            _require_space(ctx, channel.space_id)
+        if channel is None or await session.get(HuddleMember, (session_id, ctx.user.id)) is None:
+            raise PermissionError("Meeting access required")
+        _require_space(ctx, channel.space_id)
+        await read_channel(session, channel.id, ctx.user.id)
         rows = (
             await session.execute(
                 select(HuddleSegment.speaker, HuddleSegment.text, HuddleSegment.created_at)
-                .where(HuddleSegment.channel_id == huddle.channel_id, HuddleSegment.meeting_start == huddle.meeting_start)
+                .where(HuddleSegment.session_id == huddle.id)
                 .order_by(HuddleSegment.created_at.asc())
                 .limit(capped)
             )
