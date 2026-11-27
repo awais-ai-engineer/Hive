@@ -2,7 +2,7 @@
 
 import { Tooltip as UiTooltip } from '@hive/ui';
 
-import { Textarea as UiTextarea, Button as UiButton, ContextMenu, confirmAction, toast, Badge } from '@hive/ui';
+import { Textarea as UiTextarea, Button as UiButton, ContextMenu, DropdownMenu, Popover, confirmAction, toast, Badge } from '@hive/ui';
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -99,6 +99,9 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
   async function deleteMessage() {
     if (await confirmAction('Delete this message? This cannot be undone.')) await run('message:delete', { messageId: message.id });
   }
+  async function hideMessage() {
+    if (await confirmAction('Remove this message from your chat? Other participants will still see it.')) await run('message:hide', { messageId: message.id });
+  }
   function togglePin() {
     try {
       const stored: unknown = JSON.parse(localStorage.getItem(pinKey) ?? '[]');
@@ -114,6 +117,7 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
     { label: pinned ? 'Unpin on this device' : 'Pin', disabled: !userId || secret || viewOnce, onSelect: togglePin },
     { label: 'Copy link', disabled: secret || viewOnce, onSelect: () => { const url = new URL(window.location.href); url.pathname = '/home'; url.searchParams.set('c', message.channel_id); url.searchParams.set('m', message.id); void navigator.clipboard.writeText(url.toString()).then(() => toast.success('Link copied')).catch(cause => onError(requestError(cause))); } },
     { label: 'Edit', disabled: !own || secret || message.kind === 'poll' || message.kind === 'voice', onSelect: () => { setDraft(message.body ?? ''); setEditing(true); } },
+    { label: 'Delete for me', disabled: !userId || message.id.startsWith('pending:'), onSelect: () => { void hideMessage(); } },
     { label: 'Delete', disabled: !own && !canModerate, danger: true, onSelect: () => { void deleteMessage(); } },
   ];
   const time = new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -126,11 +130,13 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
     </div>;
   }
   if (message.kind === 'huddle') {
-    // System line, for example the summary of a huddle that just ended.
+    const ended = !!message.huddle?.endedAt;
+    const summary = (message.body ?? '').replace(/\s*\[Open the meeting notes\]\([^)]*\)/, '');
     return <div data-message-id={message.id} className="my-3 px-2">
-      <div role="status" className="flex items-center justify-center gap-2 text-center text-xs text-white/55">
-        <Icon name="headphones" size={14} className="shrink-0" /><span className="[&_a]:font-semibold [&_a]:text-[var(--brand-soft-fg)] [&_p]:inline"><RichText source={message.body ?? ''} /></span>
-        <UiTooltip content={new Date(message.created_at).toLocaleString()}><time dateTime={message.created_at} className="shrink-0 text-white/40">{time}</time></UiTooltip>
+      <div role="status" className="mx-auto flex max-w-md items-center gap-3 rounded-xl border border-white/10 bg-[var(--surface-2)] px-3 py-2 text-sm">
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${ended?'bg-brand-soft text-brand':'bg-emerald-500/15 text-emerald-400'}`}><Icon name="headphones" size={16} /></span>
+        <span className="min-w-0 flex-1"><strong className="block text-xs">{ended ? 'Huddle completed' : 'Huddle in progress'}</strong><span className="block truncate text-xs text-white/60">{summary || 'Huddle activity'}</span></span>
+        <UiTooltip content={new Date(message.created_at).toLocaleString()}><time dateTime={message.created_at} className="shrink-0 text-xs text-white/40">{time}</time></UiTooltip>
       </div>
       {!message.id.startsWith('pending:') && <HuddleNotes messageId={message.id} channelId={message.channel_id} userId={userId} />}
     </div>;
@@ -200,18 +206,16 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
     </UiButton>}
     {message.status === 'sending' && <span className="text-xs text-white/40">Sending…</span>}
     {message.status === 'failed' && <p className="text-xs text-rose-400">Failed: {message.error} <UiButton className="underline" onClick={() => onRetry(message)}>Retry</UiButton></p>}
-    {live && (canWrite || own || canModerate || !!userId) && <div className="mt-1 flex flex-wrap gap-3 text-xs font-medium text-brand sm:absolute sm:-top-3 sm:right-3 sm:mt-0 sm:gap-1 sm:rounded-xl sm:border sm:border-white/10 sm:bg-surface sm:p-1 sm:shadow-[var(--shadow-card)] sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 [&>button]:rounded-lg [&>button]:px-2 [&>button]:py-1 [&>button:hover]:bg-[var(--surface-2)]">
-      {canWrite && <UiButton tooltip="Add reaction" aria-label="Add reaction" aria-expanded={picker} onClick={() => setPicker(value => !value)}>React</UiButton>}
-      {canWrite && onReply && <UiButton tooltip="Reply in thread" aria-label="Reply in thread" onClick={() => onReply(message)}>Reply</UiButton>}
-      {own && !secret && <UiButton tooltip="Edit message" aria-label="Edit message" onClick={() => { setEditing(true); setDraft(message.body ?? ''); }}>Edit</UiButton>}
-      {!!userId && !secret && !viewOnce && !message.id.startsWith('pending:') && <UiButton tooltip={isSaved ? 'Remove from saved items' : 'Save message'} aria-label={isSaved ? 'Remove from saved items' : 'Save message'} aria-pressed={isSaved}
-        onClick={() => void saved.toggle('message', message.id).catch(cause => onError(requestError(cause)))}>{isSaved ? 'Saved' : 'Save'}</UiButton>}
-      {canWrite && !!userId && !secret && !viewOnce && !message.id.startsWith('pending:') && <UiButton tooltip="Add to to-dos" aria-label="Add to to-dos" onClick={() => setTodo(true)}>Add to to-dos</UiButton>}
-      {!own && !!userId && !message.id.startsWith('pending:') && <UiButton tooltip="Report message" aria-label="Report message" onClick={() => setReporting(true)}>Report</UiButton>}
-      {(own || canModerate) && <UiButton tooltip="Delete message" aria-label="Delete message" onClick={() => void deleteMessage()}>Delete</UiButton>}
-    </div>}
-    {picker && <div role="menu" className="reaction-picker mt-1 flex w-fit gap-1 rounded-2xl border border-white/10 bg-surface p-1 shadow-[var(--shadow-pop)]">
-      {QUICK_REACTIONS.map(emoji => <UiButton key={emoji} role="menuitem" onClick={() => react(emoji)} className="reaction-choice rounded px-1 text-lg hover:bg-white/10">{emoji}</UiButton>)}
+    {live && (canWrite || own || canModerate || !!userId) && <div className="mt-1 flex flex-wrap gap-1 text-xs font-medium text-brand sm:absolute sm:-top-3 sm:left-12 sm:mt-0 sm:rounded-xl sm:border sm:border-white/10 sm:bg-surface sm:p-1 sm:shadow-[var(--shadow-card)] sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 [&_button]:flex [&_button]:h-8 [&_button]:w-8 [&_button]:items-center [&_button]:justify-center [&_button]:rounded-lg [&_button:hover]:bg-[var(--surface-2)]">
+      {canWrite && <Popover open={picker} onOpenChange={setPicker} label="Quick reactions" trigger={<UiButton tooltip="Add reaction" iconOnly aria-label="Add reaction" aria-expanded={picker}><Icon name="smile" size={17} /></UiButton>} className="w-fit rounded-2xl border border-white/10 bg-surface p-1 shadow-[var(--shadow-pop)]">
+        <div role="menu" className="reaction-picker flex gap-1">
+          {QUICK_REACTIONS.map(emoji => <UiButton key={emoji} role="menuitem" tooltip={`React with ${emoji}`} onClick={() => react(emoji)} className="reaction-choice rounded px-1 text-lg hover:bg-white/10">{emoji}</UiButton>)}
+        </div>
+      </Popover>}
+      {canWrite && onReply && <UiButton tooltip="Reply in thread" iconOnly aria-label="Reply in thread" onClick={() => onReply(message)}><Icon name="threads" size={17} /></UiButton>}
+      {!!userId && !secret && !viewOnce && !message.id.startsWith('pending:') && <UiButton tooltip={isSaved ? 'Remove from saved items' : 'Save message'} iconOnly aria-label={isSaved ? 'Remove from saved items' : 'Save message'} aria-pressed={isSaved}
+        onClick={() => void saved.toggle('message', message.id).catch(cause => onError(requestError(cause)))}><Icon name="bookmark" size={17} /></UiButton>}
+      <DropdownMenu label="More message actions" trigger={<UiButton tooltip="More message actions" iconOnly aria-label="More message actions"><Icon name="more" size={17} /></UiButton>} items={actions.filter(action => action.label !== 'Reply in thread' && action.label !== 'React' && action.label !== (isSaved ? 'Unsave' : 'Save'))} />
     </div>}
     </div>
     {todo && userId && <AddTodoDialog messageId={message.id} channelId={message.channel_id} text={message.body ?? ''} userId={userId} onClose={() => setTodo(false)} />}

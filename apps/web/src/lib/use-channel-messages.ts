@@ -113,6 +113,11 @@ export function useMessageList(channelId: string, parentId: string | null = null
       if (parentId && data.id === parentId) setParent(current => current && gone(current));
       else patch(data.id, gone);
     };
+    const onHidden = (data: { id: string; channelId: string; parentId: string | null }) => {
+      if (!active || data.channelId !== channelId) return;
+      if (parentId && data.id === parentId) setParent(null);
+      else commit(messagesRef.current.filter(item => item.id !== data.id));
+    };
     const onExpired = (data: MessageExpired) => {
       if (!active || data.channelId !== channelId) return;
       const gone = new Set(data.ids);
@@ -171,7 +176,7 @@ export function useMessageList(channelId: string, parentId: string | null = null
     }
     const onConnect = () => { setConnected(true); void catchUp(); };
     const onDisconnect = () => setConnected(false);
-    socket.on('message:new', onMessage).on('message:updated', onMessage).on('message:deleted', onDelete)
+    socket.on('message:new', onMessage).on('message:updated', onMessage).on('message:deleted', onDelete).on('message:hidden', onHidden)
       .on('message:expired', onExpired).on('attachment:viewed', onViewed).on('poll:updated', onPoll)
       .on('reaction:updated', onReaction).on('connect', onConnect).on('disconnect', onDisconnect);
     setConnected(socket.connected);
@@ -191,7 +196,7 @@ export function useMessageList(channelId: string, parentId: string | null = null
     return () => {
       active = false; clearInterval(sweep);
       if (generation.current === version) generation.current++;
-      socket.off('message:new', onMessage).off('message:updated', onMessage).off('message:deleted', onDelete)
+      socket.off('message:new', onMessage).off('message:updated', onMessage).off('message:deleted', onDelete).off('message:hidden', onHidden)
         .off('message:expired', onExpired).off('attachment:viewed', onViewed).off('poll:updated', onPoll)
         .off('reaction:updated', onReaction).off('connect', onConnect).off('disconnect', onDisconnect);
       // The thread panel shares the channel room with the channel view, so only the channel leaves it.

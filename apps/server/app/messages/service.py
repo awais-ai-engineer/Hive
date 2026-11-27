@@ -19,9 +19,11 @@ from app.db.models import (
     ConversationPref,
     DirectMember,
     Draft,
+    HuddleSession,
     MemberRole,
     Message,
     MessageMention,
+    MessageVisibility,
     Poll,
     PollOption,
     Post,
@@ -148,6 +150,7 @@ async def serialize(
 ) -> list[dict]:
     """Turn (message, author) rows into MessageOut dicts, batch-loading reactions, files, and post previews."""
     ids = [message.id for message, _ in rows]
+    hidden_ids = set(await session.scalars(select(MessageVisibility.message_id).where(MessageVisibility.user_id == viewer_id, MessageVisibility.message_id.in_(ids)))) if viewer_id and ids else set()
     reactions: dict[str, dict[str, list[str]]] = {}
     attachments: dict[str, list[AttachmentOut]] = {}
     if ids:
@@ -266,7 +269,14 @@ async def serialize(
             )
 
     result = []
+    huddle_sessions = {
+        meeting.id: meeting for meeting in await session.scalars(
+            select(HuddleSession).where(HuddleSession.id.in_([message.huddle_session_id for message, _ in rows if message.huddle_session_id]))
+        )
+    }
     for message, author in rows:
+        if message.id in hidden_ids:
+            continue
         deleted = message.deleted_at is not None
         previews = [
             previews_by_id[pid]
@@ -277,6 +287,10 @@ async def serialize(
             MessageOut(
                 kind=message.kind,
                 **({} if deleted else await extras(session, message, viewer_id)),
+                huddle=(
+                    {"sessionId": meeting.id, "startedAt": meeting.started_at.isoformat(), "endedAt": meeting.ended_at.isoformat() if meeting.ended_at else None}
+                    if (meeting := huddle_sessions.get(message.huddle_session_id)) else None
+                ),
                 id=message.id,
                 channel_id=message.channel_id,
                 parent_id=message.parent_id,
@@ -472,7 +486,7 @@ async def _finish_insert(session, user, data: SendIn, message: Message, *, commi
         if audio is None or audio.kind != "audio" or audio.duration_ms is None or audio.waveform is None:
             raise HTTPException(422, "Voice messages require an audio attachment")
     if data.poll:
-        session.add(Poll(message_id=message.id, question=data.poll.question))
+        session.add(Poll(message_id=message.id, question=data.poll.question, multiple_answers=data.poll.multipleAnswers))
         await session.flush()
         session.add_all([PollOption(message_id=message.id, position=i, label=label) for i, label in enumerate(data.poll.options)])
     await update_mentions(session, message)
@@ -540,6 +554,16 @@ async def change(session: AsyncSession, user: User, message_id: str, body: str |
     await update_mentions(session, message)
     await session.commit()
     return await message_out(session, message, user.id)
+
+
+async def hide_for_user(session: AsyncSession, user: User, message_id: str):
+    message = await session.get(Message, message_id)
+    if message is None:
+        raise HTTPException(404, "Message not found")
+    await readable(session, message.channel_id, user.id)
+    await session.execute(insert(MessageVisibility).values(message_id=message.id, user_id=user.id).on_conflict_do_nothing())
+    await session.commit()
+    return {"id": message.id, "channelId": message.channel_id, "parentId": message.parent_id}
 
 
 async def toggle_reaction(session: AsyncSession, user: User, message_id: str, emoji: str):

@@ -25,6 +25,7 @@ class MessageIn(BaseModel):
 class PollIn(BaseModel):
     question: str = Field(min_length=1, max_length=200)
     options: list[str] = Field(min_length=2, max_length=10)
+    multipleAnswers: bool = False
 
     @field_validator("question")
     @classmethod
@@ -44,6 +45,7 @@ class PollIn(BaseModel):
 
 class PollVoteIn(MessageIn):
     optionId: str | None = None
+    optionIds: list[str] | None = Field(default=None, max_length=10)
 
 
 class Envelope(BaseModel):
@@ -219,11 +221,13 @@ class PollOptionOut(BaseModel):
 
 class PollOut(BaseModel):
     question: str
+    multipleAnswers: bool = False
     closedAt: datetime | None
     options: list[PollOptionOut]
     counts: dict[str, int]
     total: int
     myVote: str | None
+    myVotes: list[str] = Field(default_factory=list)
 
 
 class MessageOut(BaseModel):
@@ -233,6 +237,7 @@ class MessageOut(BaseModel):
     channelLinks: list[ChannelLinkOut] = Field(default_factory=list)
     mentions: list[MentionOut] = Field(default_factory=list)
     poll: PollOut | None = None
+    huddle: dict | None = None
     id: str
     channel_id: str
     parent_id: str | None

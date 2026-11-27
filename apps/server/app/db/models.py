@@ -740,11 +740,21 @@ class MessageMention(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", name="fk_mentions_user"), primary_key=True)
 
 
+class MessageVisibility(Base):
+    """A per-user hide record; it never alters the shared message or attachments."""
+    __tablename__ = "message_visibility"
+    __table_args__ = (PrimaryKeyConstraint("message_id", "user_id", name="pk_message_visibility"), Index("ix_message_visibility_user", "user_id"))
+    message_id: Mapped[str] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE", name="fk_message_visibility_message"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", name="fk_message_visibility_user"), primary_key=True)
+    hidden_at: Mapped[datetime] = created_at()
+
+
 class Poll(Base):
     __tablename__ = "polls"
     __table_args__ = (PrimaryKeyConstraint("message_id", name="pk_polls"),)
     message_id: Mapped[str] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE", name="fk_polls_message"), primary_key=True)
     question: Mapped[str] = mapped_column(String(200))
+    multiple_answers: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -759,10 +769,10 @@ class PollOption(Base):
 
 class PollVote(Base):
     __tablename__ = "poll_votes"
-    __table_args__ = (PrimaryKeyConstraint("message_id", "user_id", name="pk_poll_votes"), ForeignKeyConstraint(["message_id", "option_id"], ["poll_options.message_id", "poll_options.id"], ondelete="CASCADE", name="fk_poll_votes_option"))
+    __table_args__ = (PrimaryKeyConstraint("message_id", "user_id", "option_id", name="pk_poll_votes"), ForeignKeyConstraint(["message_id", "option_id"], ["poll_options.message_id", "poll_options.id"], ondelete="CASCADE", name="fk_poll_votes_option"))
     message_id: Mapped[str] = mapped_column(ForeignKey("polls.message_id", ondelete="CASCADE", name="fk_poll_votes_message"), primary_key=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", name="fk_poll_votes_user"), primary_key=True)
-    option_id: Mapped[str] = mapped_column(String(26))
+    option_id: Mapped[str] = mapped_column(String(26), primary_key=True)
 
 
 class Reminder(Base):

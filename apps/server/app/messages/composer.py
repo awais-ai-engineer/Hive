@@ -136,9 +136,14 @@ async def poll_out(session, message_id, viewer_id=None):
         ).all()
     )
     counts = {option.id: counts.get(option.id, 0) for option in options}
-    mine = await session.get(PollVote, (message_id, viewer_id)) if viewer_id else None
+    my_votes = list(
+        await session.scalars(
+            select(PollVote.option_id).where(PollVote.message_id == message_id, PollVote.user_id == viewer_id)
+        )
+    ) if viewer_id else []
     return {
         "question": poll.question,
+        "multipleAnswers": poll.multiple_answers,
         "closedAt": poll.closed_at.isoformat() if poll.closed_at else None,
         "options": [
             {"id": o.id, "label": o.label, "position": o.position, "count": counts[o.id]}
@@ -146,11 +151,13 @@ async def poll_out(session, message_id, viewer_id=None):
         ],
         "counts": counts,
         "total": sum(counts.values()),
-        "myVote": mine.option_id if mine else None,
+        # Keep myVote for clients that predate multi-answer polls.
+        "myVote": my_votes[0] if my_votes else None,
+        "myVotes": my_votes,
     }
 
 
-async def vote(session, user, message_id, option_id=None, close=False):
+async def vote(session, user, message_id, option_id=None, option_ids=None, close=False):
     from app.messages.service import _check_not_blocked, readable
 
     message = await session.get(Message, message_id)
@@ -178,7 +185,19 @@ async def vote(session, user, message_id, option_id=None, close=False):
     else:
         if poll.closed_at:
             raise HTTPException(422, "This poll is closed")
-        if option_id is None:
+        if poll.multiple_answers:
+            selected = list(dict.fromkeys(option_ids or ([] if option_id is None else [option_id])))
+            options = list(await session.scalars(select(PollOption).where(PollOption.message_id == message_id, PollOption.id.in_(selected)))) if selected else []
+            if len(options) != len(selected):
+                raise HTTPException(422, "Invalid poll option")
+            await session.execute(
+                delete(PollVote).where(
+                    PollVote.message_id == message_id, PollVote.user_id == user.id
+                )
+            )
+            if selected:
+                await session.execute(insert(PollVote), [{"message_id": message_id, "user_id": user.id, "option_id": selected_id} for selected_id in selected])
+        elif option_id is None:
             await session.execute(
                 delete(PollVote).where(
                     PollVote.message_id == message_id, PollVote.user_id == user.id
@@ -189,12 +208,9 @@ async def vote(session, user, message_id, option_id=None, close=False):
             if option is None or option.message_id != message_id:
                 raise HTTPException(422, "Invalid poll option")
             await session.execute(
-                insert(PollVote)
-                .values(message_id=message_id, user_id=user.id, option_id=option_id)
-                .on_conflict_do_update(
-                    index_elements=["message_id", "user_id"], set_={"option_id": option_id}
-                )
+                delete(PollVote).where(PollVote.message_id == message_id, PollVote.user_id == user.id)
             )
+            session.add(PollVote(message_id=message_id, user_id=user.id, option_id=option_id))
     await session.commit()
     return message.channel_id, await poll_out(session, message_id, user.id)
 

@@ -267,6 +267,13 @@ async def delete(sid, data, session, user):
     }, room=f"channel:{message['channel_id']}")
 
 
+@chat_event("message:hide", MessageIn)
+async def hide_message(sid, data, session, user):
+    hidden = await service.hide_for_user(session, user, data.messageId)
+    await sio.emit("message:hidden", hidden, room=f"user:{user.id}")
+    return hidden
+
+
 @chat_event("reaction:toggle", ReactionIn)
 async def react(sid, data, session, user):
     update = await service.toggle_reaction(session, user, data.messageId, data.emoji)
@@ -724,7 +731,7 @@ async def evict_from_space(user_id: str, space_id: str) -> None:
 
 @chat_event("poll:vote", PollVoteIn)
 async def poll_vote(sid, data, session, user):
-    return await update_poll(session, user, data.messageId, data.optionId)
+    return await update_poll(session, user, data.messageId, data.optionId, data.optionIds)
 
 
 @chat_event("poll:close", MessageIn)
@@ -732,8 +739,8 @@ async def poll_close(sid, data, session, user):
     return await update_poll(session, user, data.messageId, close=True)
 
 
-async def update_poll(session, user, message_id, option_id=None, close=False):
+async def update_poll(session, user, message_id, option_id=None, option_ids=None, close=False):
     from app.messages.composer import vote
-    channel_id, poll = await vote(session, user, message_id, option_id, close)
+    channel_id, poll = await vote(session, user, message_id, option_id, option_ids, close)
     await sio.emit("poll:updated", {"messageId": message_id, "counts": poll["counts"], "total": poll["total"], "closedAt": poll["closedAt"]}, room=f"channel:{channel_id}")
     return {"messageId": message_id, "poll": poll}
