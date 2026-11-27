@@ -136,7 +136,7 @@ export function ChatHeader({ title, channel, space, conversation, tab = 'message
             <Icon name={channel.type === 'voice' ? 'volume' : channel.is_private ? 'lock' : 'hash'} size={20} className="shrink-0 text-white/45" />{channel.name}</h1>
           <p className="truncate text-sm text-white/55">{channel.is_private && <span className="mr-2 rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand">Private channel</span>}{channel.topic || `${space.name} · ${space.type === 'community' ? 'Community' : 'Workspace'}`}</p>
         </div>
-        {channel.type !== 'voice' && <HuddleButton channelId={channel.id} title={`#${channel.name}`} />}
+        {channel.type !== 'voice' && <HuddleButton channelId={channel.id} title={`#${channel.name}`} ring />}
         {channel.type !== 'voice' && <AskHive spaceId={space.id} inline />}
         {channel.type !== 'voice' && onTimerChanged && (space.my_role === 'owner' || space.my_role === 'admin') && <TimerButton channelId={channel.id} seconds={channel.disappear_after} onChanged={onTimerChanged} onError={onError ?? (() => {})} />}
         <Controls {...controls} />
