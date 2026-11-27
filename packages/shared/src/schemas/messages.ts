@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 export const messageBodySchema = z.string().trim().max(4000);
-export const pollCreateSchema = z.object({ question: z.string().trim().min(1).max(200), options: z.array(z.string().trim().min(1).max(80)).min(2).max(10) });
-export const pollSchema = z.object({ question: z.string(), closedAt: z.string().nullable(), options: z.array(z.object({ id: z.string(), label: z.string(), position: z.number(), count: z.number() })), counts: z.record(z.number()), total: z.number(), myVote: z.string().nullable() });
+export const pollCreateSchema = z.object({ question: z.string().trim().min(1).max(200), options: z.array(z.string().trim().min(1).max(80)).min(2).max(10), multipleAnswers: z.boolean().default(false) });
+export const pollSchema = z.object({ question: z.string(), multipleAnswers: z.boolean().default(false), closedAt: z.string().nullable(), options: z.array(z.object({ id: z.string(), label: z.string(), position: z.number(), count: z.number() })), counts: z.record(z.number()), total: z.number(), myVote: z.string().nullable(), myVotes: z.array(z.string()).default([]) });
 export const ciphertextSchema = z.object({
   v: z.literal(1), senderDeviceId: z.string(), salt: z.string(),
   envelopes: z.array(z.object({ deviceId: z.string(), iv: z.string(), ct: z.string() })).min(1).max(20),

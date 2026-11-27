@@ -472,7 +472,7 @@ async def _finish_insert(session, user, data: SendIn, message: Message, *, commi
         if audio is None or audio.kind != "audio" or audio.duration_ms is None or audio.waveform is None:
             raise HTTPException(422, "Voice messages require an audio attachment")
     if data.poll:
-        session.add(Poll(message_id=message.id, question=data.poll.question))
+        session.add(Poll(message_id=message.id, question=data.poll.question, multiple_answers=data.poll.multipleAnswers))
         await session.flush()
         session.add_all([PollOption(message_id=message.id, position=i, label=label) for i, label in enumerate(data.poll.options)])
     await update_mentions(session, message)
