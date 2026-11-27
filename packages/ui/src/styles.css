@@ -103,8 +103,8 @@
 .ui-swatches { display: flex; gap: 8px; }
 .ui-swatch { width: 36px; height: 36px; padding: 0; border: 2px solid var(--border); }
 .ui-swatch[aria-pressed='true'] { outline: 2px solid var(--brand); outline-offset: 2px; }
-.ui-emoji-picker { max-width: 100%; }
-.ui-emoji-picker em-emoji-picker { --background-rgb: var(--emoji-background-rgb); --color-border: var(--border); --border-radius: var(--radius-md); width: min(340px, calc(100vw - 32px)); }
+.ui-emoji-picker { max-width: min(340px, var(--radix-popover-content-available-width, calc(100vw - 24px))); overflow: hidden; }
+.ui-emoji-picker em-emoji-picker { --background-rgb: var(--emoji-background-rgb); --color-border: var(--border); --border-radius: var(--radius-md); width: min(340px, var(--radix-popover-content-available-width, calc(100vw - 24px))); max-width: 100%; }
 [data-sonner-toaster] .ui-toast { background: var(--surface); color: var(--fg-base); border: 1px solid var(--border); box-shadow: var(--shadow-pop); }
 [data-sonner-toaster] .ui-toast-action { background: var(--brand); color: var(--on-brand); }
 .ui-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; }
