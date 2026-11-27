@@ -167,7 +167,7 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
       onKeyDown={event => {
         if (event.key === 'Escape') setEditing(false);
         if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void saveEdit(); }
-      }} /> : message.deleted ? <p className="italic leading-relaxed text-white/40">Message deleted</p>
+      }} /> : message.deleted ? <div className="flex items-center gap-2"><p className="italic leading-relaxed text-white/40">Message deleted</p>{userId && <UiButton type="button" className="rounded px-1 text-xs font-medium text-white/60 hover:bg-[var(--surface-2)] hover:text-white" onClick={() => void hideMessage()}>Remove from my chat</UiButton>}</div>
       : secret ? <p className="whitespace-pre-wrap break-words leading-relaxed text-white/90 [overflow-wrap:anywhere]">{secretBody === undefined ? <span className="italic text-white/50">Decrypting…</span>
         : secretBody === null ? <span className="italic text-white/50">This message can&apos;t be read on this device. Secret messages only open on devices that were set up when they were sent.</span> : secretBody}</p>
       : message.kind === 'poll' && message.poll ? <PollCard message={message} userId={userId} />
