@@ -1,0 +1,5 @@
+-- No production hook is installed by this file.
+-- A client_id identifies the application requesting a token. It cannot
+-- establish which protected resource the authorization request targeted.
+-- Keep MCP disabled pending verified authorization-time and refresh-time
+-- binding to the canonical HTTPS resource URI, including for dynamic clients.

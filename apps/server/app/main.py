@@ -2,7 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 
 import socketio
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -20,7 +20,7 @@ from app.channels.router import router as channels_router
 from app.comments.router import router as comments_router
 from app.composer.router import router as composer_router
 from app.core.config import settings
-from app.db.session import engine, redis
+from app.db.session import SessionLocal, engine, redis
 from app.directory.router import router as directory_router
 from app.disappearing.router import router as disappearing_router
 from app.dms.router import router as dms_router
@@ -31,6 +31,9 @@ from app.games.router import hub_router as games_hub_router
 from app.games.router import router as games_router
 from app.invites.router import router as invites_router
 from app.linkpreview.router import router as linkpreview_router
+from app.mcp.auth import resolve_mcp_context
+from app.mcp.router import router as mcp_router
+from app.mcp.server import current_mcp_ctx, mcp_server
 from app.messages.router import router as messages_router
 from app.notifications.router import router as notifications_router
 from app.posts.router import router as posts_router
@@ -115,6 +118,38 @@ api.include_router(workflows_router, prefix="/api")
 api.include_router(disappearing_router, prefix="/api")
 api.include_router(secret_router, prefix="/api")
 api.include_router(push_router, prefix="/api")
+api.include_router(mcp_router)
+
+
+@api.middleware("http")
+async def mcp_auth_middleware(request: Request, call_next):
+    if request.url.path.startswith("/api/mcp/") and not settings.mcp_enabled:
+        return JSONResponse(status_code=503, content={"detail": "MCP server is disabled"})
+    if request.url.path == "/mcp" or request.url.path.startswith("/mcp/"):
+        if not settings.mcp_enabled:
+            return JSONResponse(status_code=503, content={"detail": "MCP server is disabled"})
+        auth_header = request.headers.get("authorization", "")
+        scheme, _, token = auth_header.partition(" ")
+        if scheme.lower() != "bearer" or not token.strip():
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Bearer token required"},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        async with SessionLocal() as session:
+            try:
+                ctx = await resolve_mcp_context(session, token.strip())
+            except HTTPException as exc:
+                return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        reset_token = current_mcp_ctx.set(ctx)
+        try:
+            return await call_next(request)
+        finally:
+            current_mcp_ctx.reset(reset_token)
+    return await call_next(request)
+
+
+api.mount("/mcp", mcp_server.streamable_http_app())
 
 # One ASGI app: Socket.IO handles /socket.io, everything else goes to FastAPI.
 app = socketio.ASGIApp(sio, other_asgi_app=api)

@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     supabase_service_key: str = ""
     supabase_bucket: str = "hive-media"
     signed_url_seconds: int = 3600
+    # MCP Resource Server (Supabase OAuth 2.1)
+    mcp_enabled: bool = False
+    mcp_resource_audience: str = "hive-mcp"
+    mcp_allow_write_messages: bool = False
+    supabase_jwt_issuer: str = ""
     # Seeds the daily word so answers can't be worked out from the word list alone.
     game_secret: str = "dev-game-secret"
     # AI features: "disabled" or "anthropic". Everything AI stays off until a key is set.

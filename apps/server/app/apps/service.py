@@ -151,7 +151,10 @@ async def post_from_webhook(session, token: str, data: HookIn):
     hook = await tokens.find_webhook(session, token)
     if hook is None:
         raise HTTPException(404, "Webhook not found")
-    await rate_limit(f"rl:hook:{hook.id}", HOOK_PER_MINUTE)
+    # Webhook secrets are bearer credentials. Hash the database id in the Redis
+    # key so monitoring and key listings never expose that credential identifier.
+    limiter_id = tokens.hash_token(hook.id)
+    await rate_limit(f"rl:hook:{limiter_id}", HOOK_PER_MINUTE)
     identity = await session.get(User, hook.bot_user_id)
     hook.last_used_at = datetime.now(UTC)
     message, inserted, parent = await send(

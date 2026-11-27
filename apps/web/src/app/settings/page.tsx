@@ -18,6 +18,7 @@ import { useAuth } from '../../lib/auth';
 import { apiData, requestError } from '../../lib/spaces';
 import { useAiStatus } from '../../lib/ai';
 import { DevicesCard, PushCard } from '../../components/settings-extras';
+import { ConnectedAppsCard } from '../../components/connected-apps-card';
 
 type Section = 'communication' | 'profile' | 'notifications' | 'privacy' | 'blocked' | 'interests';
 const sections: [Section, string][] = [['communication', 'Sounds & availability'], ['profile', 'Profile'], ['notifications', 'Notifications'], ['privacy', 'Privacy'], ['blocked', 'Blocked people'], ['interests', 'Interests']];
@@ -280,7 +281,7 @@ export default function SettingsPage() {
         {section === 'communication' && <CommunicationSettings />}
         {section === 'profile' && <><ProfileCard user={user} updateUser={updateUser} /><section className="card mt-5 p-5 sm:p-6"><LanguagePicker /><p className="mt-2 text-sm text-white/60">Changes the language of Hive's menus and buttons on this device.</p></section><TranslateCard user={user} updateUser={updateUser} /></>}
         {section === 'notifications' && <><div className="mb-5 flex flex-wrap items-center justify-between gap-3 text-sm"><p>Choose which events play a sound, and preview the audio collection.</p><UiButton type="button" className="btn-ghost" onClick={() => setSection('communication')}>Manage sounds</UiButton></div><NotificationsCard /><PushCard /></>}
-        {section === 'privacy' && <><PrivacyCard user={user} updateUser={updateUser} /><DevicesCard /></>}
+        {section === 'privacy' && <><PrivacyCard user={user} updateUser={updateUser} /><DevicesCard /><div className="mt-5"><ConnectedAppsCard /></div></>}
         {section === 'blocked' && <BlockedCard />}
         {section === 'interests' && <InterestsSettings />}
       </div>
