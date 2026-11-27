@@ -1,6 +1,6 @@
 'use client';
 
-import { Button as UiButton, LoadingState } from '@hive/ui';
+import { Button as UiButton, Checkbox, LoadingState } from '@hive/ui';
 import { useEffect, useState } from 'react';
 import { apiFetch, responseData } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth';
@@ -144,8 +144,7 @@ export default function OAuthConsentPage() {
               {info.workspaces.map(ws => (
                 <li key={ws.id}>
                   <label className="flex cursor-pointer items-center gap-3 rounded-lg bg-[var(--surface-2)] p-3 transition hover:bg-[var(--surface-2)]/80">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={selectedSpaces.has(ws.id)}
                       onChange={() => toggleSpace(ws.id)}
                       className="h-4 w-4 rounded border-white/20 bg-transparent text-brand focus:ring-brand"

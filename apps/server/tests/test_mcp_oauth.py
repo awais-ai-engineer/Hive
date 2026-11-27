@@ -79,14 +79,13 @@ def test_mcp_server_registers_all_expected_tools():
         "list_workspaces",
         "list_channels",
         "read_messages",
-        "send_message",
         "list_tasks",
         "list_docs",
         "list_members",
         "list_meetings",
         "read_transcript",
     }
-    assert expected.issubset(tool_names)
+    assert tool_names == expected
 
 
 async def test_send_message_disabled_by_default(monkeypatch):

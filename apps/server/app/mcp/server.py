@@ -43,8 +43,7 @@ async def list_workspaces() -> list[dict]:
             .join(SpaceMember, SpaceMember.space_id == Space.id)
             .where(SpaceMember.user_id == ctx.user.id, Space.type == "workspace")
         )
-        if ctx.space_ids:
-            query = query.where(Space.id.in_(ctx.space_ids))
+        query = query.where(Space.id.in_(ctx.space_ids))
         rows = (await session.execute(query.order_by(Space.name))).all()
         await record_audit(session, ctx, "list_workspaces", "ok")
         await session.commit()
@@ -93,7 +92,6 @@ async def read_messages(channel_id: str, limit: int = 20) -> list[dict]:
         return items
 
 
-@mcp_server.tool()
 async def send_message(channel_id: str, text: str) -> dict:
     """Send a message to an authorized Hive channel (disabled unless explicitly enabled and write:messages granted)."""
     ctx = _require_ctx()
