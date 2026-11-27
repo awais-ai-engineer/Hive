@@ -231,10 +231,12 @@ async def create(session, user, slug, data):
             )
         )
         kinds = [file.kind for file in files]
-        if len(files) != len(data.mediaIds) or not (
-            all(kind == "image" for kind in kinds) or kinds == ["video"]
-        ):
-            raise HTTPException(422, "Use 1-10 images or one video uploaded to this space")
+        # Post attachments can include documents and audio as well as images. Video is
+        # intentionally exclusive to keep the feed preview and download behavior clear.
+        if len(files) != len(data.mediaIds) or any(kind not in {"image", "video", "audio", "file"} for kind in kinds):
+            raise HTTPException(422, "Choose up to 10 supported files uploaded to this space")
+        if "video" in kinds and kinds != ["video"]:
+            raise HTTPException(422, "A video must be the only attachment in a post")
         for file in files:
             file.post_id = post.id
             file.position = data.mediaIds.index(file.id)

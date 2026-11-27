@@ -15,6 +15,7 @@ import { RepostDialog } from './repost-dialog';
 import { ShareMenu } from './share-menu';
 import { VoteButtons } from './vote-buttons';
 import { TranslateLink } from '../ai/translate';
+import { RichText } from '../rich-text';
 
 /** The original post embedded inside a repost. */
 function OriginalPost({ original }: { original: PostSummary }) {
@@ -71,7 +72,7 @@ export function PostCard({ post, combined = false, full = false, reason, onChang
             : full ? post.title : <Link className="hover:text-brand" href={`/p/${post.id}`}>{post.title}</Link>}
           {post.domain && <span className="ml-2 text-xs font-normal text-white/45">({post.domain})</span>}
         </h2>
-        {post.body && <p className={`mt-1.5 whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${full ? 'text-[15px] leading-relaxed text-white/85' : 'line-clamp-2 text-sm text-white/60'}`}>{post.body}</p>}
+        {post.body && <div className={`mt-1.5 break-words [overflow-wrap:anywhere] ${full ? 'text-[15px] leading-relaxed text-white/85' : 'line-clamp-2 text-sm text-white/60'}`}><RichText source={post.body} /></div>}
       </div>
       {thumb && <Link href={`/p/${post.id}`} className="hidden shrink-0 sm:block" aria-label="Open post">
         <img src={mediaUrl(thumb.url)} alt="" loading="lazy" className="h-24 w-40 rounded-xl object-cover" />
