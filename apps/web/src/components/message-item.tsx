@@ -99,6 +99,9 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
   async function deleteMessage() {
     if (await confirmAction('Delete this message? This cannot be undone.')) await run('message:delete', { messageId: message.id });
   }
+  async function hideMessage() {
+    if (await confirmAction('Remove this message from your chat? Other participants will still see it.')) await run('message:hide', { messageId: message.id });
+  }
   function togglePin() {
     try {
       const stored: unknown = JSON.parse(localStorage.getItem(pinKey) ?? '[]');
@@ -114,6 +117,7 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
     { label: pinned ? 'Unpin on this device' : 'Pin', disabled: !userId || secret || viewOnce, onSelect: togglePin },
     { label: 'Copy link', disabled: secret || viewOnce, onSelect: () => { const url = new URL(window.location.href); url.pathname = '/home'; url.searchParams.set('c', message.channel_id); url.searchParams.set('m', message.id); void navigator.clipboard.writeText(url.toString()).then(() => toast.success('Link copied')).catch(cause => onError(requestError(cause))); } },
     { label: 'Edit', disabled: !own || secret || message.kind === 'poll' || message.kind === 'voice', onSelect: () => { setDraft(message.body ?? ''); setEditing(true); } },
+    { label: 'Delete for me', disabled: !userId || message.id.startsWith('pending:'), onSelect: () => { void hideMessage(); } },
     { label: 'Delete', disabled: !own && !canModerate, danger: true, onSelect: () => { void deleteMessage(); } },
   ];
   const time = new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

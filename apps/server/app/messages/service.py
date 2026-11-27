@@ -23,6 +23,7 @@ from app.db.models import (
     MemberRole,
     Message,
     MessageMention,
+    MessageVisibility,
     Poll,
     PollOption,
     Post,
@@ -149,6 +150,7 @@ async def serialize(
 ) -> list[dict]:
     """Turn (message, author) rows into MessageOut dicts, batch-loading reactions, files, and post previews."""
     ids = [message.id for message, _ in rows]
+    hidden_ids = set(await session.scalars(select(MessageVisibility.message_id).where(MessageVisibility.user_id == viewer_id, MessageVisibility.message_id.in_(ids)))) if viewer_id and ids else set()
     reactions: dict[str, dict[str, list[str]]] = {}
     attachments: dict[str, list[AttachmentOut]] = {}
     if ids:
@@ -273,6 +275,8 @@ async def serialize(
         )
     }
     for message, author in rows:
+        if message.id in hidden_ids:
+            continue
         deleted = message.deleted_at is not None
         previews = [
             previews_by_id[pid]
@@ -550,6 +554,16 @@ async def change(session: AsyncSession, user: User, message_id: str, body: str |
     await update_mentions(session, message)
     await session.commit()
     return await message_out(session, message, user.id)
+
+
+async def hide_for_user(session: AsyncSession, user: User, message_id: str):
+    message = await session.get(Message, message_id)
+    if message is None:
+        raise HTTPException(404, "Message not found")
+    await readable(session, message.channel_id, user.id)
+    await session.execute(insert(MessageVisibility).values(message_id=message.id, user_id=user.id).on_conflict_do_nothing())
+    await session.commit()
+    return {"id": message.id, "channelId": message.channel_id, "parentId": message.parent_id}
 
 
 async def toggle_reaction(session: AsyncSession, user: User, message_id: str, emoji: str):

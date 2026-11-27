@@ -740,6 +740,15 @@ class MessageMention(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", name="fk_mentions_user"), primary_key=True)
 
 
+class MessageVisibility(Base):
+    """A per-user hide record; it never alters the shared message or attachments."""
+    __tablename__ = "message_visibility"
+    __table_args__ = (PrimaryKeyConstraint("message_id", "user_id", name="pk_message_visibility"), Index("ix_message_visibility_user", "user_id"))
+    message_id: Mapped[str] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE", name="fk_message_visibility_message"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE", name="fk_message_visibility_user"), primary_key=True)
+    hidden_at: Mapped[datetime] = created_at()
+
+
 class Poll(Base):
     __tablename__ = "polls"
     __table_args__ = (PrimaryKeyConstraint("message_id", name="pk_polls"),)

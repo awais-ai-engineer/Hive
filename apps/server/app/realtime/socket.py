@@ -267,6 +267,13 @@ async def delete(sid, data, session, user):
     }, room=f"channel:{message['channel_id']}")
 
 
+@chat_event("message:hide", MessageIn)
+async def hide_message(sid, data, session, user):
+    hidden = await service.hide_for_user(session, user, data.messageId)
+    await sio.emit("message:hidden", hidden, room=f"user:{user.id}")
+    return hidden
+
+
 @chat_event("reaction:toggle", ReactionIn)
 async def react(sid, data, session, user):
     update = await service.toggle_reaction(session, user, data.messageId, data.emoji)
