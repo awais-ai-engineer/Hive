@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import get_current_user
-from app.db.models import McpGrant, Space, SpaceMember, User
+from app.db.models import McpAuditLog, McpGrant, Space, SpaceMember, User
 from app.db.session import get_session
 from app.mcp.auth import supabase_issuer, verify_supabase_oauth_token
 from app.mcp.schemas import GrantCreateIn, LinkSupabaseIn
@@ -118,3 +118,25 @@ async def revoke_grant(grant_id: str, session: Session, user: CurrentUser) -> Re
     grant.revoked_at = datetime.now(UTC)
     await session.commit()
     return Response(status_code=204)
+
+
+@router.get("/api/mcp/audit")
+async def list_audit_logs(session: Session, user: CurrentUser) -> list[dict]:
+    """Return recent MCP tool invocations for the current user."""
+    rows = await session.scalars(
+        select(McpAuditLog)
+        .where(McpAuditLog.user_id == user.id)
+        .order_by(McpAuditLog.created_at.desc())
+        .limit(25)
+    )
+    return [
+        {
+            "id": r.id,
+            "client_id": r.client_id,
+            "tool_name": r.tool_name,
+            "space_id": r.space_id,
+            "status": r.status,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]

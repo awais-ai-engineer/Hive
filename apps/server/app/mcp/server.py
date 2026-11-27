@@ -29,7 +29,7 @@ def _require_scope(ctx: McpContext, scope: str) -> None:
 
 
 def _require_space(ctx: McpContext, space_id: str) -> None:
-    if ctx.space_ids and space_id not in ctx.space_ids:
+    if not ctx.space_ids or space_id not in ctx.space_ids:
         raise PermissionError("Access to this workspace is not granted")
 
 
@@ -58,6 +58,11 @@ async def list_channels(space_id: str) -> list[dict]:
     _require_scope(ctx, "read:channels")
     _require_space(ctx, space_id)
     async with SessionLocal() as session:
+        member = await session.scalar(
+            select(SpaceMember).where(SpaceMember.space_id == space_id, SpaceMember.user_id == ctx.user.id)
+        )
+        if member is None:
+            raise PermissionError("Not a member of this workspace")
         rows = (
             await session.execute(
                 select(Channel.id, Channel.name, Channel.type)

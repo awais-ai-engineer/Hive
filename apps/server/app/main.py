@@ -124,6 +124,8 @@ api.include_router(mcp_router)
 @api.middleware("http")
 async def mcp_auth_middleware(request: Request, call_next):
     if request.url.path == "/mcp" or request.url.path.startswith("/mcp/"):
+        if not settings.mcp_enabled:
+            return JSONResponse(status_code=503, content={"detail": "MCP server is disabled"})
         auth_header = request.headers.get("authorization", "")
         scheme, _, token = auth_header.partition(" ")
         if scheme.lower() != "bearer" or not token.strip():

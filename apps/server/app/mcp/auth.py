@@ -67,7 +67,13 @@ async def resolve_mcp_context(session: AsyncSession, token: str) -> McpContext:
     """Validate Supabase OAuth token, resolve linked Hive user, and enforce active grant."""
     claims = verify_supabase_oauth_token(token)
     sub = claims["sub"]
-    client_id = claims.get("client_id") or "default"
+    client_id = claims.get("client_id")
+    if not isinstance(client_id, str) or not client_id.strip():
+        raise HTTPException(
+            401,
+            "Token missing OAuth client_id",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     user = await session.scalar(select(User).where(User.supabase_sub == sub))
     if user is None or user.is_system or user.is_bot:
