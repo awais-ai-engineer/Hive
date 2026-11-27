@@ -130,6 +130,19 @@ async def test_state_and_ring(client, setup_chat, live_server):
         assert (await call(a, "call:ring", {"channelId": lounge}))["error"]["code"] == "invalid"
 
 
+async def test_text_channel_huddle_rings_authorized_space_members(client, setup_chat, live_server):
+    alice, bob, carol, _, _, ch, _, channel = setup_chat
+    await client.post("/api/spaces/chat/join", headers=ch)
+    async with connected(live_server, alice) as (a, _), connected(live_server, bob) as (_, bq), \
+            connected(live_server, carol) as (_, cq):
+        row = await call(a, "call:ring", {"channelId": channel})
+        bob_invitation = await event(bq["call:incoming"])
+        carol_invitation = await event(cq["call:incoming"])
+        assert row["channelId"] == channel
+        assert bob_invitation["invitationId"] == row["invitationId"] == carol_invitation["invitationId"]
+        assert {person["id"] for person in row["people"]} == {bob["user"]["id"], carol["user"]["id"]}
+
+
 async def test_participants_broadcast_and_kick(client, setup_chat, live_server):
     alice, bob, _, ah, _, _, space, _ = setup_chat
     lounge = await voice_channel(space["id"])

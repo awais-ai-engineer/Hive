@@ -16,7 +16,7 @@ import socketio
 from fastapi import HTTPException
 from pydantic import ValidationError
 from socketio.exceptions import ConnectionRefusedError
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.auth.security import decode_access_token
 from app.calls import invitations
@@ -426,6 +426,26 @@ async def call_audience(session, channel: Channel) -> list[str]:
     return [f"user:{person}" for person in await session.scalars(people)]
 
 
+async def call_invitation_recipients(session, channel: Channel) -> list[str]:
+    """Return active people who may receive an invitation for this exact huddle.
+
+    A workspace channel is not a direct-contact request: it notifies only its
+    authorized members, including the explicit member list for private channels.
+    This deliberately excludes community visitors who can merely read public chat.
+    """
+    if channel.type == ChannelType.dm:
+        return await participant_ids(session, channel.id)
+    people = select(SpaceMember.user_id).where(
+        SpaceMember.space_id == channel.space_id,
+        or_(SpaceMember.banned_until.is_(None), SpaceMember.banned_until <= datetime.now(UTC)),
+    )
+    if channel.is_private:
+        people = people.where(
+            SpaceMember.user_id.in_(select(ChannelMember.user_id).where(ChannelMember.channel_id == channel.id))
+        )
+    return list(await session.scalars(people))
+
+
 async def announce_participants(channel_id: str) -> None:
     """Tell sidebars who is in a call, but only people who can read that channel."""
     summary = await calls.summary(channel_id)
@@ -663,17 +683,22 @@ async def call_caption(sid, data, session, user):
 
 @chat_event("call:ring", CallIn)
 async def call_ring(sid, data, session, user):
-    """Rings the other participants of a DM or group DM (voice channels don't ring)."""
+    """Ring authorized members of a direct conversation or text-channel Huddle."""
     channel = await calls.check_access(session, data.channelId, user)
-    if channel.type != ChannelType.dm:
-        raise HTTPException(422, "Only conversations can ring")
+    if channel.type == ChannelType.voice:
+        raise HTTPException(422, "Voice channels cannot send a Huddle invitation")
     from app.availability.service import enforce
 
-    await enforce(session, channel.id, user.id, "huddles")
     if not await redis.set(f"{settings.socketio_channel}:ring:{channel.id}:{user.id}", 1, nx=True, ex=5):
         raise HTTPException(429, "Hold on a moment before ringing again")
-    recipients = [person for person in await participant_ids(session, channel.id)
-                  if person != user.id and not await blocked_among(session, user.id, [person])]
+    recipients = [person for person in await call_invitation_recipients(session, channel) if person != user.id]
+    # Availability restrictions and user blocks apply to direct contact only;
+    # a shared channel Huddle remains a workspace activity.
+    if channel.type == ChannelType.dm:
+        await enforce(session, channel.id, user.id, "huddles")
+        recipients = [person for person in recipients if not await blocked_among(session, user.id, [person])]
+    if not recipients:
+        raise HTTPException(422, "There is nobody else eligible to invite to this Huddle")
     row = await invitations.create(channel.id, user.id, recipients, sid)
     await invitations.emit(row)
     return row
