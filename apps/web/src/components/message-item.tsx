@@ -2,7 +2,7 @@
 
 import { Tooltip as UiTooltip } from '@hive/ui';
 
-import { Textarea as UiTextarea, Button as UiButton, ContextMenu, confirmAction, toast, Badge } from '@hive/ui';
+import { Textarea as UiTextarea, Button as UiButton, ContextMenu, DropdownMenu, Popover, confirmAction, toast, Badge } from '@hive/ui';
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -200,18 +200,16 @@ export function MessageItem({ message, grouped, userId, canWrite, canModerate, o
     </UiButton>}
     {message.status === 'sending' && <span className="text-xs text-white/40">Sending…</span>}
     {message.status === 'failed' && <p className="text-xs text-rose-400">Failed: {message.error} <UiButton className="underline" onClick={() => onRetry(message)}>Retry</UiButton></p>}
-    {live && (canWrite || own || canModerate || !!userId) && <div className="mt-1 flex flex-wrap gap-3 text-xs font-medium text-brand sm:absolute sm:-top-3 sm:right-3 sm:mt-0 sm:gap-1 sm:rounded-xl sm:border sm:border-white/10 sm:bg-surface sm:p-1 sm:shadow-[var(--shadow-card)] sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 [&>button]:rounded-lg [&>button]:px-2 [&>button]:py-1 [&>button:hover]:bg-[var(--surface-2)]">
-      {canWrite && <UiButton tooltip="Add reaction" aria-label="Add reaction" aria-expanded={picker} onClick={() => setPicker(value => !value)}>React</UiButton>}
-      {canWrite && onReply && <UiButton tooltip="Reply in thread" aria-label="Reply in thread" onClick={() => onReply(message)}>Reply</UiButton>}
-      {own && !secret && <UiButton tooltip="Edit message" aria-label="Edit message" onClick={() => { setEditing(true); setDraft(message.body ?? ''); }}>Edit</UiButton>}
-      {!!userId && !secret && !viewOnce && !message.id.startsWith('pending:') && <UiButton tooltip={isSaved ? 'Remove from saved items' : 'Save message'} aria-label={isSaved ? 'Remove from saved items' : 'Save message'} aria-pressed={isSaved}
-        onClick={() => void saved.toggle('message', message.id).catch(cause => onError(requestError(cause)))}>{isSaved ? 'Saved' : 'Save'}</UiButton>}
-      {canWrite && !!userId && !secret && !viewOnce && !message.id.startsWith('pending:') && <UiButton tooltip="Add to to-dos" aria-label="Add to to-dos" onClick={() => setTodo(true)}>Add to to-dos</UiButton>}
-      {!own && !!userId && !message.id.startsWith('pending:') && <UiButton tooltip="Report message" aria-label="Report message" onClick={() => setReporting(true)}>Report</UiButton>}
-      {(own || canModerate) && <UiButton tooltip="Delete message" aria-label="Delete message" onClick={() => void deleteMessage()}>Delete</UiButton>}
-    </div>}
-    {picker && <div role="menu" className="reaction-picker mt-1 flex w-fit gap-1 rounded-2xl border border-white/10 bg-surface p-1 shadow-[var(--shadow-pop)]">
-      {QUICK_REACTIONS.map(emoji => <UiButton key={emoji} role="menuitem" onClick={() => react(emoji)} className="reaction-choice rounded px-1 text-lg hover:bg-white/10">{emoji}</UiButton>)}
+    {live && (canWrite || own || canModerate || !!userId) && <div className="mt-1 flex flex-wrap gap-1 text-xs font-medium text-brand sm:absolute sm:-top-3 sm:left-12 sm:mt-0 sm:rounded-xl sm:border sm:border-white/10 sm:bg-surface sm:p-1 sm:shadow-[var(--shadow-card)] sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 [&_button]:flex [&_button]:h-8 [&_button]:w-8 [&_button]:items-center [&_button]:justify-center [&_button]:rounded-lg [&_button:hover]:bg-[var(--surface-2)]">
+      {canWrite && <Popover open={picker} onOpenChange={setPicker} label="Quick reactions" trigger={<UiButton tooltip="Add reaction" iconOnly aria-label="Add reaction" aria-expanded={picker}><Icon name="smile" size={17} /></UiButton>} className="w-fit rounded-2xl border border-white/10 bg-surface p-1 shadow-[var(--shadow-pop)]">
+        <div role="menu" className="reaction-picker flex gap-1">
+          {QUICK_REACTIONS.map(emoji => <UiButton key={emoji} role="menuitem" tooltip={`React with ${emoji}`} onClick={() => react(emoji)} className="reaction-choice rounded px-1 text-lg hover:bg-white/10">{emoji}</UiButton>)}
+        </div>
+      </Popover>}
+      {canWrite && onReply && <UiButton tooltip="Reply in thread" iconOnly aria-label="Reply in thread" onClick={() => onReply(message)}><Icon name="threads" size={17} /></UiButton>}
+      {!!userId && !secret && !viewOnce && !message.id.startsWith('pending:') && <UiButton tooltip={isSaved ? 'Remove from saved items' : 'Save message'} iconOnly aria-label={isSaved ? 'Remove from saved items' : 'Save message'} aria-pressed={isSaved}
+        onClick={() => void saved.toggle('message', message.id).catch(cause => onError(requestError(cause)))}><Icon name="bookmark" size={17} /></UiButton>}
+      <DropdownMenu label="More message actions" trigger={<UiButton tooltip="More message actions" iconOnly aria-label="More message actions"><Icon name="more" size={17} /></UiButton>} items={actions.filter(action => action.label !== 'Reply in thread' && action.label !== 'React' && action.label !== (isSaved ? 'Unsave' : 'Save'))} />
     </div>}
     </div>
     {todo && userId && <AddTodoDialog messageId={message.id} channelId={message.channel_id} text={message.body ?? ''} userId={userId} onClose={() => setTodo(false)} />}
