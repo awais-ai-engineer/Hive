@@ -38,7 +38,7 @@ async def test_create_permissions_validation(client, setup_chat):
 
 
 async def test_channel_posts_are_published_to_channel_and_private_acl_is_enforced(client, setup_chat):
-    _alice, _bob, _, ah, bh, _ch, space, public_channel = setup_chat
+    _alice, _bob, _carol, ah, bh, ch, space, public_channel = setup_chat
     general_url = f"/api/channels/{public_channel}/posts"
     created = await client.post(general_url, headers=ah, json={
         "title": "General channel update", "body": "Visible in #general only"
@@ -66,7 +66,7 @@ async def test_channel_posts_are_published_to_channel_and_private_acl_is_enforce
                               json={"username": "bob"})
     assert added.status_code == 201, added.text
     assert [item["id"] for item in (await client.get(private_url, headers=bh)).json()["items"]] == [secret_post["id"]]
-    assert (await client.post(f"/api/channels/{public_channel}/posts", headers=bh,
+    assert (await client.post(f"/api/channels/{public_channel}/posts", headers=ch,
                               json={"title": "No member should not publish"})).status_code == 403
 
     upload = await client.post(
@@ -192,7 +192,9 @@ async def test_realtime(client, setup_chat, live_server):
             peer.on(name, queue.put_nowait)
         assert (await call(peer, 'space:watch', {'spaceId': space['id']}))['ok']
         post = (await create(client, ah)).json()
-        assert (await event(queues['post:new'])) == {'postId': post['id'], 'spaceId': space['id']}
+        assert (await event(queues['post:new'])) == {
+            'postId': post['id'], 'spaceId': space['id'], 'channelId': None
+        }
         await client.put(f"/api/posts/{post['id']}/vote", headers=ah, json={'value': 1})
         assert (await event(queues['post:score']))['score'] == 1
 
