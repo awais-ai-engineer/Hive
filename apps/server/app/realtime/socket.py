@@ -73,7 +73,7 @@ from app.users.blocks import blocked_among
 log = logging.getLogger("hive.realtime")
 
 sio = socketio.AsyncServer(
-    async_mode="asgi", cors_allowed_origins=[settings.web_origin],
+    async_mode="asgi", cors_allowed_origins=settings.trusted_web_origins,
     client_manager=socketio.AsyncRedisManager(
         settings.redis_url, channel=settings.socketio_channel
     ),

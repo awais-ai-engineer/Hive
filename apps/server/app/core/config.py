@@ -1,3 +1,5 @@
+from urllib.parse import urlsplit
+
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -7,6 +9,7 @@ class Settings(BaseSettings):
 
     port: int = 4000
     web_origin: str = "http://localhost:3000"
+    web_origins: str = ""
     database_url: str = "postgresql+asyncpg://hive:hive@localhost:5434/hive"
     redis_url: str = "redis://localhost:6380"
     socketio_channel: str = "hive-socketio"
@@ -59,6 +62,20 @@ class Settings(BaseSettings):
             raise ValueError("STORAGE_DRIVER must be local or supabase")
         if self.storage_driver == "supabase" and not all((self.supabase_url, self.supabase_service_key, self.supabase_bucket)):
             raise ValueError("Supabase storage requires SUPABASE_URL, SUPABASE_SERVICE_KEY and SUPABASE_BUCKET")
+
+    @property
+    def trusted_web_origins(self) -> list[str]:
+        """Canonical frontend origin plus explicitly trusted rollback/staging origins."""
+        origins: list[str] = []
+        for candidate in (self.web_origin, *self.web_origins.split(",")):
+            origin = candidate.strip().rstrip("/")
+            if not origin or origin in origins:
+                continue
+            parsed = urlsplit(origin)
+            if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.path or parsed.query or parsed.fragment:
+                raise ValueError("WEB_ORIGIN(S) must contain only absolute HTTP(S) origins")
+            origins.append(origin)
+        return origins
 
 
 settings = Settings()

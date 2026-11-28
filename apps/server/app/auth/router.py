@@ -27,7 +27,8 @@ GOOGLE_NEXT_COOKIE = "hive_google_next"
 
 
 def google_callback_uri() -> str:
-    return f"{settings.web_origin.rstrip('/')}/api/auth/google/callback"
+    """Keep OAuth callbacks on the configured canonical frontend, never a request host."""
+    return f"{settings.web_origin}/api/auth/google/callback"
 
 
 def safe_next(value: str | None) -> str:
@@ -39,10 +40,11 @@ def safe_next(value: str | None) -> str:
 
 def google_redirect(path: str, *, error: str | None = None) -> RedirectResponse:
     destination = safe_next(path)
+    base = settings.web_origin
     if error:
         query = urlencode({"authError": error, "next": destination})
-        return RedirectResponse(f"{settings.web_origin.rstrip('/')}/login?{query}", status_code=303)
-    return RedirectResponse(f"{settings.web_origin.rstrip('/')}{destination}", status_code=303)
+        return RedirectResponse(f"{base}/login?{query}", status_code=303)
+    return RedirectResponse(f"{base}{destination}", status_code=303)
 
 
 def clear_google_cookies(response: Response) -> None:

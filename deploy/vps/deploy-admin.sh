@@ -7,7 +7,7 @@ DEPLOY="$ROOT/deploy/vps"
 COMPOSE="$DEPLOY/compose.yaml"
 ENV_FILE="$DEPLOY/.env"
 SERVER_ENV="$DEPLOY/server.env"
-DOMAIN=hive.blackbox-n8n.duckdns.org
+DOMAIN=
 BACKUP_DIR=/var/backups/hive
 REPORT="$DEPLOY/deploy-report.txt"
 SITE=/etc/nginx/sites-available/hive
@@ -43,7 +43,17 @@ flock -n 9 || fail "another Hive deployment is running"
 
 chmod 600 "$ENV_FILE" "$SERVER_ENV"
 PUBLIC_URL=$(sed -n 's/^PUBLIC_URL=//p' "$ENV_FILE" | tail -n 1)
-[[ "$PUBLIC_URL" == "https://$DOMAIN" ]] || fail "PUBLIC_URL must be https://$DOMAIN"
+DOMAIN=$(python3 - "$PUBLIC_URL" <<'PY'
+import sys
+from urllib.parse import urlsplit
+
+url = urlsplit(sys.argv[1])
+if url.scheme != "https" or not url.hostname or url.path or url.query or url.fragment or url.username or url.password:
+    raise SystemExit(1)
+print(url.hostname)
+PY
+) || fail "PUBLIC_URL must be a valid HTTPS origin"
+[[ "$PUBLIC_URL" == "https://$DOMAIN" && "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || fail "PUBLIC_URL must be a canonical HTTPS origin without a path or port"
 grep -q '^DATABASE_URL=.' "$SERVER_ENV" || fail "DATABASE_URL is empty"
 grep -q '^JWT_SECRET=.' "$SERVER_ENV" || fail "JWT_SECRET is empty"
 grep -q '^SUPABASE_URL=https://.*\.supabase\.co' "$SERVER_ENV" || fail "Supabase URL is missing"
@@ -155,7 +165,7 @@ cat > "$SITE" <<'NGINX'
 server {
     listen 80;
     listen [::]:80;
-    server_name hive.blackbox-n8n.duckdns.org;
+    server_name __DOMAIN__;
     location ^~ /.well-known/acme-challenge/ {
         root /var/www/hive-acme;
         default_type text/plain;
@@ -163,6 +173,7 @@ server {
     location / { return 404; }
 }
 NGINX
+sed -i "s/__DOMAIN__/$DOMAIN/g" "$SITE"
 ln -s "$SITE" "$SITE_LINK"
 TEMP_SITE_ACTIVE=1
 nginx -t
@@ -175,7 +186,8 @@ certbot certonly --webroot -w /var/www/hive-acme -d "$DOMAIN" --cert-name "$DOMA
 [[ -s "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" && -s "/etc/letsencrypt/live/$DOMAIN/privkey.pem" ]] \
     || fail "certificate files were not created"
 
-install -m 644 "$DEPLOY/nginx.conf" "$SITE"
+sed "s/__DOMAIN__/$DOMAIN/g" "$DEPLOY/nginx.conf" > "$WORKDIR/hive.nginx.conf"
+install -m 644 "$WORKDIR/hive.nginx.conf" "$SITE"
 nginx -t
 systemctl reload nginx
 SITE_COMMITTED=1

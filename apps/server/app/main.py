@@ -74,7 +74,7 @@ async def lifespan(_: FastAPI):
 api = FastAPI(title="Hive API", version="0.1.0", lifespan=lifespan)
 api.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.web_origin],
+    allow_origins=settings.trusted_web_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

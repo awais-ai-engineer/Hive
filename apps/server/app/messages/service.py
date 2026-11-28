@@ -175,8 +175,8 @@ async def serialize(
                 attachments.setdefault(file.message_id, []).append(serialized[file.id])
 
     # Extract post links from message bodies: {WEB_ORIGIN}/p/<26-char id>, max 3 per message
-    origins = [re.escape(settings.web_origin)]
-    if "localhost" in settings.web_origin:
+    origins = [re.escape(origin) for origin in settings.trusted_web_origins]
+    if any("localhost" in origin for origin in settings.trusted_web_origins):
         origins.append(r"http://127.0.0.1:3000")
     origin_pattern = "|".join(origins)
     post_link_re = re.compile(rf"(?:{origin_pattern})/p/([0-9A-Za-z]{{26}})")

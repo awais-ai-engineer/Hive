@@ -7,6 +7,7 @@ import pytest
 from socketio.exceptions import ConnectionRefusedError
 from sqlalchemy import select, update
 
+from app.auth.router import google_callback_uri
 from app.auth.security import create_access_token, decode_access_token, hash_token, verify_password
 from app.core.config import settings
 from app.db.models import RefreshToken, User
@@ -14,6 +15,21 @@ from app.db.session import SessionLocal, redis
 from app.realtime.socket import connect, ping, sio
 
 ACCOUNT = {"username": "alice", "email": "alice@example.com", "password": "password123"}
+
+
+def test_trusted_frontend_origins(monkeypatch):
+    monkeypatch.setattr(settings, "web_origin", "https://hive-connect.vercel.app")
+    monkeypatch.setattr(settings, "web_origins", "https://hive.blackbox-n8n.duckdns.org, https://hive-connect.vercel.app")
+    assert settings.trusted_web_origins == [
+        "https://hive-connect.vercel.app",
+        "https://hive.blackbox-n8n.duckdns.org",
+    ]
+
+
+def test_google_callback_uses_canonical_frontend_not_request_host(monkeypatch):
+    monkeypatch.setattr(settings, "web_origin", "https://hive-connect.vercel.app")
+    monkeypatch.setattr(settings, "web_origins", "https://hive.blackbox-n8n.duckdns.org")
+    assert google_callback_uri() == "https://hive-connect.vercel.app/api/auth/google/callback"
 
 
 async def signup(client, **changes):

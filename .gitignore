@@ -16,3 +16,5 @@ apps/server/uploads/
 
 output/playwright/
 apps/web/playwright-report/
+.vercel/
+/deploy/vps/.vercel-staging/
