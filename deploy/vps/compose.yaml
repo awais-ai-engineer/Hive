@@ -26,6 +26,7 @@ services:
       PORT: "4000"
       WEB_ORIGIN: ${PUBLIC_URL:?Set PUBLIC_URL in .env}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      MODERATION_URL: http://moderation:8000
       COOKIE_SECURE: "true"
       STORAGE_DRIVER: supabase
       SUPABASE_BUCKET: ${SUPABASE_BUCKET:-hive-media}
@@ -33,8 +34,24 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      moderation:
+        condition: service_healthy
     ports:
       - "127.0.0.1:4000:4000"
+
+  moderation:
+    build:
+      context: ../../services/moderation
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
 
   web:
     build:

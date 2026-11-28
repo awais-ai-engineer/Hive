@@ -1,7 +1,8 @@
 # Hive VPS deployment
 
 This deployment keeps the existing PostgreSQL and media data in Supabase, runs
-Hive's API, Next.js web app, and Redis in separate containers, and adds a new Nginx
+Hive's API, Next.js web app, Redis, and the existing internal moderation service in
+separate containers, and adds a new Nginx
 virtual host. It does not replace the existing n8n or other Nginx sites.
 
 ## First deployment
@@ -12,14 +13,28 @@ virtual host. It does not replace the existing n8n or other Nginx sites.
    production environment. In particular, retain the current `DATABASE_URL` and
    `JWT_SECRET` so Hive uses the same database and existing logins remain valid.
    Keep the Supabase service key server-side only. Set the existing Google OAuth and
-   VAPID values if those features are enabled in production.
-3. Back up the production PostgreSQL database before starting the API. The API
-   applies the additive Alembic migration before accepting traffic.
-4. Build and start from this directory with `docker compose -f compose.yaml up -d --build`.
-   Verify `http://127.0.0.1:4000/api/health` and the web container before touching Nginx.
-5. Install `nginx.conf` as a new site, run `nginx -t`, then enable/reload it. Obtain a
-   certificate for the new hostname with Certbot. Keep the existing Nginx sites intact.
-6. Verify sign-in, posting, uploads, Socket.IO, and database migration over HTTPS.
+   credentials only after rotating any previously exposed OAuth secret. This VPS
+   setup keeps Google sign-in disabled until fresh credentials and callback URLs
+   are configured. VAPID keys may be generated locally and kept only in `server.env`.
+3. Keep `.env` and `server.env` mode `600`. The operator's `server.env` must contain
+   the real production `DATABASE_URL`, `JWT_SECRET`, Supabase URL/service key, bucket,
+   and matching VAPID keys. No secret belongs in Git or the browser bundle.
+4. From Windows PowerShell, run the single guarded deployment command:
+
+   ```powershell
+   ssh -tt -i "$env:USERPROFILE\.ssh\hive-vps-deploy" admin@163.123.181.8 "sudo bash /home/admin/hive-pr53-5d6a0d9/deploy/vps/deploy-admin.sh"
+   ```
+
+   Enter the normal `admin` sudo password at the SSH terminal prompt. The script does
+   not alter sudoers or group membership. It inventories containers first, refuses
+   conflicting Hive container/port/site names, writes a root-only PostgreSQL backup,
+   validates it, builds and starts only Hive's Compose project (including the existing
+   internal moderation service), then lets the API apply the additive Alembic migration.
+   It adds only the Hive hostname-specific Nginx site, obtains a free Let's Encrypt
+   certificate using the ACME webroot, reloads Nginx (never restarts the VPS), and
+   checks HTTPS, API health, Socket.IO/WebSocket upgrade, and certificate renewal.
+   The already-active Certbot timer handles future renewal. The script aborts before
+   adding the public route if backup, build, migration, health checks, or ACME setup fail.
 
 ## Rollback
 
