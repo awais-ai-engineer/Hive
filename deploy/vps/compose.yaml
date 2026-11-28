@@ -1,0 +1,55 @@
+name: hive
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ../../apps/server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./server.env
+    environment:
+      PORT: "4000"
+      WEB_ORIGIN: ${PUBLIC_URL:?Set PUBLIC_URL in .env}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      COOKIE_SECURE: "true"
+      STORAGE_DRIVER: supabase
+      SUPABASE_BUCKET: ${SUPABASE_BUCKET:-hive-media}
+      SOCKETIO_CHANNEL: hive-socketio
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:4000:4000"
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${PUBLIC_URL:?Set PUBLIC_URL in .env}
+        NEXT_PUBLIC_WEB_URL: ${PUBLIC_URL:?Set PUBLIC_URL in .env}
+        NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED: ${NEXT_PUBLIC_GOOGLE_LOGIN_ENABLED:-false}
+        NEXT_PUBLIC_AUTH_PROXY: "1"
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  redis-data:
