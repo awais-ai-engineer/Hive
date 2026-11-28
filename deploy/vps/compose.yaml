@@ -39,6 +39,16 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:4000:4000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/api/health', timeout=2)"
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 60s
 
   moderation:
     build:

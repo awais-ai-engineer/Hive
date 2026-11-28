@@ -26,6 +26,12 @@ for f in "${FILES[@]}"; do [[ -f "$STAGE/$f" ]] || { echo "Missing staged API fi
 echo "This rebuilds/restarts only the Hive API. Redis, moderation, web, Nginx, n8n, OpenClaw, and data are untouched."
 echo "Sudo will prompt for the existing administrator password."
 sudo -v
+CURRENT_API_CONTAINER="$("${COMPOSE[@]}" ps -q api)"
+if [[ -n "$CURRENT_API_CONTAINER" ]]; then
+  echo "Current restored API container status:"
+  sudo docker inspect --format 'state={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}} restarts={{.RestartCount}} started={{.State.StartedAt}}' "$CURRENT_API_CONTAINER"
+  sudo docker logs --tail 80 "$CURRENT_API_CONTAINER" 2>&1 | grep -Ei 'alembic|uvicorn|application startup|error|traceback|failed|ready' | tail -n 40 | sed -E 's#(://)[^/@:]+:[^/@]+@#\1[redacted]@#g; s/(secret|token|password)([=: ]+)[^ ]+/\1\2[redacted]/Ig' || true
+fi
 read -r -p "Google OAuth Web Client ID from Google Cloud: " GOOGLE_CLIENT_ID
 read -r -s -p "Freshly rotated Google OAuth client secret (hidden; do not paste in chat): " GOOGLE_CLIENT_SECRET
 printf '\n'
@@ -63,7 +69,6 @@ os.replace(temporary, path)
 PY
 printf '%s\0%s\0' "$GOOGLE_CLIENT_ID" "$GOOGLE_CLIENT_SECRET" | python3 -c 'import os,pathlib,sys,tempfile; p=pathlib.Path(sys.argv[1]); client_id,secret=sys.stdin.buffer.read().split(b"\0")[:2]; lines=p.read_bytes().splitlines(); keys=(b"GOOGLE_CLIENT_ID=",b"GOOGLE_CLIENT_SECRET="); lines=[line for line in lines if not line.startswith(keys)]; lines.extend([keys[0]+client_id,keys[1]+secret]); fd,tmp=tempfile.mkstemp(dir=p.parent,prefix=".server.env."); os.write(fd,b"\n".join(lines)+b"\n"); os.fchmod(fd,0o600); os.close(fd); os.replace(tmp,p)' "$SERVER_ENV"
 unset GOOGLE_CLIENT_SECRET GOOGLE_CLIENT_ID
-unset GOOGLE_CLIENT_SECRET
 
 rollback() {
   echo "Health/CORS verification failed; restoring the previous Hive API image and config." >&2
@@ -81,7 +86,33 @@ rollback() {
 "${COMPOSE[@]}" config --quiet || rollback
 "${COMPOSE[@]}" build api || rollback
 "${COMPOSE[@]}" up -d --no-deps --force-recreate api || rollback
-curl --fail --silent --show-error --max-time 10 http://127.0.0.1:4000/api/health >/dev/null || rollback
+
+# Compose's "Started" means the container process launched, not that FastAPI's
+# lifespan and health route are ready. Give it a bounded startup window.
+API_CONTAINER="$("${COMPOSE[@]}" ps -q api)"
+[[ -n "$API_CONTAINER" ]] || rollback
+API_READY=0
+for attempt in $(seq 1 90); do
+  API_STATE="$(sudo docker inspect --format '{{.State.Status}}' "$API_CONTAINER" 2>/dev/null || true)"
+  API_HEALTH="$(sudo docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$API_CONTAINER" 2>/dev/null || true)"
+  if [[ "$API_STATE" == "running" && "$API_HEALTH" == "healthy" ]] && curl --fail --silent --max-time 5 http://127.0.0.1:4000/api/health >/dev/null; then
+    API_READY=1
+    break
+  fi
+  if [[ "$API_STATE" == "exited" || "$API_STATE" == "dead" ]]; then
+    echo "Hive API container stopped during startup; automatic rollback follows." >&2
+    break
+  fi
+  sleep 2
+done
+if [[ "$API_READY" != "1" ]]; then
+  echo "Hive API did not become healthy within 180 seconds. Filtered startup diagnostics:" >&2
+  sudo docker inspect --format 'state={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} restarts={{.RestartCount}} started={{.State.StartedAt}}' "$API_CONTAINER" 2>/dev/null || true
+  sudo docker logs --tail 120 "$API_CONTAINER" 2>&1 | grep -Ei 'alembic|uvicorn|application startup|error|traceback|failed|ready' | tail -n 60 | sed -E 's#(://)[^/@:]+:[^/@]+@#\1[redacted]@#g; s/(secret|token|password)([=: ]+)[^ ]+/\1\2[redacted]/Ig' || true
+  rollback
+fi
+echo "API readiness passed (container health is healthy). Checking CORS separately."
+
 PREFLIGHT="$(curl --silent --show-error --max-time 10 -i -X OPTIONS http://127.0.0.1:4000/api/health -H "Origin: $ORIGIN" -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization,content-type')" || rollback
 grep -Fqi "access-control-allow-origin: $ORIGIN" <<<"$PREFLIGHT" || rollback
 SOCKET="$(curl --silent --show-error --max-time 10 -i 'http://127.0.0.1:4000/socket.io/?EIO=4&transport=polling&t=origin-check' -H "Origin: $ORIGIN")" || rollback

@@ -28,9 +28,17 @@ The current running VPS stack and Nginx configuration must remain untouched unti
 the Vercel app is verified. For the frontend-origin change, use
 `activate-vercel-origin.sh`; it updates only the Hive API container, keeps the old
 origin explicitly trusted for rollback, and validates API health, CORS, and a
-Socket.IO handshake. It does not run migrations or restart Redis, moderation, the
-VPS web frontend, Nginx, n8n, or OpenClaw. Do not use the earlier DuckDNS
-migration steps. Retain the existing Nginx route and certificate.
+Socket.IO handshake. API startup has a 60-second Docker health grace and a
+bounded three-minute readiness wait before any CORS check. On failure it prints
+filtered startup diagnostics and restores the old image/config. It does not
+restart Redis, moderation, the VPS web frontend, Nginx, n8n, or OpenClaw. Do not
+use the earlier DuckDNS migration steps. Retain the existing Nginx route and
+certificate.
+
+The API image runs `alembic upgrade head` before launching Uvicorn. Docker
+reporting a container as started therefore does not mean the HTTP health route
+is listening yet; readiness is now confirmed by both Docker's health status and
+the health endpoint before any CORS or Socket.IO checks run.
 
 The VPS-hosted frontend is retained only as a rollback path. Its build arguments
 use the existing API host and `WEB_ORIGIN`; Google login for the Vercel frontend is
