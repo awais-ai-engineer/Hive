@@ -1,0 +1,16 @@
+.git
+.next
+node_modules
+**/node_modules
+**/.next
+**/.env*
+**/server.env
+output
+playwright-report
+test-results
+**/__pycache__
+**/*.py[cod]
+**/.venv
+**/tests
+**/test
+**/*.log

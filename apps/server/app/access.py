@@ -80,14 +80,23 @@ def readable_channel_ids(user_id: str):
 
 
 def post_readable(user_id: str):
-    """Condition on `Post`: it lives in a public community or in a space the viewer belongs to."""
+    """Space posts use space visibility; channel posts additionally require channel access."""
     return exists().where(
         Space.id == Post.space_id,
         or_(
-            Space.type == SpaceType.community,
-            exists().where(
-                SpaceMember.space_id == Space.id, SpaceMember.user_id == user_id, _active()
-            ).correlate(Space),
+            and_(
+                Post.channel_id.is_(None),
+                or_(
+                    Space.type == SpaceType.community,
+                    exists().where(
+                        SpaceMember.space_id == Space.id, SpaceMember.user_id == user_id, _active()
+                    ).correlate(Space),
+                ),
+            ),
+            and_(
+                Post.channel_id.is_not(None),
+                Post.channel_id.in_(readable_channel_ids(user_id)),
+            ),
         ),
     ).correlate(Post)
 

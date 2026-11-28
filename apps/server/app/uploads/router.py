@@ -5,7 +5,7 @@ from pathlib import PurePath
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -139,6 +139,47 @@ async def post_upload(slug: str, file: UploadFile, session: Session, user: Curre
     space, member = await load_space(session, slug, user)
     require_role(member.role if member else None, MemberRole.member)
     return await store_upload(file, session, user, space_id=space.id)
+
+
+@router.delete("/spaces/{slug}/uploads/{attachment_id}", status_code=204)
+async def discard_space_upload(slug: str, attachment_id: str, session: Session, user: CurrentUser):
+    """Remove an unclaimed space upload owned by this user (composer draft cleanup)."""
+    space, member = await load_space(session, slug, user)
+    require_role(member.role if member else None, MemberRole.member)
+    attachment = await session.scalar(
+        select(Attachment).where(
+            Attachment.id == attachment_id,
+            Attachment.space_id == space.id,
+            Attachment.uploader_id == user.id,
+            Attachment.post_id.is_(None),
+        ).with_for_update()
+    )
+    if attachment is None:
+        raise HTTPException(404, "Unattached upload not found")
+    await get_storage().delete([attachment.storage_key])
+    await session.delete(attachment)
+    await session.commit()
+    return Response(status_code=204)
+
+
+@router.delete("/channels/{channel_id}/uploads/{attachment_id}", status_code=204)
+async def discard_channel_upload(channel_id: str, attachment_id: str, session: Session, user: CurrentUser):
+    """Remove this user's unclaimed channel upload from a channel post draft."""
+    await writable(session, channel_id, user.id, "media")
+    attachment = await session.scalar(
+        select(Attachment).where(
+            Attachment.id == attachment_id,
+            Attachment.channel_id == channel_id,
+            Attachment.uploader_id == user.id,
+            Attachment.post_id.is_(None),
+        ).with_for_update()
+    )
+    if attachment is None:
+        raise HTTPException(404, "Unattached upload not found")
+    await get_storage().delete([attachment.storage_key])
+    await session.delete(attachment)
+    await session.commit()
+    return Response(status_code=204)
 
 
 @router.get("/attachments/{attachment_id}")

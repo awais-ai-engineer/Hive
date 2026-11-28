@@ -1,7 +1,8 @@
 export type MarkdownNode =
   | { type: 'text' | 'code'; value: string }
   | { type: 'break' }
-  | { type: 'bold' | 'italic' | 'strike' | 'paragraph' | 'quote'; children: MarkdownNode[] }
+  | { type: 'bold' | 'italic' | 'underline' | 'strike' | 'paragraph' | 'quote'; children: MarkdownNode[] }
+  | { type: 'heading'; level: 1 | 2 | 3; children: MarkdownNode[] }
   | { type: 'link'; href: string; children: MarkdownNode[] }
   | { type: 'codeBlock'; value: string; language?: string }
   | { type: 'list'; ordered: boolean; items: MarkdownNode[][] };
@@ -77,7 +78,7 @@ export function parseMarkdown(source: string): MarkdownNode[] {
             if (href) { flush(); children.push({ type: 'link', href, children: [{ type: 'text', value }] }); nodes += 2; position += value.length; continue; }
           }
         }
-        const marker = text.startsWith('**', position) ? '**' : text.startsWith('~~', position) ? '~~' : char === '*' || char === '_' ? char : null;
+        const marker = text.startsWith('**', position) ? '**' : text.startsWith('~~', position) ? '~~' : text.startsWith('++', position) ? '++' : char === '*' || char === '_' ? char : null;
         if (marker && depth < 12 && children.length < maxNodes) {
           // Runs without content are literal and cannot create deep recursive trees.
           let runEnd = position;
@@ -86,7 +87,7 @@ export function parseMarkdown(source: string): MarkdownNode[] {
           position += marker.length;
           const parsed = inlineDelimited(marker, depth + 1);
           if (parsed.closed && parsed.children.length) {
-            flush(); children.push({ type: marker === '**' ? 'bold' : marker === '~~' ? 'strike' : 'italic', children: parsed.children }); nodes++;
+            flush(); children.push({ type: marker === '**' ? 'bold' : marker === '~~' ? 'strike' : marker === '++' ? 'underline' : 'italic', children: parsed.children }); nodes++;
           } else plain += text.slice(start, position);
           continue;
         }
@@ -110,6 +111,10 @@ export function parseMarkdown(source: string): MarkdownNode[] {
   while (index < lines.length) {
     if (nodes >= maxNodes || work >= maxWork) { result.push({ type: 'text', value: lines.slice(index).join('\n') }); break; }
     const line = lines[index];
+    const heading = /^(#{1,3})\s+(.+)$/.exec(line);
+    if (heading) {
+      result.push({ type: 'heading', level: heading[1].length as 1 | 2 | 3, children: inline(heading[2]) }); nodes++; index++; continue;
+    }
     const fence = /^```([\w+-]*)\s*$/.exec(line);
     if (fence) {
       let end = index + 1;

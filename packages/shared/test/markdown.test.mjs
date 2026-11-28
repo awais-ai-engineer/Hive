@@ -15,6 +15,11 @@ test('inline formatting, nested emphasis, inline code and line breaks', () => {
   assert.equal(nodes.find(node => node.type === 'code').value, 'a < b');
   assert.equal(parseMarkdown('*italic **bold***')[0].children[0].children[1].type, 'bold');
 });
+test('post composer heading and underline syntax render as structured rich text', () => {
+  const nodes = all(parseMarkdown('# Project update\n++important++'));
+  assert.ok(nodes.some(node => node.type === 'heading' && node.level === 1));
+  assert.ok(nodes.some(node => node.type === 'underline'));
+});
 test('fenced code, language, quotes, unordered and ordered lists', () => {
   const nodes = parseMarkdown('```js\nconst x = "<script>";\n```\n> quoted\n> again\n- a\n- b\n1. first\n2. second');
   assert.deepEqual(nodes[0], { type: 'codeBlock', language: 'js', value: 'const x = "<script>";' });
@@ -28,7 +33,7 @@ test('safe explicit links and bare HTTP URLs', () => {
   assert.deepEqual(links.map(node => node.href), ['https://example.org/a_(b)', 'MAILTO:a@example.org', 'https://example.org']);
 });
 test('HTML and unterminated syntax remain literal', () => {
-  for (const value of ['<img src=x onerror=alert(1)>', '<script>alert(1)</script>', '**open', '*open', '_open', '~~open', '`open', '[open', '```js\nopen', '# heading', '![image](https://example.org/x.png)']) {
+  for (const value of ['<img src=x onerror=alert(1)>', '<script>alert(1)</script>', '**open', '*open', '_open', '~~open', '++open', '`open', '[open', '```js\nopen', '![image](https://example.org/x.png)']) {
     assert.equal(literal(parseMarkdown(value)), value);
   }
 });

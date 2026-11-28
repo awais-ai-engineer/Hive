@@ -114,6 +114,16 @@ async def test_media_posts(client, setup_chat, monkeypatch):
     post = gallery.json()
     assert [item['id'] for item in post['media']] == [file['id'] for file in files]
     assert (await create([video['id']])).status_code == 201
+    document = (await upload(client, ah, path, b'%PDF-1.4 document', 'notes.pdf')).json()
+    document_post = await create([document['id']])
+    assert document_post.status_code == 201, document_post.text
+    assert document_post.json()['media'][0]['kind'] == 'file'
+    assert (await client.delete(f"/api/spaces/chat/uploads/{document['id']}", headers=ah)).status_code == 404
+    temporary = (await upload(client, ah, path, b'cancelled draft')).json()
+    cleanup_path = f"/api/spaces/chat/uploads/{temporary['id']}"
+    assert (await client.delete(cleanup_path, headers=bh)).status_code == 404
+    assert (await client.delete(cleanup_path, headers=ah)).status_code == 204
+    assert (await client.delete(cleanup_path, headers=ah)).status_code == 404
     fresh = (await upload(client, ah, path)).json()
     fresh_video = (await upload(client, ah, path, MP4)).json()
     for ids, extra in [([fresh['id'], fresh_video['id']], {}), ([fresh['id']] * 11, {}),

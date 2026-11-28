@@ -337,14 +337,19 @@ async def watch_post(sid: str, data: object = None) -> dict:
         post = await session.get(Post, post_id)
         if post is None:
             return {"ok": False, "error": {"code": "not_found", "message": "Post not found"}}
-        space = await session.get(Space, post.space_id)
-        if space is None:
-            return {"ok": False, "error": {"code": "not_found", "message": "Post not found"}}
-        if space.type == SpaceType.workspace:
-            if not user_id:
+        if post.channel_id or not user_id:
+            from app.posts.service import visible_post
+
+            try:
+                await visible_post(session, post, user_id)
+            except HTTPException:
                 return {"ok": False, "error": {"code": "not_found", "message": "Post not found"}}
-            member = await member_for(session, space.id, user_id)
-            if member is None:
+        else:
+            space = await session.get(Space, post.space_id)
+            if space is None or (
+                space.type == SpaceType.workspace
+                and await member_for(session, space.id, user_id) is None
+            ):
                 return {"ok": False, "error": {"code": "not_found", "message": "Post not found"}}
     await sio.enter_room(sid, f"post:{post_id}")
     return {"ok": True}

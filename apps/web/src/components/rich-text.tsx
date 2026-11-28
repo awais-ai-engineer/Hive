@@ -61,6 +61,11 @@ export function RichText({ source, mentions = [], channels = [] }: Props) {
         case 'bold': return <strong key={index}>{render(node.children, inLink)}</strong>;
         case 'italic': return <em key={index}>{render(node.children, inLink)}</em>;
         case 'strike': return <s key={index}>{render(node.children, inLink)}</s>;
+        case 'underline': return <u key={index}>{render(node.children, inLink)}</u>;
+        case 'heading': {
+          const Heading = `h${node.level}` as 'h1' | 'h2' | 'h3';
+          return <Heading key={index} className="my-2 font-semibold">{render(node.children, inLink)}</Heading>;
+        }
         case 'quote': return <blockquote key={index} className="my-1 border-s-2 border-brand/40 ps-3 text-white/65">{render(node.children, inLink)}</blockquote>;
         case 'link': return inLink ? <Fragment key={index}>{render(node.children, true)}</Fragment>
           : typeof window !== 'undefined' && node.href.startsWith(`${window.location.origin}/`)

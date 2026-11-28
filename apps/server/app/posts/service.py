@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.models import (
     Attachment,
+    Channel,
     MemberRole,
     Post,
     PostVote,
@@ -21,7 +22,7 @@ from app.db.models import (
 )
 from app.db.session import redis
 from app.posts.ranking import hot_score
-from app.posts.schemas import Author, Place, PostOut, PostSummary
+from app.posts.schemas import Author, ChannelPlace, Place, PostOut, PostSummary
 from app.spaces.permissions import require_role
 from app.spaces.service import load_space, member_for
 from app.storage import get_storage
@@ -33,6 +34,22 @@ async def visible_space(session, space, user_id):
     if space.type == SpaceType.workspace and member is None:
         raise HTTPException(404, "Space not found")
     return member
+
+
+async def visible_post(session, post, user_id):
+    """Check both the parent space and, for channel posts, the channel's private ACL."""
+    space = await session.get(Space, post.space_id)
+    if space is None:
+        raise HTTPException(404, "Post not found")
+    member = await visible_space(session, space, user_id)
+    if post.channel_id:
+        from app.messages.service import readable
+
+        try:
+            await readable(session, post.channel_id, user_id)
+        except HTTPException:
+            raise HTTPException(404, "Post not found") from None
+    return space, member
 
 
 def cursor_encode(value):
@@ -84,6 +101,14 @@ async def serialize(session, rows, viewer_id=None):
     for file in files:
         if file.id in serialized:
             media.setdefault(file.post_id, []).append(serialized[file.id])
+
+    channel_ids = {row[0].channel_id for row in rows if row[0].channel_id}
+    channels = {}
+    if channel_ids:
+        channels = {
+            channel.id: ChannelPlace(id=channel.id, name=channel.name)
+            for channel in await session.scalars(select(Channel).where(Channel.id.in_(channel_ids)))
+        }
 
     repost_ids = list(
         {row[0].repost_of_id for row in rows if getattr(row[0], "repost_of_id", None)}
@@ -156,6 +181,7 @@ async def serialize(session, rows, viewer_id=None):
             PostOut(
                 id=post.id,
                 space=Place(id=space.id, slug=space.slug, name=space.name, type=space.type.value),
+                channel=channels.get(post.channel_id),
                 author=None if deleted else Author.model_validate(author) if author else None,
                 title="[deleted]" if deleted else post.title,
                 body=None if deleted else post.body,
@@ -189,15 +215,23 @@ async def get_post(session, post_id, user_id=None):
     ).first()
     if row is None:
         raise HTTPException(404, "Post not found")
-    try:
-        await visible_space(session, row[1], user_id)
-    except HTTPException:
-        raise HTTPException(404, "Post not found") from None
+    await visible_post(session, row[0], user_id)
     return (await serialize(session, [row], user_id))[0]
 
 
-async def create(session, user, slug, data):
-    space, member = await load_space(session, slug, user)
+async def create(session, user, slug, data, channel_id=None):
+    if channel_id:
+        from app.messages.service import writable
+
+        channel = await session.get(Channel, channel_id)
+        if channel is None or channel.space_id is None:
+            raise HTTPException(404, "Channel not found")
+        await writable(session, channel.id, user.id)
+        space = await session.get(Space, channel.space_id)
+        member = await member_for(session, channel.space_id, user.id)
+    else:
+        channel = None
+        space, member = await load_space(session, slug, user)
     require_role(member.role if member else None, MemberRole.member)
     count = await redis.eval(
         "local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],600) end; return n",
@@ -208,6 +242,7 @@ async def create(session, user, slug, data):
         raise HTTPException(429, "Too many posts; try again later")
     post = Post(
         space_id=space.id,
+        channel_id=channel.id if channel else None,
         author_id=user.id,
         title=data.title,
         body=data.body,
@@ -224,17 +259,19 @@ async def create(session, user, slug, data):
                 .where(
                     Attachment.id.in_(data.mediaIds),
                     Attachment.uploader_id == user.id,
-                    Attachment.space_id == space.id,
+                    Attachment.channel_id == channel.id if channel else Attachment.space_id == space.id,
                     Attachment.post_id.is_(None),
                 )
                 .with_for_update()
             )
         )
         kinds = [file.kind for file in files]
-        if len(files) != len(data.mediaIds) or not (
-            all(kind == "image" for kind in kinds) or kinds == ["video"]
-        ):
-            raise HTTPException(422, "Use 1-10 images or one video uploaded to this space")
+        # Post attachments can include documents and audio as well as images. Video is
+        # intentionally exclusive to keep the feed preview and download behavior clear.
+        if len(files) != len(data.mediaIds) or any(kind not in {"image", "video", "audio", "file"} for kind in kinds):
+            raise HTTPException(422, "Choose up to 10 supported files uploaded to this space")
+        if "video" in kinds and kinds != ["video"]:
+            raise HTTPException(422, "A video must be the only attachment in a post")
         for file in files:
             file.post_id = post.id
             file.position = data.mediaIds.index(file.id)
@@ -243,7 +280,7 @@ async def create(session, user, slug, data):
     return await get_post(session, post.id, user.id)
 
 
-async def feed(session, viewer, slug=None, sort="hot", period="week", cursor=None, limit=25):
+async def feed(session, viewer, slug=None, sort="hot", period="week", cursor=None, limit=25, channel_id=None):
     query = (
         select(Post, Space, User)
         .select_from(Post)
@@ -251,17 +288,22 @@ async def feed(session, viewer, slug=None, sort="hot", period="week", cursor=Non
         .outerjoin(User, User.id == Post.author_id)
         .where(Post.deleted_at.is_(None))
     )
-    if slug:
+    if channel_id:
+        from app.messages.service import readable
+
+        await readable(session, channel_id, viewer.id if viewer else None)
+        query = query.where(Post.channel_id == channel_id)
+    elif slug:
         space, _ = await load_space(session, slug, viewer)
-        query = query.where(Post.space_id == space.id)
+        query = query.where(Post.space_id == space.id, Post.channel_id.is_(None))
     elif viewer:
         memberships = select(SpaceMember.space_id).where(
             SpaceMember.user_id == viewer.id,
             or_(SpaceMember.banned_until.is_(None), SpaceMember.banned_until <= datetime.now(UTC)),
         )
-        query = query.where(Post.space_id.in_(memberships))
+        query = query.where(Post.space_id.in_(memberships), Post.channel_id.is_(None))
     else:
-        query = query.where(Space.type == SpaceType.community)
+        query = query.where(Space.type == SpaceType.community, Post.channel_id.is_(None))
     order = Post.id
     if sort == "hot":
         order = Post.hot
@@ -308,8 +350,7 @@ async def edit(session, user, post_id, data):
     post = await session.get(Post, post_id)
     if post is None:
         raise HTTPException(404, "Post not found")
-    space = await session.get(Space, post.space_id)
-    await visible_space(session, space, user.id)
+    await visible_post(session, post, user.id)
     if post.author_id != user.id:
         raise HTTPException(403, "Only the author can edit this post")
     if post.deleted_at:
@@ -334,8 +375,7 @@ async def remove(session, user, post_id):
     post = await session.get(Post, post_id)
     if post is None:
         raise HTTPException(404, "Post not found")
-    space = await session.get(Space, post.space_id)
-    member = await visible_space(session, space, user.id)
+    _space, member = await visible_post(session, post, user.id)
     if post.author_id != user.id and (
         member is None
         or member.role not in (MemberRole.owner, MemberRole.admin, MemberRole.moderator)
@@ -364,10 +404,12 @@ async def repost(session, user, post_id, data):
     orig_space = await session.get(Space, orig_post.space_id)
     if orig_space is None:
         raise HTTPException(404, "Space not found")
-    await visible_space(session, orig_space, user.id)
+    await visible_post(session, orig_post, user.id)
 
     if orig_post.deleted_at is not None:
         raise HTTPException(422, "Cannot repost a deleted post")
+    if orig_post.channel_id:
+        raise HTTPException(403, "Channel posts cannot be reposted outside their channel")
     if orig_space.type != SpaceType.community:
         raise HTTPException(403, "Workspace posts cannot be reposted")
 
@@ -426,8 +468,7 @@ async def vote(session, user, post_id, value):
     post = await session.scalar(select(Post).where(Post.id == post_id).with_for_update())
     if post is None:
         raise HTTPException(404, "Post not found")
-    space = await session.get(Space, post.space_id)
-    member = await visible_space(session, space, user.id)
+    _space, member = await visible_post(session, post, user.id)
     require_role(member.role if member else None, MemberRole.member)
     if post.deleted_at:
         raise HTTPException(422, "Cannot vote on a deleted post")

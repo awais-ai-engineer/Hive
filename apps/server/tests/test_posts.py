@@ -37,6 +37,53 @@ async def test_create_permissions_validation(client, setup_chat):
                               json={'title': 'Private'})).status_code == 404
 
 
+async def test_channel_posts_are_published_to_channel_and_private_acl_is_enforced(client, setup_chat):
+    _alice, _bob, _carol, ah, bh, ch, space, public_channel = setup_chat
+    general_url = f"/api/channels/{public_channel}/posts"
+    created = await client.post(general_url, headers=ah, json={
+        "title": "General channel update", "body": "Visible in #general only"
+    })
+    assert created.status_code == 201, created.text
+    post = created.json()
+    assert post["space"]["id"] == space["id"]
+    assert post["channel"] == {"id": public_channel, "name": "general"}
+    assert [item["id"] for item in (await client.get(general_url, headers=bh)).json()["items"]] == [post["id"]]
+    assert (await client.get("/api/spaces/chat/posts", headers=ah)).json()["items"] == []
+    assert (await client.get("/api/feed", headers=ah)).json()["items"] == []
+
+    secret = (await client.post("/api/spaces/chat/channels", headers=ah, json={
+        "name": "secret", "type": "text", "is_private": True
+    })).json()["id"]
+    private_url = f"/api/channels/{secret}/posts"
+    hidden = await client.post(private_url, headers=ah, json={"title": "Restricted update"})
+    assert hidden.status_code == 201, hidden.text
+    secret_post = hidden.json()
+    assert (await client.get(private_url, headers=bh)).status_code == 404
+    assert (await client.get(f"/api/posts/{secret_post['id']}", headers=bh)).status_code == 404
+    assert (await client.post(private_url, headers=bh, json={"title": "Unauthorized"})).status_code == 404
+    assert secret_post["id"] not in {item["id"] for item in (await client.get("/api/spaces/chat/posts", headers=bh)).json()["items"]}
+    added = await client.post(f"/api/spaces/chat/channels/{secret}/members", headers=ah,
+                              json={"username": "bob"})
+    assert added.status_code == 201, added.text
+    assert [item["id"] for item in (await client.get(private_url, headers=bh)).json()["items"]] == [secret_post["id"]]
+    assert (await client.post(f"/api/channels/{public_channel}/posts", headers=ch,
+                              json={"title": "No member should not publish"})).status_code == 403
+
+    upload = await client.post(
+        f"/api/channels/{public_channel}/uploads", headers=ah,
+        files={"file": ("proof.png", b"\x89PNG\r\n\x1a\ncontent", "image/png")},
+    )
+    assert upload.status_code == 201, upload.text
+    attachment_post = await client.post(general_url, headers=ah, json={
+        "title": "Attachment in general", "mediaIds": [upload.json()["id"]]
+    })
+    assert attachment_post.status_code == 201, attachment_post.text
+    assert [media["id"] for media in attachment_post.json()["media"]] == [upload.json()["id"]]
+    assert (await client.post("/api/spaces/chat/posts", headers=ah, json={
+        "title": "Wrong scope", "mediaIds": [upload.json()["id"]]
+    })).status_code == 422
+
+
 async def test_rate_limit(client, setup_chat):
     ah = setup_chat[3]
     for _ in range(5):
@@ -145,9 +192,25 @@ async def test_realtime(client, setup_chat, live_server):
             peer.on(name, queue.put_nowait)
         assert (await call(peer, 'space:watch', {'spaceId': space['id']}))['ok']
         post = (await create(client, ah)).json()
-        assert (await event(queues['post:new'])) == {'postId': post['id'], 'spaceId': space['id']}
+        assert (await event(queues['post:new'])) == {
+            'postId': post['id'], 'spaceId': space['id'], 'channelId': None
+        }
         await client.put(f"/api/posts/{post['id']}/vote", headers=ah, json={'value': 1})
         assert (await event(queues['post:score']))['score'] == 1
+
+
+async def test_channel_post_realtime_is_channel_scoped(client, setup_chat, live_server):
+    _alice, bob, _, ah, _, _, space, channel = setup_chat
+    async with connected(live_server, bob) as (peer, _):
+        queue = asyncio.Queue()
+        peer.on('post:new', queue.put_nowait)
+        assert (await call(peer, 'channel:join', {'channelId': channel}))['ok']
+        response = await client.post(f"/api/channels/{channel}/posts", headers=ah,
+                                     json={'title': 'Realtime general post'})
+        assert response.status_code == 201, response.text
+        assert await event(queue) == {
+            'postId': response.json()['id'], 'spaceId': space['id'], 'channelId': channel
+        }
 
 
 async def test_edit_keeps_fields_not_sent(client, setup_chat):
