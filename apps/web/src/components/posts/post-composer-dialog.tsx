@@ -12,8 +12,8 @@ import { Icon } from '../ui/icons';
 type Draft = { title: string; body: string; url: string; kind: 'text' | 'link' | 'media' };
 const emptyDraft: Draft = { title: '', body: '', url: '', kind: 'text' };
 
-export function PostComposerDialog({ open, onOpenChange, spaces, initialSpace, userId, onPublished }: {
-  open: boolean; onOpenChange: (open: boolean) => void; spaces: Space[]; initialSpace?: Space; userId: string;
+export function PostComposerDialog({ open, onOpenChange, spaces, initialSpace, channelId, userId, onPublished }: {
+  open: boolean; onOpenChange: (open: boolean) => void; spaces: Space[]; initialSpace?: Space; channelId?: string; userId: string;
   onPublished?: (post: Post) => void;
 }) {
   const available = useMemo(() => spaces.filter(space => !!space.my_role && space.my_role !== 'guest'), [spaces]);
@@ -29,7 +29,14 @@ export function PostComposerDialog({ open, onOpenChange, spaces, initialSpace, u
   const uploads = useRef({ files, space });
   uploads.current = { files, space };
   const dirty = !!(draft.title.trim() || draft.body.trim() || draft.url.trim() || files.length);
-  const storageKey = `hive:post-draft:${userId}:${spaceId || 'default'}`;
+  const storageKey = `hive:post-draft:${userId}:${channelId ? `channel:${channelId}` : spaceId || 'default'}`;
+
+  useEffect(() => {
+    if (available.some(item => item.id === spaceId)) return;
+    const preferred = initialSpace && available.some(item => item.id === initialSpace.id)
+      ? initialSpace.id : available[0]?.id ?? '';
+    if (preferred !== spaceId) setSpaceId(preferred);
+  }, [available, initialSpace?.id, spaceId]);
 
   useEffect(() => {
     if (!open || typeof window === 'undefined') return;
@@ -51,9 +58,10 @@ export function PostComposerDialog({ open, onOpenChange, spaces, initialSpace, u
   useEffect(() => () => {
     const current = uploads.current;
     if (current.space && current.files.length) {
-      void Promise.allSettled(current.files.map(file => apiData(`/api/spaces/${encodeURIComponent(current.space!.slug)}/uploads/${encodeURIComponent(file.id)}`, { method: 'DELETE' })));
+      const base = channelId ? `/api/channels/${encodeURIComponent(channelId)}/uploads` : `/api/spaces/${encodeURIComponent(current.space.slug)}/uploads`;
+      void Promise.allSettled(current.files.map(file => apiData(`${base}/${encodeURIComponent(file.id)}`, { method: 'DELETE' })));
     }
-  }, []);
+  }, [channelId]);
 
   function requestClose(next: boolean) {
     if (!next && dirty && !busy) { setConfirmClose(true); return; }
@@ -62,7 +70,8 @@ export function PostComposerDialog({ open, onOpenChange, spaces, initialSpace, u
   }
   async function removeUnclaimedUploads() {
     if (!space) return;
-    await Promise.allSettled(files.map(file => apiData(`/api/spaces/${encodeURIComponent(space.slug)}/uploads/${encodeURIComponent(file.id)}`, { method: 'DELETE' })));
+    const base = channelId ? `/api/channels/${encodeURIComponent(channelId)}/uploads` : `/api/spaces/${encodeURIComponent(space.slug)}/uploads`;
+    await Promise.allSettled(files.map(file => apiData(`${base}/${encodeURIComponent(file.id)}`, { method: 'DELETE' })));
   }
   async function discardAndClose() {
     await removeUnclaimedUploads();
@@ -92,7 +101,8 @@ export function PostComposerDialog({ open, onOpenChange, spaces, initialSpace, u
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? 'Check the post details.'); return; }
     setBusy(true);
     try {
-      const post = await apiData<Post>(`/api/spaces/${encodeURIComponent(space.slug)}/posts`, { method: 'POST', body: JSON.stringify(parsed.data) });
+      const path = channelId ? `/api/channels/${encodeURIComponent(channelId)}/posts` : `/api/spaces/${encodeURIComponent(space.slug)}/posts`;
+      const post = await apiData<Post>(path, { method: 'POST', body: JSON.stringify(parsed.data) });
       if (draft.kind !== 'media') await removeUnclaimedUploads();
       try { window.localStorage.removeItem(storageKey); } catch { /* ignore */ }
       setDraft(emptyDraft); setFiles([]); onPublished?.(post); onOpenChange(false);
@@ -101,9 +111,9 @@ export function PostComposerDialog({ open, onOpenChange, spaces, initialSpace, u
     finally { setBusy(false); }
   }
 
-  return <Dialog open={open} onOpenChange={requestClose} title="Create a post" description="Share an update, idea, link, or media with a space." className="max-w-2xl">
+  return <Dialog open={open} onOpenChange={requestClose} title="Create a post" description={channelId ? 'Share an update, idea, link, or media in this channel.' : 'Share an update, idea, link, or media with a space.'} className="max-w-2xl !max-h-[calc(100dvh-2rem)]">
     {!available.length ? <div className="space-y-3"><p className="text-sm text-white/65">You need member access to a workspace or community before you can publish a post.</p><Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>Close</Button></div> : <form className="space-y-4" onSubmit={event => void publish(event)}>
-      {available.length > 1 && <label className="block text-sm font-medium">Post to
+      {available.length > 1 && !channelId && <label className="block text-sm font-medium">Post to
         <Select className="mt-1 w-full" aria-label="Post to" value={spaceId} onChange={event => setSpaceId(event.target.value)}>
           {available.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
         </Select>
@@ -128,7 +138,7 @@ export function PostComposerDialog({ open, onOpenChange, spaces, initialSpace, u
         <Textarea ref={bodyRef} aria-label="Content" className="mt-0 min-h-40 resize-y rounded-t-none" maxLength={40000} value={draft.body} placeholder="Add context or start a discussion…" onChange={event => setDraft(value => ({ ...value, body: event.target.value }))} />
         <span className="mt-1 block text-right text-xs text-white/45">{draft.body.length}/40,000</span>
       </div>}
-      {draft.kind === 'media' && space && <UploadPicker path={`/api/spaces/${encodeURIComponent(space.slug)}/uploads`} maxFiles={10} onChange={setFiles} onBusy={setUploading} />}
+      {draft.kind === 'media' && space && <UploadPicker path={channelId ? `/api/channels/${encodeURIComponent(channelId)}/uploads` : `/api/spaces/${encodeURIComponent(space.slug)}/uploads`} maxFiles={10} onChange={setFiles} onBusy={setUploading} />}
       {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}
       <div className="flex flex-col-reverse justify-end gap-2 border-t border-white/10 pt-3 sm:flex-row">
         <Button type="button" variant="secondary" disabled={busy} onClick={() => requestClose(false)}>Cancel</Button>

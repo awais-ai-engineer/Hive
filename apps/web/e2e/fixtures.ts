@@ -29,6 +29,9 @@ export async function mockApi(page: Page, initial: Space[] = fixtures, withChann
     else if (path === '/api/me/availability' || path.endsWith('/availability')) body = [];
     else if (path === '/api/me/sounds') body = { enabled: true, volume: 0.35, messages: true, huddles: true, activity: true, feedback: true };
     else if (path === '/api/me/spaces') body = spaces;
+    else if (path === '/api/spaces') body = spaces;
+    else if (/^\/api\/spaces\/[^/]+\/members$/.test(path)) body = { items: [] };
+    else if (path === '/api/saved/ids') body = { messages: [], posts: [], comments: [] };
     else if (path === '/api/me/preferences') {
       const ids = route.request().postDataJSON().spaceOrder as string[];
       if (failOrder) return route.fulfill({ status: 503, json: { detail: 'Could not save order' } });

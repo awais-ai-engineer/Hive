@@ -88,6 +88,11 @@ class Place(BaseModel):
     type: str = "community"
 
 
+class ChannelPlace(BaseModel):
+    id: str
+    name: str
+
+
 class PostSummary(BaseModel):
     id: str
     title: str
@@ -105,6 +110,7 @@ class PostOut(BaseModel):
     media: list[AttachmentOut] = Field(default_factory=list)
     id: str
     space: Place
+    channel: ChannelPlace | None = None
     author: Author | None
     title: str
     body: str | None

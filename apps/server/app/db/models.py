@@ -518,6 +518,9 @@ class Post(Base):
         Index("posts_space_new", "space_id", "id"),
         Index("posts_space_hot", "space_id", "hot", "id"),
         Index("posts_space_top", "space_id", "score", "id"),
+        Index("ix_posts_channel_new", "channel_id", "id"),
+        Index("ix_posts_channel_hot", "channel_id", "hot", "id"),
+        Index("ix_posts_channel_top", "channel_id", "score", "id"),
         Index("posts_author_idx", "author_id"),
         UniqueConstraint("author_id", "space_id", "repost_of_id", name="posts_repost_once"),
         Index("ix_posts_title_fts", text("to_tsvector('simple', title)"), postgresql_using="gin"),
@@ -526,6 +529,8 @@ class Post(Base):
     )
     id: Mapped[str] = pk()
     space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"))
+    # Null means a public community/workspace feed post; set for a post scoped to a chat channel.
+    channel_id: Mapped[str | None] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"), index=True)
     author_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     title: Mapped[str] = mapped_column(String(300))
     body: Mapped[str | None] = mapped_column(Text)

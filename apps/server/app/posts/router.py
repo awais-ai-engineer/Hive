@@ -31,13 +31,37 @@ async def feed(
     return await service.feed(session, viewer, slug, sort, t, cursor, limit)
 
 
+@router.get("/channels/{channel_id}/posts")
+async def channel_feed(
+    channel_id: str,
+    session: Session,
+    viewer: Viewer,
+    sort: Literal["hot", "new", "top"] = "hot",
+    t: Literal["day", "week", "month", "year", "all"] = "week",
+    cursor: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 25,
+):
+    return await service.feed(session, viewer, sort=sort, period=t, cursor=cursor, limit=limit, channel_id=channel_id)
+
+
 @router.post("/spaces/{slug}/posts", response_model=PostOut, status_code=201)
 async def create(slug: str, data: PostCreate, session: Session, user: CurrentUser):
     post = await service.create(session, user, slug, data)
     await sio.emit(
         "post:new",
-        {"postId": post["id"], "spaceId": post["space"]["id"]},
+        {"postId": post["id"], "spaceId": post["space"]["id"], "channelId": None},
         room=f"space:{post['space']['id']}",
+    )
+    return post
+
+
+@router.post("/channels/{channel_id}/posts", response_model=PostOut, status_code=201)
+async def create_channel_post(channel_id: str, data: PostCreate, session: Session, user: CurrentUser):
+    post = await service.create(session, user, "", data, channel_id=channel_id)
+    await sio.emit(
+        "post:new",
+        {"postId": post["id"], "spaceId": post["space"]["id"], "channelId": channel_id},
+        room=f"channel:{channel_id}",
     )
     return post
 
@@ -72,13 +96,15 @@ async def remove(post_id: str, session: Session, user: CurrentUser):
 async def vote(post_id: str, data: VoteIn, session: Session, user: CurrentUser):
     result = await service.vote(session, user, post_id, data.value)
     post = await service.get_post(session, post_id, user.id)
+    room = f"channel:{post['channel']['id']}" if post.get("channel") else f"space:{post['space']['id']}"
     await sio.emit(
         "post:score",
         {
             "postId": post_id,
             "spaceId": post["space"]["id"],
+            "channelId": post["channel"]["id"] if post.get("channel") else None,
             **{key: result[key] for key in ("score", "upvotes", "downvotes")},
         },
-        room=f"space:{post['space']['id']}",
+        room=room,
     )
     return result

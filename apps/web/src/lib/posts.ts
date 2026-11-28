@@ -16,7 +16,7 @@ export type PostSummary = {
 
 export type Post = {
   media: Attachment[];
-  id: string; space: { id: string; slug: string; name: string; type?: 'community' | 'workspace' };
+  id: string; space: { id: string; slug: string; name: string; type?: 'community' | 'workspace' }; channel?: { id: string; name: string } | null;
   author: { id: string; username: string; avatar_url: string | null } | null;
   title: string; body: string | null; url: string | null; domain: string | null;
   score: number; upvotes: number; downvotes: number; comment_count: number;

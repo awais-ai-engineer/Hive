@@ -25,7 +25,7 @@ from app.db.models import (
     new_id,
 )
 from app.db.session import redis
-from app.posts.service import cursor_decode, cursor_encode, visible_space
+from app.posts.service import cursor_decode, cursor_encode, visible_post
 from app.spaces.permissions import require_role
 
 
@@ -50,10 +50,7 @@ async def get_post_and_check_visibility(
     post = await session.get(Post, post_id)
     if post is None:
         raise HTTPException(404, "Post not found")
-    space = await session.get(Space, post.space_id)
-    if space is None:
-        raise HTTPException(404, "Post not found")
-    member = await visible_space(session, space, user_id)
+    space, member = await visible_post(session, post, user_id)
     return post, space, member
 
 

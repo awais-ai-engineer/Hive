@@ -60,6 +60,7 @@ export function PostCard({ post, combined = false, full = false, reason, onChang
         <span className="text-white/40">in</span>
         <Link href={`/s/${post.space.slug}`} className="truncate rounded-full bg-brand-soft px-2 py-0.5 text-xs font-semibold text-brand hover:underline">{post.space.name}</Link>
       </>}
+      {post.channel && <span className="truncate rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-xs text-white/60">#{post.channel.name}</span>}
       {post.edited_at && <span className="text-xs text-white/40">· edited</span>}
     </header>
 

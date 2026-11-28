@@ -162,6 +162,26 @@ async def discard_space_upload(slug: str, attachment_id: str, session: Session, 
     return Response(status_code=204)
 
 
+@router.delete("/channels/{channel_id}/uploads/{attachment_id}", status_code=204)
+async def discard_channel_upload(channel_id: str, attachment_id: str, session: Session, user: CurrentUser):
+    """Remove this user's unclaimed channel upload from a channel post draft."""
+    await writable(session, channel_id, user.id, "media")
+    attachment = await session.scalar(
+        select(Attachment).where(
+            Attachment.id == attachment_id,
+            Attachment.channel_id == channel_id,
+            Attachment.uploader_id == user.id,
+            Attachment.post_id.is_(None),
+        ).with_for_update()
+    )
+    if attachment is None:
+        raise HTTPException(404, "Unattached upload not found")
+    await get_storage().delete([attachment.storage_key])
+    await session.delete(attachment)
+    await session.commit()
+    return Response(status_code=204)
+
+
 @router.get("/attachments/{attachment_id}")
 async def download(attachment_id: str, exp: int, sig: str, session: Session):
     attachment = await session.get(Attachment, attachment_id)

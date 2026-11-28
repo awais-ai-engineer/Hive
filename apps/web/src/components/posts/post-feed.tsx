@@ -12,13 +12,14 @@ import { socket } from '../../lib/socket';
 import { PostCard } from './post-card';
 import { PostComposerDialog } from './post-composer-dialog';
 
-export function PostFeed({ space }: { space?: Space }) {
+export function PostFeed({ space, channelId }: { space?: Space; channelId?: string }) {
   const { user, loading } = useAuth();
   const search = useSearchParams();
   const router = useRouter();
   const sort = ['hot', 'new', 'top'].includes(search.get('sort') ?? '') ? search.get('sort')! : 'hot';
   const period = search.get('t') ?? 'week';
-  const path = space ? `/api/spaces/${encodeURIComponent(space.slug)}/posts` : '/api/feed';
+  const path = channelId ? `/api/channels/${encodeURIComponent(channelId)}/posts`
+    : space ? `/api/spaces/${encodeURIComponent(space.slug)}/posts` : '/api/feed';
   const [posts, setPosts] = useState<Post[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -47,19 +48,28 @@ export function PostFeed({ space }: { space?: Space }) {
   useEffect(() => {
     if (!user) return;
     const ids = space ? [space.id] : memberships.map(item => item.id);
-    const watch = () => ids.forEach(spaceId => socket.emit('space:watch', { spaceId }, () => {}));
+    const watch = () => {
+      if (channelId) socket.emit('channel:join', { channelId }, () => {});
+      else ids.forEach(spaceId => socket.emit('space:watch', { spaceId }, () => {}));
+    };
     if (socket.connected) watch();
-    const score = (data: { postId: string; score: number; upvotes: number; downvotes: number }) => setPosts(list => list.map(post => post.id === data.postId ? { ...post, score: data.score, upvotes: data.upvotes, downvotes: data.downvotes } : post));
-    const newPost = (data: { spaceId: string; postId: string }) => {
+    const score = (data: { postId: string; score: number; upvotes: number; downvotes: number; channelId?: string | null }) => {
+      if (channelId && data.channelId !== channelId) return;
+      setPosts(list => list.map(post => post.id === data.postId ? { ...post, score: data.score, upvotes: data.upvotes, downvotes: data.downvotes } : post));
+    };
+    const newPost = (data: { spaceId: string; postId: string; channelId?: string | null }) => {
+      if (channelId) { if (data.channelId === channelId) void load(); return; }
+      if (data.channelId) return;
       if (!ids.includes(data.spaceId)) return;
       void load();
     };
     socket.on('connect', watch).on('post:score', score).on('post:new', newPost);
     return () => {
       socket.off('connect', watch).off('post:score', score).off('post:new', newPost);
-      ids.forEach(spaceId => { if (socket.connected) socket.emit('space:unwatch', { spaceId }, () => {}); });
+      if (socket.connected && channelId) socket.emit('channel:leave', { channelId }, () => {});
+      else ids.forEach(spaceId => { if (socket.connected) socket.emit('space:unwatch', { spaceId }, () => {}); });
     };
-  }, [user?.id, space?.id, memberships, load]);
+  }, [user?.id, space?.id, channelId, memberships, load]);
   function change(key: string, value: string) {
     const params = new URLSearchParams(search.toString()); params.set(key, value); router.push(`?${params}`);
   }
@@ -108,6 +118,6 @@ export function PostFeed({ space }: { space?: Space }) {
       return <PostCard key={post.id} post={post} combined={!space} reason={!user ? 'Log in to vote' : !role || role === 'guest' ? 'Join to vote' : ''} onChange={value => update(post.id, value)} />;
     })}
     {cursor && !busy && <UiButton className="auth-button" onClick={() => void more()}>Load more</UiButton>}
-    <PostComposerDialog open={composerOpen} onOpenChange={setComposerOpen} spaces={postableSpaces} initialSpace={space} userId={user?.id ?? ''} onPublished={addPublished} />
+    <PostComposerDialog open={composerOpen} onOpenChange={setComposerOpen} spaces={postableSpaces} initialSpace={space} channelId={channelId} userId={user?.id ?? ''} onPublished={addPublished} />
   </div>;
 }

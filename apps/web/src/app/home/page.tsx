@@ -490,7 +490,7 @@ function Home() {
           canWrite={!!space.my_role && space.my_role !== 'guest'} emptyTitle="No to-dos here yet"
           emptyText="Keep track of what needs doing in this channel. Anyone who can post here can add and tick off to-dos." /></div>
         : tab === 'posts' ? <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-        <Suspense fallback={<LoadingState label="Loading posts" />}><PostFeed space={space} /></Suspense>
+        <Suspense fallback={<LoadingState label="Loading posts" />}><PostFeed space={space} channelId={channel.id} /></Suspense>
       </div> : <ChannelChat key={channel.id} channel={channel} channels={channels} space={space} placeholder={`Message #${channel.name}`}
         reason={!space.my_role ? 'Join this space to chat'
           : space.my_role === 'guest' ? 'You have read-only access' : ''}
